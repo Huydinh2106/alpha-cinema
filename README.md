@@ -1,25 +1,32 @@
-# Alpha Cinema
+\# Alpha Cinema
 
-Backend-first project skeleton for a movie application platform built with NestJS, PostgreSQL, Redis, and Docker.
 
-## Tech Stack
 
-- Backend: NestJS
-- Database: PostgreSQL
-- Cache: Redis
-- ORM: Prisma
-- Container: Docker / Docker Compose
+\- \*\*Backend\*\*: NestJS API
 
-## Project Structure
+\- \*\*Frontend\*\*: Android Native với Kotlin + Jetpack Compose
+
+
+
+\## Cấu trúc dự án
+
+
 
 ```text
+
 alpha-cinema/
-├── backend/
-├── worker/
-├── docs/
-├── infra/
-├── .github/
-├── .gitignore
-├── .env.example
+
+├── backend/        # NestJS backend
+
+├── android-app/    # Android app (Jetpack Compose)
+
+├── docs/           # Tài liệu kiến trúc, roadmap, database
+
 ├── docker-compose.yml
+
+├── .env.example
+
+├── .gitignore
+
 └── README.md
+

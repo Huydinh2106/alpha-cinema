@@ -1,37 +1,74 @@
-# OS
+# =========================
+# OS / System files
+# =========================
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDE
+# =========================
+# IDE / Editor
+# =========================
 .vscode/
 .idea/
+*.iml
 
-# Env
+# =========================
+# Environment files
+# =========================
 .env
 .env.*
 !.env.example
 
+# =========================
 # Logs
+# =========================
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Node
+# =========================
+# Backend / Node / NestJS
+# =========================
 node_modules/
 dist/
 coverage/
-
-# Backend
 backend/node_modules/
 backend/dist/
 backend/coverage/
 
-# Worker
-worker/node_modules/
-worker/dist/
+# Optional cache folders
+.npm/
+.parcel-cache/
 
-# Prisma local files
-backend/prisma/dev.db
+# =========================
+# Android / Gradle
+# =========================
+.gradle/
+**/build/
+android-app/.gradle/
+android-app/local.properties
+android-app/captures/
+android-app/.idea/
+android-app/*.iml
+android-app/.cxx/
+android-app/.externalNativeBuild/
 
-# Misc
+# APK / AAB outputs
+*.apk
+*.aab
+
+# =========================
+# Temporary files
+# =========================
 tmp/
 temp/
+*.tmp
+*.swp
+
+# =========================
+# Mac / Linux metadata
+# =========================
+.Trashes
