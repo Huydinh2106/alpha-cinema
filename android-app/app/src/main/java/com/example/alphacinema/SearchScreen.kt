@@ -102,7 +102,6 @@ fun SearchScreen() {
             ),
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
         ) {
             // Search Header - full width span
             item(span = { GridItemSpan(maxLineSpan) }) {
