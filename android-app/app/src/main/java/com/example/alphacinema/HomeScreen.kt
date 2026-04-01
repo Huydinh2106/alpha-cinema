@@ -1,4 +1,4 @@
-﻿@file:OptIn(ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class)
 package com.example.alphacinema
     import androidx.compose.foundation.ExperimentalFoundationApi
     import androidx.compose.foundation.Image
@@ -88,7 +88,7 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
+    fun HomeScreen(viewModel: HomeViewModel = viewModel(), onPlayMovie: (MovieUi) -> Unit = {}) {
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
         
@@ -962,7 +962,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                     indication = null,
                     onClick = onClick
                 )
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 21.dp, vertical = 8.dp)
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale

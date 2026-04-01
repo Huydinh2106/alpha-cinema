@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.RemoveRedEye
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,15 +48,37 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import coil.compose.AsyncImage
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.UserProfileChangeRequest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+
+private const val WEB_CLIENT_ID = "1013232588133-86fl74ls04r8fkarnahh2b9pvie5g7kn.apps.googleusercontent.com"
 
 private data class AccountMenuItemUi(
     val title: String,
@@ -63,15 +87,78 @@ private data class AccountMenuItemUi(
 
 @Composable
 fun AccountScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val auth = remember { FirebaseAuth.getInstance() }
+    var currentUser by remember { mutableStateOf(auth.currentUser) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
     val authStateHolder = rememberAccountAuthStateHolder(
-        onLogin = { _, _ ->
-            // TODO: Connect Firebase Auth signInWithEmailAndPassword here.
+        onLogin = { email, password ->
+            scope.launch {
+                isLoading = true
+                errorMessage = null
+                try {
+                    val result = auth.signInWithEmailAndPassword(email, password).await()
+                    currentUser = result.user
+                } catch (e: Exception) {
+                    errorMessage = e.localizedMessage ?: "Đăng nhập thất bại"
+                } finally {
+                    isLoading = false
+                }
+            }
         },
-        onRegister = { _, _, _ ->
-            // TODO: Connect Firebase Auth createUserWithEmailAndPassword here.
+        onRegister = { name, email, password ->
+            scope.launch {
+                isLoading = true
+                errorMessage = null
+                try {
+                    val result = auth.createUserWithEmailAndPassword(email, password).await()
+                    result.user?.updateProfile(
+                        UserProfileChangeRequest.Builder()
+                            .setDisplayName(name)
+                            .build()
+                    )?.await()
+                    currentUser = auth.currentUser
+                } catch (e: Exception) {
+                    errorMessage = e.localizedMessage ?: "Đăng ký thất bại"
+                } finally {
+                    isLoading = false
+                }
+            }
         },
         onGoogleSignIn = {
-            // TODO: Connect Firebase Google Sign-In flow here.
+            scope.launch {
+                isLoading = true
+                errorMessage = null
+                try {
+                    val credentialManager = CredentialManager.create(context)
+                    val signInWithGoogleOption = GetGoogleIdOption.Builder()
+                        .setFilterByAuthorizedAccounts(false)
+                        .setServerClientId(WEB_CLIENT_ID)
+                        .setAutoSelectEnabled(false)
+                        .setNonce(null)
+                        .build()
+                    val request = GetCredentialRequest.Builder()
+                        .addCredentialOption(signInWithGoogleOption)
+                        .build()
+                    val credentialResponse = credentialManager.getCredential(
+                        request = request,
+                        context = context as android.app.Activity
+                    )
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credentialResponse.credential.data)
+                    val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+                    val result = auth.signInWithCredential(firebaseCredential).await()
+                    currentUser = result.user
+                } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+                    errorMessage = "Không tìm thấy tài khoản Google. Hãy đăng nhập Google trên thiết bị trước."
+                } catch (e: Exception) {
+                    errorMessage = e.localizedMessage ?: "Đăng nhập Google thất bại"
+                } finally {
+                    isLoading = false
+                }
+            }
         }
     )
     val state = authStateHolder.uiState
@@ -117,49 +204,137 @@ fun AccountScreen() {
                 fontWeight = FontWeight.ExtraBold
             )
 
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                    .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "A",
-                    color = Color(0xFFF6E29A),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            // === User Info / Auth Buttons ===
+            if (currentUser != null) {
+                // LOGGED IN: show avatar, name, email
+                val photoUrl = currentUser?.photoUrl?.toString()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (photoUrl != null) {
+                        AsyncImage(
+                            model = photoUrl,
+                            contentDescription = "Avatar",
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .background(
+                                    Brush.linearGradient(listOf(Color(0xFFF6E29A), Color(0xFFD4A843))),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = (currentUser?.displayName?.firstOrNull() ?: currentUser?.email?.firstOrNull() ?: 'A').uppercase(),
+                                color = Color(0xFF070B16),
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+                    Column(modifier = Modifier.padding(start = 14.dp)) {
+                        Text(
+                            text = currentUser?.displayName ?: "Người dùng",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = currentUser?.email ?: "",
+                            color = Color.White.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
+                // Logout button
                 Button(
-                    onClick = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
+                    onClick = {
+                        auth.signOut()
+                        currentUser = null
+                    },
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .height(50.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFF6E29A),
-                        contentColor = Color.Black
+                        containerColor = Color(0xFF2A1A1A),
+                        contentColor = Color(0xFFFF6B6B)
                     )
                 ) {
-                    Text("Đăng nhập", fontWeight = FontWeight.Bold)
+                    Icon(Icons.Outlined.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Đăng xuất", fontWeight = FontWeight.Bold)
+                }
+            } else {
+                // NOT LOGGED IN: show default avatar + login/register buttons
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "A",
+                        color = Color(0xFFF6E29A),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
-                OutlinedButton(
-                    onClick = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.REGISTER)) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Đăng ký", fontWeight = FontWeight.SemiBold)
+                    Button(
+                        onClick = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFF6E29A),
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text("Đăng nhập", fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.REGISTER)) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Text("Đăng ký", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            // Error message
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage ?: "",
+                    color = Color(0xFFFF6B6B),
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // Loading indicator
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFFF6E29A), modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
                 }
             }
 
