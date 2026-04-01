@@ -30,6 +30,9 @@ package com.example.alphacinema
     import androidx.compose.animation.core.animateFloatAsState
     import androidx.compose.animation.core.tween
     import androidx.compose.runtime.*
+    import androidx.lifecycle.viewmodel.compose.viewModel
+    import com.example.alphacinema.ui.viewmodel.HomeViewModel
+    import com.example.alphacinema.data.model.MovieItem
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.draw.blur
@@ -85,94 +88,62 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun HomeScreen() {
-        val movies = listOf(
-            MovieUi(
-                title = "Thế Giới Không Lối Thoát",
-                subtitle = "Alice in Borderland",
-                description = "Một game thủ lông bông cùng hai người bạn nhận ra họ đã lọt vào thế giới Tokyo song song, nơi họ buộc phải tham gia những trò chơi sinh tồn cực kỳ nguy hiểm...",
-                rating = "7.8",
-                age = "T18",
-                year = "2020",
-                season = "Phần 3",
-                episode = "Tập 6",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BNGEyOGJiNmEtMmI1OC00MDI4LWIxNzctYzg2YjYyMTk3MTdiXkEyXkFqcGc@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Dune: Hành Tinh Cát 2",
-                subtitle = "Dune: Part Two",
-                description = "Paul Atreides liên minh với người Fremen để báo thù những kẻ đã hủy diệt gia đình anh, đồng thời cố gắng ngăn chặn tương lai khủng khiếp mà chỉ mình anh nhìn thấy.",
-                rating = "8.6",
-                age = "T13",
-                year = "2024",
-                season = "",
-                episode = "",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BN2QyZGU4ZDctOWMzMy00NTc5LThlOGQtODhmNDI1NmY5YzAwXkEyXkFqcGdeQXVyMDM2NDM2MQ@@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Joker",
-                subtitle = "Joker",
-                description = "Tại thành phố Gotham năm 1981, Arthur Fleck - một diễn viên hài thất bại - bị xã hội ruồng bỏ và dần dần trượt vào vực thẳm của điên loạn, biến thành tên tội phạm Joker.",
-                rating = "8.4",
-                age = "T18",
-                year = "2019",
-                season = "",
-                episode = "",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BNGVjNWI4ZGUtNzE0MS00YTJmLWE0ZDctN2ZiYTk2YmI3NTYyXkEyXkFqcGdeQXVyMTkxNjUyNQ@@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Interstellar",
-                subtitle = "Interstellar",
-                description = "Khi Trái Đất đang dần trở nên không thể sinh sống, một nhóm phi hành gia được cử đi tìm kiếm hành tinh mới cho nhân loại qua một lỗ sâu bí ẩn.",
-                rating = "8.7",
-                age = "T13",
-                year = "2014",
-                season = "",
-                episode = "",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BYzdjMDAxZGItMjI2My00ODA1LTlkNzItOWFjMDU5ZDJlYWY3XkEyXkFqcGc@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Squid Game",
-                subtitle = "Squid Game",
-                description = "Hàng trăm người chơi đang cần tiền chấp nhận lời mời kỳ lạ tham gia các trò chơi trẻ em. Phần thưởng hấp dẫn đang chờ, nhưng cái giá phải trả rất đắt.",
-                rating = "8.0",
-                age = "T18",
-                year = "2021",
-                season = "Phần 2",
-                episode = "Tập 7",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BYWE3MDVkN2EtNjQ5MS00ZDQ4LTliNzYtMjc2YWMzMDEwMTA3XkEyXkFqcGdeQXVyMTEzMTI1Mjk3._V1_.jpg"
-            )
-        )
+    fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
+        val isLoading by viewModel.isLoading.collectAsState()
+        val error by viewModel.error.collectAsState()
+        
+        val heroItems by viewModel.heroMovies.collectAsState()
+        val phimBoMoi by viewModel.phimBoMoi.collectAsState()
+        val phimLeHot by viewModel.phimLeHot.collectAsState()
+        val phimHanhDong by viewModel.phimHanhDong.collectAsState()
+        val selectedChip by viewModel.selectedChip.collectAsState()
 
-        val recommendationGroups = listOf(
-            RecommendGroupUi(
-                title = "Đề xuất cho bạn",
-                movies = listOf(
-                    RecommendMovieUi("Dark", "Tâm lý", "8.7", "https://m.media-amazon.com/images/M/MV5BOTk2NzUyOTctZDdlMS00MDJlLTgzNTEtNzQzYjFhNzY0ZGFmXkEyXkFqcGdeQXVyMjg1NDcxNDE@._V1_.jpg"),
-                    RecommendMovieUi("The Platform", "Sinh tồn", "7.0", "https://m.media-amazon.com/images/M/MV5BMjAzMjlhNGQtMjAzZC00ODIzLWE4YTAtMDkyYmFiZmE2YWYzXkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Prison Break", "Hành động", "8.3", "https://m.media-amazon.com/images/M/MV5BMTg3NTkwNzAxOF5BMl5BanBnXkFtZTcwMjM1NjI5MQ@@._V1_.jpg"),
-                    RecommendMovieUi("1899", "Bí ẩn", "7.3", "https://m.media-amazon.com/images/M/MV5BYjdkODg1OGItNjc2Yi00YjRiLWI5ZjAtOWMwZjlmMDFiNjBlXkEyXkFqcGc@._V1_.jpg")
+        val movies = remember(heroItems) {
+            heroItems.map {
+                MovieUi(
+                    title = it.name,
+                    subtitle = it.origin_name ?: "",
+                    description = "", // detail usually requires individual endpoint, we don't have it on list.
+                    rating = it.getRating(),
+                    age = "",
+                    year = it.year?.toString() ?: "",
+                    season = "",
+                    episode = it.episode_current ?: "",
+                    posterUrl = it.getFullPosterUrl()
                 )
-            ),
-            RecommendGroupUi(
-                title = "Top 10 bộ phim bán chạy nhất",
-                movies = listOf(
-                    RecommendMovieUi("Dune: Part Two", "Viễn tưởng", "8.0", "https://m.media-amazon.com/images/M/MV5BN2QyZGU4ZDctOWMzMy00NTc5LThlOGQtODhmNDI1NmY5YzAwXkEyXkFqcGdeQXVyMDM2NDM2MQ@@._V1_.jpg"),
-                    RecommendMovieUi("Joker", "Tâm lý", "8.4", "https://m.media-amazon.com/images/M/MV5BNGVjNWI4ZGUtNzE0MS00YTJmLWE0ZDctN2ZiYTk2YmI3NTYyXkEyXkFqcGdeQXVyMTkxNjUyNQ@@._V1_.jpg"),
-                    RecommendMovieUi("John Wick 4", "Hành động", "7.4", "https://m.media-amazon.com/images/M/MV5BMDExZGMyOTMtMDgyYi00NGIwLWJhMTEtOTdkZGFjNmZiMTEwXkEyXkFqcGdeQXVyMjM4NTM5NDY@._V1_.jpg"),
-                    RecommendMovieUi("Interstellar", "Khoa học", "8.7", "https://m.media-amazon.com/images/M/MV5BYzdjMDAxZGItMjI2My00ODA1LTlkNzItOWFjMDU5ZDJlYWY3XkEyXkFqcGc@._V1_.jpg")
-                )
-            ),
-            RecommendGroupUi(
-                title = "Top 10 bộ phim mới nhất",
-                movies = listOf(
-                    RecommendMovieUi("Oppenheimer", "Lịch sử", "8.3", "https://m.media-amazon.com/images/M/MV5BN2JkMDc5MGQtZjg3YS00NmFiLWIyZmQtZjZjMjc3MmJlZTQ1XkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Rebel Moon", "Phiêu lưu", "5.6", "https://m.media-amazon.com/images/M/MV5BNjMwOWYyYTAtNjE3OS00MzUyLThmNmMtYjI3NDdlNGIzMGI2XkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Silo", "Bí ẩn", "8.1", "https://m.media-amazon.com/images/M/MV5BMDI2NjQ1NjctZGI2MC00YzgyLTk3Y2ItMjkwMjNlODg3NTcwXkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Shogun", "Lịch sử", "8.8", "https://m.media-amazon.com/images/M/MV5BMWI2N2Q1MjgtMjYxYi00OGJmLTk5NzctMDk5YTljMmE2NjcxXkEyXkFqcGc@._V1_.jpg")
-                )
-            )
-        )
+            }.ifEmpty { // fallback to prevent empty state crashes if the list is empty during initial load
+                List(5) {
+                    MovieUi("Đang tải...", "Đang kết nối dữ liệu", "Vui lòng chờ trong giây lát...", "-", "", "", "", "")
+                }
+            }
+        }
+
+        val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, selectedChip) {
+            val allGroups = mutableListOf<RecommendGroupUi>()
+            val boMoiList = phimBoMoi.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl()) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "") } }
+            val leHotList = phimLeHot.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl()) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "") } }
+            val hanhDongList = phimHanhDong.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl()) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "") } }
+
+            if (selectedChip == "Đề xuất" || selectedChip == "Phim bộ") {
+                allGroups.add(RecommendGroupUi(
+                    title = "Phim bộ mới",
+                    movies = boMoiList
+                ))
+            }
+            if (selectedChip == "Đề xuất" || selectedChip == "Phim lẻ") {
+                allGroups.add(RecommendGroupUi(
+                    title = "Phim lẻ hot",
+                    movies = leHotList
+                ))
+            }
+            if (selectedChip == "Đề xuất" || selectedChip == "Thể loại") {
+                allGroups.add(RecommendGroupUi(
+                    title = "Phim hành động",
+                    movies = hanhDongList
+                ))
+            }
+            allGroups
+        }
 
         val movieCount = movies.size
         val initialPage = remember(movieCount) {
@@ -209,9 +180,25 @@ package com.example.alphacinema
                     .padding(horizontal = 20.dp)
                     .padding(top = 90.dp, bottom = 110.dp)
             ) {
-                CategoryChips()
+                CategoryChips(
+                    selectedChip = selectedChip,
+                    onChipSelected = { viewModel.setCategory(it) }
+                )
                 Spacer(modifier = Modifier.height(22.dp))
-                HeroCarousel(pagerState, movies)
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    HeroCarousel(pagerState, movies)
+                    if (isLoading && heroItems.isEmpty()) {
+                        CircularProgressIndicator(color = Color(0xFFF6E29A))
+                    } else if (error != null && heroItems.isEmpty()) {
+                        Text(
+                            text = "Lỗi tải phim",
+                            color = Color.Red,
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(20.dp))
                 MovieInfoSection(
                     movie = movies[currentMovieIndex],
@@ -402,16 +389,22 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun CategoryChips() {
+    fun CategoryChips(
+        selectedChip: String,
+        onChipSelected: (String) -> Unit
+    ) {
+        val categories = listOf("Đề xuất", "Phim bộ", "Phim lẻ", "Thể loại")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            FilledChip(text = "Đề xuất", selected = true, modifier = Modifier.weight(1f))
-            OutlineChip(text = "Phim bộ", modifier = Modifier.weight(1f))
-            OutlineChip(text = "Phim lẻ", modifier = Modifier.weight(1f))
-            OutlineChip(text = "Thể loại", modifier = Modifier.weight(1f))
-
+            categories.forEach { category ->
+                if (selectedChip == category) {
+                    FilledChip(text = category, selected = true, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
+                } else {
+                    OutlineChip(text = category, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
+                }
+            }
         }
     }
 
