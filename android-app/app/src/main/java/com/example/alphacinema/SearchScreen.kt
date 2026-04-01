@@ -1,4 +1,5 @@
 @file:OptIn(ExperimentalFoundationApi::class)
+
 package com.example.alphacinema
 
 import androidx.compose.animation.animateColorAsState
@@ -8,7 +9,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -23,8 +35,14 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 data class SearchMovieUi(
+    val movieId: String,
     val title: String,
     val subtitle: String,
     val badge: String,
@@ -45,28 +64,22 @@ data class SearchMovieUi(
 )
 
 @Composable
-fun SearchScreen() {
-    val trendingMovies = listOf(
-        SearchMovieUi("Hành Trình Rực Rỡ", "A Big Bold Beautiful...", "Phụ Đề", "gray", "7.8", "2025"),
-        SearchMovieUi("Hãy Lấy Em Đi", "Would You Marry Me?", "Phụ Đề", "gray", "6.9", "2025"),
-        SearchMovieUi("Ám Ảnh Kinh Hoàng", "The Conjuring: Last...", "Thuyết Minh", "blue", "8.1", "2025"),
-        SearchMovieUi("Toàn Trí Độc Giả", "Omniscient Reader", "Thuyết Minh", "blue", "7.5", "2024"),
-        SearchMovieUi("Zombie Con Của Ba", "My Daughter is a Zo...", "Thuyết Minh", "blue", "6.8", "2024"),
-        SearchMovieUi("Thế Giới Không Lối", "Alice in Borderland", "Lồng Tiếng", "green", "7.8", "2020"),
-        SearchMovieUi("Freakier Friday", "Thứ Sáu Siêu Quậy", "Phụ Đề", "gray", "6.5", "2025"),
-        SearchMovieUi("The Platform 2", "El Hoyo 2", "Thuyết Minh", "blue", "5.7", "2024"),
-        SearchMovieUi("Dune: Part Two", "Dune: Phần 2", "Phụ Đề", "gray", "8.6", "2024")
-    )
-
+fun SearchScreen(
+    onOpenMovieDetail: (String) -> Unit = {}
+) {
+    val trendingMovies = MovieDetailFakeData.searchMovies
     val categories = listOf("Tất cả", "Phim bộ", "Phim lẻ", "Anime", "TV Show")
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Tất cả") }
 
-    val filteredMovies = if (searchQuery.isEmpty()) trendingMovies
-    else trendingMovies.filter {
-        it.title.contains(searchQuery, ignoreCase = true) ||
+    val filteredMovies = if (searchQuery.isEmpty()) {
+        trendingMovies
+    } else {
+        trendingMovies.filter {
+            it.title.contains(searchQuery, ignoreCase = true) ||
                 it.subtitle.contains(searchQuery, ignoreCase = true)
+        }
     }
 
     Box(
@@ -74,7 +87,6 @@ fun SearchScreen() {
             .fillMaxSize()
             .background(Color(0xFF070B16))
     ) {
-        // Background glow effect
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -89,7 +101,6 @@ fun SearchScreen() {
                 )
         )
 
-        // Using LazyVerticalGrid as root scrollable (NOT nested in verticalScroll)
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -100,10 +111,8 @@ fun SearchScreen() {
                 top = 16.dp,
                 bottom = 120.dp
             ),
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Search Header - full width span
             item(span = { GridItemSpan(maxLineSpan) }) {
                 SearchHeader(
                     searchQuery = searchQuery,
@@ -111,7 +120,6 @@ fun SearchScreen() {
                 )
             }
 
-            // Category chips - full width span
             item(span = { GridItemSpan(maxLineSpan) }) {
                 SearchCategoryChips(
                     categories = categories,
@@ -120,7 +128,6 @@ fun SearchScreen() {
                 )
             }
 
-            // Section title - full width span
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(
                     modifier = Modifier
@@ -153,12 +160,13 @@ fun SearchScreen() {
                 }
             }
 
-            // Movie cards
             items(filteredMovies) { movie ->
-                SearchMovieCard(movie = movie)
+                SearchMovieCard(
+                    movie = movie,
+                    onClick = { onOpenMovieDetail(movie.movieId) }
+                )
             }
 
-            // Empty state
             if (filteredMovies.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
@@ -332,7 +340,10 @@ fun SearchCategoryChips(
 }
 
 @Composable
-fun SearchMovieCard(movie: SearchMovieUi) {
+fun SearchMovieCard(
+    movie: SearchMovieUi,
+    onClick: () -> Unit = {}
+) {
     val badgeBgColor = when (movie.badgeColor) {
         "blue" -> Color(0xFF3B7DD8)
         "green" -> Color(0xFF4CAF50)
@@ -357,9 +368,8 @@ fun SearchMovieCard(movie: SearchMovieUi) {
                 color = Color.White.copy(alpha = 0.08f),
                 shape = RoundedCornerShape(16.dp)
             )
-            .clickable { /* TODO: navigate to detail */ }
+            .clickable(onClick = onClick)
     ) {
-        // Subtle gradient overlay for depth
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -376,7 +386,6 @@ fun SearchMovieCard(movie: SearchMovieUi) {
                 )
         )
 
-        // Placeholder icon
         Icon(
             imageVector = Icons.Outlined.Search,
             contentDescription = null,
@@ -386,7 +395,6 @@ fun SearchMovieCard(movie: SearchMovieUi) {
                 .align(Alignment.Center)
         )
 
-        // Rating badge at top right
         if (movie.rating.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -414,7 +422,6 @@ fun SearchMovieCard(movie: SearchMovieUi) {
             }
         }
 
-        // Bottom info section
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -422,7 +429,6 @@ fun SearchMovieCard(movie: SearchMovieUi) {
                 .padding(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Badge
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -438,7 +444,6 @@ fun SearchMovieCard(movie: SearchMovieUi) {
                 )
             }
 
-            // Title
             Text(
                 text = movie.title,
                 color = Color.White,
@@ -450,7 +455,6 @@ fun SearchMovieCard(movie: SearchMovieUi) {
                 lineHeight = 14.sp
             )
 
-            // Subtitle
             Text(
                 text = movie.subtitle,
                 color = Color.White.copy(alpha = 0.55f),

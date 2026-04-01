@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalFoundationApi::class)
+﻿@file:OptIn(ExperimentalFoundationApi::class)
 package com.example.alphacinema
     import androidx.compose.foundation.ExperimentalFoundationApi
     import androidx.compose.foundation.Image
@@ -18,7 +18,7 @@ package com.example.alphacinema
     import androidx.compose.foundation.shape.CircleShape
     import androidx.compose.foundation.shape.RoundedCornerShape
     import androidx.compose.material.icons.Icons
-    import androidx.compose.material.icons.outlined.CalendarMonth
+    import androidx.compose.material.icons.outlined.HeadsetMic
     import androidx.compose.material.icons.outlined.Home
     import androidx.compose.material.icons.outlined.NotificationsNone
     import androidx.compose.material.icons.outlined.PersonOutline
@@ -85,7 +85,9 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun HomeScreen() {
+    fun HomeScreen(
+        onPlayMovie: (MovieUi) -> Unit = {}
+    ) {
         val movies = listOf(
             MovieUi(
                 title = "Thế Giới Không Lối Thoát",
@@ -216,7 +218,8 @@ package com.example.alphacinema
                 MovieInfoSection(
                     movie = movies[currentMovieIndex],
                     currentMovieIndex = currentMovieIndex,
-                    total = movies.size
+                    total = movies.size,
+                    onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
                 )
                 Spacer(modifier = Modifier.height(26.dp))
                 RecommendationGroupsSection(groups = recommendationGroups)
@@ -530,7 +533,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
     fun MovieInfoSection(
         movie: MovieUi,
         currentMovieIndex: Int,
-        total: Int
+        total: Int,
+        onPlayClick: () -> Unit = {}
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
@@ -560,7 +564,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Button(
-                    onClick = {},
+                    onClick = onPlayClick,
                     modifier = Modifier
                         .weight(1f)
                         .height(52.dp),
@@ -909,10 +913,10 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                 )
 
                 BottomItem(
-                    icon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null) },
-                    label = "Lịch chiếu",
-                    selected = currentScreen == ScreenType.SCHEDULE,
-                    onClick = { onNavigate(ScreenType.SCHEDULE) }
+                    icon = { Icon(Icons.Outlined.HeadsetMic, contentDescription = null) },
+                    label = "Hỗ trợ",
+                    selected = currentScreen == ScreenType.SUPPORT,
+                    onClick = { onNavigate(ScreenType.SUPPORT) }
                 )
 
                 BottomItem(
@@ -967,7 +971,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                     indication = null,
                     onClick = onClick
                 )
-                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale
@@ -986,7 +990,9 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                 color = textColor,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                fontSize = 10.sp
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -998,4 +1004,5 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
             HomeScreen()
         }
     }
+
 
