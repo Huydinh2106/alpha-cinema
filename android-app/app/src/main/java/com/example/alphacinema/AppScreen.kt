@@ -30,7 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.alphacinema.ui.viewmodel.HomeViewModel
 import com.example.alphacinema.ui.viewmodel.MovieDetailViewModel
+import kotlinx.coroutines.delay
 
 enum class ScreenType {
     HOME,
@@ -45,8 +47,57 @@ sealed interface AppRoute {
     data class PlayerRoute(val slug: String, val episodeId: String?) : AppRoute
 }
 
+sealed interface SplashState {
+    object Showing : SplashState
+    object Done : SplashState
+}
+
 @Composable
 fun AppScreen(modifier: Modifier = Modifier) {
+    // Tạo HomeViewModel ở đây để dùng chung cho Splash (theo dõi isLoading)
+    // và MainContent (truyền vào để HomeScreen không fetch lại lần 2)
+    val homeViewModel: HomeViewModel = viewModel()
+    val isLoading by homeViewModel.isLoading.collectAsState()
+
+    var splashState by remember { mutableStateOf<SplashState>(SplashState.Showing) }
+    var minTimeElapsed by remember { mutableStateOf(false) }
+
+    // Thời gian tối thiểu 1.5 giây để splash không chớp tắt quá nhanh khi mạng nhanh
+    LaunchedEffect(Unit) {
+        delay(1500)
+        minTimeElapsed = true
+    }
+
+    // Tắt Splash khi CẢ HAI điều kiện đều đúng:
+    // 1. isLoading = false (dữ liệu HomeScreen đã load xong)
+    // 2. Đã qua ít nhất 1.5 giây
+    LaunchedEffect(isLoading, minTimeElapsed) {
+        if (!isLoading && minTimeElapsed) {
+            splashState = SplashState.Done
+        }
+    }
+
+    Crossfade(
+        targetState = splashState,
+        animationSpec = tween(durationMillis = 500, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        modifier = modifier.fillMaxSize(),
+        label = "SplashTransition"
+    ) { state ->
+        when (state) {
+            is SplashState.Showing -> {
+                SplashScreen(onFinished = { splashState = SplashState.Done })
+            }
+            is SplashState.Done -> {
+                MainContent(modifier = modifier)
+            }
+        }
+    }
+}
+
+@Composable
+fun MainContent(
+    modifier: Modifier = Modifier
+) {
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
     var currentRoute by remember { mutableStateOf<AppRoute>(AppRoute.Main(ScreenType.HOME)) }
 
@@ -95,7 +146,6 @@ fun AppScreen(modifier: Modifier = Modifier) {
 
                 is AppRoute.MovieDetailRoute -> {
                     if (detailLoading) {
-                        // Loading state
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -122,18 +172,18 @@ fun AppScreen(modifier: Modifier = Modifier) {
                             movieStats = movieStats,
                             userRating = userRating,
                             comments = comments,
-                            onToggleFavorite = { movie -> 
+                            onToggleFavorite = { movie ->
                                 movieDetailViewModel.toggleFavorite(movie.title, movie.posterUrl) { _, msg ->
                                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            onPostComment = { content -> 
+                            onPostComment = { content ->
                                 val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                                 movieDetailViewModel.postComment(user?.displayName ?: "Ẩn danh", user?.photoUrl?.toString() ?: "", content) { _, msg ->
                                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            onSubmitRating = { score -> 
+                            onSubmitRating = { score ->
                                 movieDetailViewModel.submitRating(score) { _, msg ->
                                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
@@ -148,7 +198,6 @@ fun AppScreen(modifier: Modifier = Modifier) {
                             onOpenMovie = ::openMovieDetail
                         )
                     } else if (detailError != null) {
-                        // Error state
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
