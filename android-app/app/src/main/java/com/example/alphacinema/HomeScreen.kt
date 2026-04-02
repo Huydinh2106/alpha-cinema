@@ -1,4 +1,4 @@
-﻿@file:OptIn(ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class)
 package com.example.alphacinema
     import androidx.compose.foundation.ExperimentalFoundationApi
     import androidx.compose.foundation.Image
@@ -67,14 +67,16 @@ package com.example.alphacinema
         val year: String,
         val season: String,
         val episode: String,
-        val posterUrl: String = ""
+        val posterUrl: String = "",
+        val slug: String = ""
     )
 
     data class RecommendMovieUi(
         val title: String,
         val genre: String,
         val rating: String,
-        val posterUrl: String = ""
+        val posterUrl: String = "",
+        val slug: String = ""
     )
 
     data class RecommendGroupUi(
@@ -88,7 +90,7 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
+    fun HomeScreen(viewModel: HomeViewModel = viewModel(), onPlayMovie: (MovieUi) -> Unit = {}) {
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
         
@@ -103,13 +105,14 @@ package com.example.alphacinema
                 MovieUi(
                     title = it.name,
                     subtitle = it.origin_name ?: "",
-                    description = "", // detail usually requires individual endpoint, we don't have it on list.
+                    description = "",
                     rating = it.getRating(),
                     age = "",
                     year = it.year?.toString() ?: "",
                     season = "",
                     episode = it.episode_current ?: "",
-                    posterUrl = it.getFullPosterUrl()
+                    posterUrl = it.getFullPosterUrl(),
+                    slug = it.slug
                 )
             }.ifEmpty { // fallback to prevent empty state crashes if the list is empty during initial load
                 List(5) {
@@ -120,9 +123,9 @@ package com.example.alphacinema
 
         val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, selectedChip) {
             val allGroups = mutableListOf<RecommendGroupUi>()
-            val boMoiList = phimBoMoi.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl()) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "") } }
-            val leHotList = phimLeHot.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl()) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "") } }
-            val hanhDongList = phimHanhDong.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl()) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "") } }
+            val boMoiList = phimBoMoi.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl(), it.slug) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "", "") } }
+            val leHotList = phimLeHot.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl(), it.slug) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "", "") } }
+            val hanhDongList = phimHanhDong.map { RecommendMovieUi(it.name, it.category?.firstOrNull()?.name ?: "", it.getRating(), it.getFullPosterUrl(), it.slug) }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "-", "", "") } }
 
             if (selectedChip == "Đề xuất" || selectedChip == "Phim bộ") {
                 allGroups.add(RecommendGroupUi(
@@ -186,7 +189,7 @@ package com.example.alphacinema
                 )
                 Spacer(modifier = Modifier.height(22.dp))
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    HeroCarousel(pagerState, movies)
+                    HeroCarousel(pagerState, movies, onMovieClick = onPlayMovie)
                     if (isLoading && heroItems.isEmpty()) {
                         CircularProgressIndicator(color = Color(0xFFF6E29A))
                     } else if (error != null && heroItems.isEmpty()) {
@@ -207,7 +210,20 @@ package com.example.alphacinema
                     onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
                 )
                 Spacer(modifier = Modifier.height(26.dp))
-                RecommendationGroupsSection(groups = recommendationGroups)
+                RecommendationGroupsSection(groups = recommendationGroups, onMovieClick = { recommendMovie ->
+                    onPlayMovie(MovieUi(
+                        title = recommendMovie.title,
+                        subtitle = "",
+                        description = "",
+                        rating = recommendMovie.rating,
+                        age = "",
+                        year = "",
+                        season = "",
+                        episode = "",
+                        posterUrl = recommendMovie.posterUrl,
+                        slug = recommendMovie.slug
+                    ))
+                })
                 Spacer(modifier = Modifier.height(22.dp))
                 InterestSection()
                 Spacer(modifier = Modifier.height(20.dp))
@@ -448,7 +464,7 @@ package com.example.alphacinema
     }
 
 @Composable
-fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
+fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (MovieUi) -> Unit = {}) {
     val movieCount = movies.size
     BoxWithConstraints(
         modifier = Modifier
@@ -496,7 +512,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                     )
                     .background(
                         if (isCenter) Color(0xFF20253A) else Color(0xFF1B2031)
-                    ),
+                    )
+                    .clickable { onMovieClick(movie) },
                 contentAlignment = Alignment.Center
             ) {
                 // Hiển thị poster từ URL
@@ -571,7 +588,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                 }
 
                 Button(
-                    onClick = {},
+                    onClick = onPlayClick,
                     modifier = Modifier
                         .weight(1f)
                         .height(52.dp),
@@ -673,16 +690,16 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
     }
 
     @Composable
-    fun RecommendationGroupsSection(groups: List<RecommendGroupUi>) {
+    fun RecommendationGroupsSection(groups: List<RecommendGroupUi>, onMovieClick: (RecommendMovieUi) -> Unit = {}) {
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             groups.forEach { group ->
-                RecommendationGroup(group = group)
+                RecommendationGroup(group = group, onMovieClick = onMovieClick)
             }
         }
     }
 
     @Composable
-    fun RecommendationGroup(group: RecommendGroupUi) {
+    fun RecommendationGroup(group: RecommendGroupUi, onMovieClick: (RecommendMovieUi) -> Unit = {}) {
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -710,19 +727,20 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                 contentPadding = PaddingValues(horizontal = 2.dp)
             ) {
                 items(group.movies) { movie ->
-                    RecommendationMovieCard(movie = movie)
+                    RecommendationMovieCard(movie = movie, onClick = { onMovieClick(movie) })
                 }
             }
         }
     }
 
     @Composable
-    fun RecommendationMovieCard(movie: RecommendMovieUi) {
+    fun RecommendationMovieCard(movie: RecommendMovieUi, onClick: () -> Unit = {}) {
         Box(
             modifier = Modifier
                 .width(132.dp)
                 .height(194.dp)
                 .clip(RoundedCornerShape(18.dp))
+                .clickable { onClick() }
                 .border(
                     width = 1.dp,
                     color = Color.White.copy(alpha = 0.10f),
@@ -962,7 +980,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                     indication = null,
                     onClick = onClick
                 )
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 21.dp, vertical = 8.dp)
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale

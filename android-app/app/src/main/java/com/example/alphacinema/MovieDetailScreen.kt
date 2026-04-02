@@ -30,6 +30,8 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,9 +39,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
+import com.example.alphacinema.data.model.Comment
+import com.example.alphacinema.data.model.MovieStats
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +66,13 @@ import coil.compose.AsyncImage
 @Composable
 fun MovieDetailScreen(
     movie: MovieDetailUi,
+    isFavorite: Boolean,
+    movieStats: MovieStats?,
+    userRating: Int?,
+    comments: List<Comment>,
+    onToggleFavorite: (MovieDetailUi) -> Unit,
+    onPostComment: (String) -> Unit,
+    onSubmitRating: (Int) -> Unit,
     onBack: () -> Unit,
     onPlayMovie: (MovieDetailUi, EpisodeUi?) -> Unit,
     onOpenMovie: (String) -> Unit
@@ -121,7 +134,15 @@ fun MovieDetailScreen(
                     onEpisodes = { selectedTabName = MovieDetailTab.EPISODES.name }
                 )
                 Spacer(modifier = Modifier.height(14.dp))
-                ActionRow()
+                ActionRow(
+                    isFavorite = isFavorite,
+                    onActionClick = { action ->
+                        when(action) {
+                            MovieDetailAction.FAVORITE -> onToggleFavorite(movie)
+                            else -> {}
+                        }
+                    }
+                )
                 Spacer(modifier = Modifier.height(18.dp))
             }
         }
@@ -163,6 +184,15 @@ fun MovieDetailScreen(
                 MovieDetailTab.RECOMMENDATIONS -> RecommendationTab(
                     movies = movie.recommendations,
                     onOpenMovie = onOpenMovie
+                )
+                MovieDetailTab.COMMENTS -> CommentsTab(
+                    comments = comments,
+                    onPostComment = onPostComment
+                )
+                MovieDetailTab.RATINGS -> RatingsTab(
+                    stats = movieStats,
+                    userRating = userRating,
+                    onSubmitRating = onSubmitRating
                 )
             }
         }
@@ -341,7 +371,10 @@ private fun ButtonRow(
 }
 
 @Composable
-private fun ActionRow() {
+private fun ActionRow(
+    isFavorite: Boolean,
+    onActionClick: (MovieDetailAction) -> Unit
+) {
     val actions = MovieDetailAction.entries
     Row(
         modifier = Modifier
@@ -350,22 +383,24 @@ private fun ActionRow() {
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         actions.forEach { action ->
+            val isFavActive = action == MovieDetailAction.FAVORITE && isFavorite
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.clickable { onActionClick(action) }
             ) {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.10f))
-                        .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                        .border(1.dp, if (isFavActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.2f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = actionIcon(action),
+                        imageVector = if (isFavActive) Icons.Filled.Favorite else actionIcon(action),
                         contentDescription = action.label,
-                        tint = Color.White.copy(alpha = 0.85f)
+                        tint = if (isFavActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.85f)
                     )
                 }
                 Text(
@@ -549,7 +584,181 @@ private fun RecommendationTab(
 private fun actionIcon(action: MovieDetailAction) = when (action) {
     MovieDetailAction.FAVORITE -> Icons.Outlined.FavoriteBorder
     MovieDetailAction.ADD_TO_LIST -> Icons.Outlined.Add
-    MovieDetailAction.RATE -> Icons.Outlined.StarBorder
-    MovieDetailAction.COMMENT -> Icons.Outlined.ChatBubbleOutline
     MovieDetailAction.SHARE -> Icons.Outlined.Share
+}
+
+@Composable
+private fun CommentsTab(
+    comments: List<Comment>,
+    onPostComment: (String) -> Unit
+) {
+    var text by rememberSaveable { mutableStateOf("") }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Viết bình luận...", color = Color.White.copy(alpha = 0.5f)) },
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedBorderColor = Color(0xFFF6E29A)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    onPostComment(text)
+                    text = ""
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A), contentColor = Color.Black)
+            ) {
+                Text("Gửi", fontWeight = FontWeight.Bold)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(10.dp))
+        
+        if (comments.isEmpty()) {
+            Text("Chưa có bình luận nào.", color = Color.White.copy(alpha = 0.5f))
+        } else {
+            comments.forEach { comment ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1F2438)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = comment.userName.firstOrNull()?.uppercase() ?: "?",
+                            color = Color(0xFFF6E29A),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.06f))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = comment.userName.ifBlank { "Người dùng" },
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = comment.content,
+                            color = Color.White.copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RatingsTab(
+    stats: MovieStats?,
+    userRating: Int?,
+    onSubmitRating: (Int) -> Unit
+) {
+    var selectedScore by rememberSaveable(userRating) { mutableStateOf(userRating ?: 0) }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (stats != null) {
+            Text(
+                text = "${stats.averageRating} / 10",
+                color = Color(0xFFF6E29A),
+                style = MaterialTheme.typography.displayMedium,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                text = "Dựa trên ${stats.totalRatings} lượt đánh giá",
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.labelMedium
+            )
+        } else {
+            Text(
+                text = "Chưa có đánh giá nào",
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(30.dp))
+        
+        Text(
+            text = "Đánh giá của bạn:",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // Display 5 pair blocks for 10 scores? Actually let's just make 5 stars that act as 10 scores (half stars) or simply 10 stars in a scrollable or wrapped row. 
+            // 10 stars in a row might be too dense, but we can fit it.
+            for (i in 1..10) {
+                Icon(
+                    imageVector = if (i <= selectedScore) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    contentDescription = "$i sao",
+                    tint = if (i <= selectedScore) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clickable { selectedScore = i }
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Button(
+            onClick = { onSubmitRating(selectedScore) },
+            enabled = selectedScore > 0,
+            modifier = Modifier
+                .width(200.dp)
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF6E29A), 
+                contentColor = Color.Black,
+                disabledContainerColor = Color.White.copy(alpha = 0.1f),
+                disabledContentColor = Color.White.copy(alpha = 0.3f)
+            )
+        ) {
+            Text("Lưu Đánh Giá", fontWeight = FontWeight.Bold)
+        }
+    }
 }
