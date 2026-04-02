@@ -1,5 +1,10 @@
 import {onRequest} from "firebase-functions/v2/https";
+import * as v1 from "firebase-functions/v1";
 import * as logger from "firebase-functions/logger";
+import * as admin from "firebase-admin";
+
+admin.initializeApp();
+const db = admin.firestore();
 
 const REGION = "asia-southeast1";
 const BASE_URL = "https://phimapi.com";
@@ -62,4 +67,36 @@ export const getMovieDetail = onRequest({ cors: true, region: REGION, maxInstanc
     }
 });
 
+
+export const onRatingWritten = v1.region(REGION).firestore
+    .document("movies/{movieId}/ratings/{userId}")
+    .onWrite(async (change: any, context: any) => {
+    const movieId = context.params.movieId;
+    
+    try {
+        const ratingsSnapshot = await db.collection("movies").doc(movieId).collection("ratings").get();
+        
+        let totalRatings = 0;
+        let sumScore = 0;
+        
+        ratingsSnapshot.forEach((doc) => {
+            const rating = doc.data();
+            if (typeof rating.score === "number") {
+                sumScore += rating.score;
+                totalRatings++;
+            }
+        });
+        
+        const averageRating = totalRatings > 0 ? (sumScore / totalRatings) : 0;
+        
+        await db.collection("movies").doc(movieId).set({
+            averageRating: Math.round(averageRating * 10) / 10,
+            totalRatings: totalRatings
+        }, { merge: true });
+        
+        logger.info(`Updated stats for movie ${movieId}: avg=${averageRating}, total=${totalRatings}`);
+    } catch (error) {
+        logger.error(`Error updating stats for movie ${movieId}`, error);
+    }
+});
 
