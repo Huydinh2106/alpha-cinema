@@ -347,123 +347,102 @@ fun SearchMovieCard(
     val badgeBgColor = when (movie.badgeColor) {
         "blue" -> Color(0xFF3B7DD8)
         "green" -> Color(0xFF4CAF50)
-        else -> Color(0xFF6B7280)
+        else -> Color(0xFF5C6273)
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(2f / 3f)
-            .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF2A3354),
-                        Color(0xFF131A2F)
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(16.dp)
-            )
             .clickable(onClick = onClick)
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(12.dp))
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Transparent,
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.7f)
-                        ),
-                        startY = 0f,
-                        endY = Float.POSITIVE_INFINITY
+                            Color(0xFF2A3354),
+                            Color(0xFF131A2F)
+                        )
                     )
                 )
-        )
-
-        Icon(
-            imageVector = Icons.Outlined.Search,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.08f),
-            modifier = Modifier
-                .size(48.dp)
-                .align(Alignment.Center)
-        )
-
-        if (movie.rating.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .padding(horizontal = 5.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Star,
-                    contentDescription = null,
-                    tint = Color(0xFFFFD76A),
-                    modifier = Modifier.size(10.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(12.dp)
                 )
-                Text(
-                    text = movie.rating,
-                    color = Color(0xFFFFE08A),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 9.sp
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            // Gradient Overlay
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(badgeBgColor.copy(alpha = 0.85f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.4f)
+                            ),
+                            startY = 0f,
+                            endY = Float.POSITIVE_INFINITY
+                        )
+                    )
+            )
+
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.08f),
+                modifier = Modifier
+                    .size(48.dp)
+                    .align(Alignment.Center)
+            )
+
+            // Tag độ phân giải (Badge) - now the ONLY thing inside the card as requested
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(badgeBgColor.copy(alpha = 0.95f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = movie.badge,
                     color = Color.White,
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 8.sp
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
                 )
             }
-
-            Text(
-                text = movie.title,
-                color = Color.White,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 14.sp
-            )
-
-            Text(
-                text = movie.subtitle,
-                color = Color.White.copy(alpha = 0.55f),
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 9.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Tên tiếng Việt
+        Text(
+            text = movie.title,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        // Tên tiếng Anh (Subtitle)
+        Text(
+            text = movie.subtitle,
+            color = Color.White.copy(alpha = 0.55f),
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
