@@ -50,11 +50,16 @@ fun AppScreen(modifier: Modifier = Modifier) {
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
     var currentRoute by remember { mutableStateOf<AppRoute>(AppRoute.Main(ScreenType.HOME)) }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     val movieDetailViewModel: MovieDetailViewModel = viewModel()
     val movieDetail by movieDetailViewModel.movieDetail.collectAsState()
     val detailLoading by movieDetailViewModel.isLoading.collectAsState()
     val detailError by movieDetailViewModel.error.collectAsState()
     val episodeVideoUrls by movieDetailViewModel.episodeVideoUrls.collectAsState()
+    val isFavorite by movieDetailViewModel.isFavorite.collectAsState()
+    val movieStats by movieDetailViewModel.movieStats.collectAsState()
+    val comments by movieDetailViewModel.comments.collectAsState()
+    val userRating by movieDetailViewModel.userRating.collectAsState()
 
     fun openMovieDetail(slug: String) {
         movieDetailViewModel.loadMovieDetail(slug)
@@ -113,6 +118,26 @@ fun AppScreen(modifier: Modifier = Modifier) {
                     } else if (movieDetail != null) {
                         MovieDetailScreen(
                             movie = movieDetail!!,
+                            isFavorite = isFavorite,
+                            movieStats = movieStats,
+                            userRating = userRating,
+                            comments = comments,
+                            onToggleFavorite = { movie -> 
+                                movieDetailViewModel.toggleFavorite(movie.title, movie.posterUrl) { _, msg ->
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onPostComment = { content -> 
+                                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                                movieDetailViewModel.postComment(user?.displayName ?: "Ẩn danh", user?.photoUrl?.toString() ?: "", content) { _, msg ->
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onSubmitRating = { score -> 
+                                movieDetailViewModel.submitRating(score) { _, msg ->
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             onBack = { currentRoute = AppRoute.Main(currentMainScreen) },
                             onPlayMovie = { playingMovie, episode ->
                                 currentRoute = AppRoute.PlayerRoute(
