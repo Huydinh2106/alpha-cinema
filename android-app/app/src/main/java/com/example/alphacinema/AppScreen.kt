@@ -7,8 +7,19 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.alphacinema.ui.viewmodel.MovieDetailViewModel
 
 enum class ScreenType {
     HOME,
@@ -26,8 +41,8 @@ enum class ScreenType {
 
 sealed interface AppRoute {
     data class Main(val screen: ScreenType) : AppRoute
-    data class MovieDetail(val movieId: String) : AppRoute
-    data class Player(val movieId: String, val episodeId: String?) : AppRoute
+    data class MovieDetailRoute(val slug: String) : AppRoute
+    data class PlayerRoute(val slug: String, val episodeId: String?) : AppRoute
 }
 
 @Composable
@@ -35,22 +50,21 @@ fun AppScreen(modifier: Modifier = Modifier) {
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
     var currentRoute by remember { mutableStateOf<AppRoute>(AppRoute.Main(ScreenType.HOME)) }
 
-    fun openMovieDetail(movieId: String) {
-        val movie = MovieDetailFakeData.findMovie(movieId)
-        if (movie != null) {
-            currentRoute = AppRoute.MovieDetail(movieId = movie.id)
-        }
+    val movieDetailViewModel: MovieDetailViewModel = viewModel()
+    val movieDetail by movieDetailViewModel.movieDetail.collectAsState()
+    val detailLoading by movieDetailViewModel.isLoading.collectAsState()
+    val detailError by movieDetailViewModel.error.collectAsState()
+    val episodeVideoUrls by movieDetailViewModel.episodeVideoUrls.collectAsState()
+
+    fun openMovieDetail(slug: String) {
+        movieDetailViewModel.loadMovieDetail(slug)
+        currentRoute = AppRoute.MovieDetailRoute(slug = slug)
     }
 
     fun openPlayerFromHome(movieUi: MovieUi) {
-        val movie = MovieDetailFakeData.movies.firstOrNull {
-            it.subtitle.equals(movieUi.subtitle, ignoreCase = true) ||
-                it.title.equals(movieUi.title, ignoreCase = true)
-        } ?: MovieDetailFakeData.findDefaultMovie()
-        currentRoute = AppRoute.Player(
-            movieId = movie.id,
-            episodeId = movie.episodes.firstOrNull()?.id
-        )
+        if (movieUi.slug.isNotBlank()) {
+            openMovieDetail(movieUi.slug)
+        }
     }
 
     Box(
@@ -74,32 +88,87 @@ fun AppScreen(modifier: Modifier = Modifier) {
                     }
                 }
 
-                is AppRoute.MovieDetail -> {
-                    val movie = MovieDetailFakeData.findMovie(route.movieId)
-                        ?: MovieDetailFakeData.findDefaultMovie()
-                    MovieDetailScreen(
-                        movie = movie,
-                        onBack = { currentRoute = AppRoute.Main(currentMainScreen) },
-                        onPlayMovie = { playingMovie, episode ->
-                            currentRoute = AppRoute.Player(
-                                movieId = playingMovie.id,
-                                episodeId = episode?.id
-                            )
-                        },
-                        onOpenMovie = ::openMovieDetail
-                    )
+                is AppRoute.MovieDetailRoute -> {
+                    if (detailLoading) {
+                        // Loading state
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF070B16)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFFF6E29A),
+                                    modifier = Modifier.size(42.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    "Đang tải chi tiết phim...",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    } else if (movieDetail != null) {
+                        MovieDetailScreen(
+                            movie = movieDetail!!,
+                            onBack = { currentRoute = AppRoute.Main(currentMainScreen) },
+                            onPlayMovie = { playingMovie, episode ->
+                                currentRoute = AppRoute.PlayerRoute(
+                                    slug = route.slug,
+                                    episodeId = episode?.id
+                                )
+                            },
+                            onOpenMovie = ::openMovieDetail
+                        )
+                    } else if (detailError != null) {
+                        // Error state
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF070B16)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    "Lỗi tải phim",
+                                    color = Color(0xFFFF6B6B),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    detailError ?: "",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
                 }
 
-                is AppRoute.Player -> {
-                    val movie = MovieDetailFakeData.findMovie(route.movieId)
-                        ?: MovieDetailFakeData.findDefaultMovie()
-                    val episode = movie.episodes.firstOrNull { it.id == route.episodeId }
-                        ?: movie.episodes.firstOrNull()
-                    PlayerScreen(
-                        movie = movie,
-                        episode = episode,
-                        onBack = { currentRoute = AppRoute.MovieDetail(movie.id) }
-                    )
+                is AppRoute.PlayerRoute -> {
+                    val movie = movieDetail
+                    if (movie != null) {
+                        val episode = movie.episodes.firstOrNull { it.id == route.episodeId }
+                            ?: movie.episodes.firstOrNull()
+                        val videoUrl = episode?.let { episodeVideoUrls[it.id] } ?: ""
+
+                        PlayerScreen(
+                            movie = movie,
+                            episode = episode,
+                            onBack = { currentRoute = AppRoute.MovieDetailRoute(route.slug) },
+                            videoUrl = videoUrl,
+                            episodeVideoUrls = episodeVideoUrls,
+                            onSelectEpisode = { ep ->
+                                currentRoute = AppRoute.PlayerRoute(
+                                    slug = route.slug,
+                                    episodeId = ep.id
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
