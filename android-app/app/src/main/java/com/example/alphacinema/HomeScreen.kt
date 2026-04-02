@@ -67,7 +67,8 @@ package com.example.alphacinema
         val year: String,
         val season: String,
         val episode: String,
-        val posterUrl: String = ""
+        val posterUrl: String = "",
+        val slug: String = ""
     )
 
     data class RecommendMovieUi(
@@ -103,13 +104,14 @@ package com.example.alphacinema
                 MovieUi(
                     title = it.name,
                     subtitle = it.origin_name ?: "",
-                    description = "", // detail usually requires individual endpoint, we don't have it on list.
+                    description = "",
                     rating = it.getRating(),
                     age = "",
                     year = it.year?.toString() ?: "",
                     season = "",
                     episode = it.episode_current ?: "",
-                    posterUrl = it.getFullPosterUrl()
+                    posterUrl = it.getFullPosterUrl(),
+                    slug = it.slug
                 )
             }.ifEmpty { // fallback to prevent empty state crashes if the list is empty during initial load
                 List(5) {
