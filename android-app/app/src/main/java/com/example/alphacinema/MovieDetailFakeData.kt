@@ -135,11 +135,26 @@ object MovieDetailFakeData {
     private val movieById: Map<String, MovieDetailUi> = movies.associateBy { it.id }
 
     val searchMovies: List<SearchMovieUi> = listOf(
-        SearchMovieUi("alice-in-borderland", "Thế Giới Không Lối", "Alice in Borderland", "Lồng Tiếng", "green", "7.8", "2020"),
-        SearchMovieUi("dune-part-two", "Dune: Hành Tinh Cát 2", "Dune: Part Two", "Phụ Đề", "gray", "8.6", "2024"),
-        SearchMovieUi("interstellar", "Interstellar", "Interstellar", "Phụ Đề", "gray", "8.7", "2014"),
-        SearchMovieUi("joker", "Joker", "Joker", "Thuyết Minh", "blue", "8.4", "2019"),
-        SearchMovieUi("squid-game", "Squid Game", "Squid Game", "Lồng Tiếng", "green", "8.0", "2021")
+        SearchMovieUi(
+            "alice-in-borderland", "Thế Giới Không Lối", "Alice in Borderland", "Lồng Tiếng", "green", "7.8", "2020",
+            posterUrl = "https://image.tmdb.org/t/p/w500/20mOwAAPwZ1vLQkw0fvuQHiG7bO.jpg"
+        ),
+        SearchMovieUi(
+            "dune-part-two", "Dune: Hành Tinh Cát 2", "Dune: Part Two", "Phụ Đề", "gray", "8.6", "2024",
+            posterUrl = "https://m.media-amazon.com/images/M/MV5BN2QyZGU4ZDctOWMzMy00NTc5LThlOGQtODhmNDI1NmY5YzAwXkEyXkFqcGdeQXVyMDM2NDM2MQ@@._V1_.jpg"
+        ),
+        SearchMovieUi(
+            "interstellar", "Interstellar", "Interstellar", "Phụ Đề", "gray", "8.7", "2014",
+            posterUrl = "https://m.media-amazon.com/images/M/MV5BYzdjMDAxZGItMjI2My00ODA1LTlkNzItOWFjMDU5ZDJlYWY3XkEyXkFqcGc@._V1_.jpg"
+        ),
+        SearchMovieUi(
+            "joker", "Joker", "Joker", "Thuyết Minh", "blue", "8.4", "2019",
+            posterUrl = "https://m.media-amazon.com/images/M/MV5BNGVjNWI4ZGUtNzE0MS00YTJmLWE0ZDctN2ZiYTk2YmI3NTYyXkEyXkFqcGdeQXVyMTkxNjUyNQ@@._V1_.jpg"
+        ),
+        SearchMovieUi(
+            "squid-game", "Squid Game", "Squid Game", "Lồng Tiếng", "green", "8.0", "2021",
+            posterUrl = "https://m.media-amazon.com/images/M/MV5BYWE3MDVkN2EtNjQ5MS00ZDQ4LTliNzYtMjc2YWMzMDEwMTA3XkEyXkFqcGdeQXVyMTEzMTI1Mjk3._V1_.jpg"
+        )
     )
 
     fun findMovie(movieId: String): MovieDetailUi? = movieById[movieId]

@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -39,6 +40,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,10 +52,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 
 data class SearchMovieUi(
     val movieId: String,
@@ -60,18 +68,25 @@ data class SearchMovieUi(
     val badge: String,
     val badgeColor: String,
     val rating: String = "",
-    val year: String = ""
+    val year: String = "",
+    val posterUrl: String = ""
 )
 
 @Composable
 fun SearchScreen(
-    onOpenMovieDetail: (String) -> Unit = {}
+    onOpenMovieDetail: (String) -> Unit = {},
+    viewModel: SearchViewModel = viewModel()
 ) {
     val trendingMovies = MovieDetailFakeData.searchMovies
     val categories = listOf("Tất cả", "Phim bộ", "Phim lẻ", "Anime", "TV Show")
 
+    val searchResults by viewModel.searchResults.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Tất cả") }
+
+    val isLoadMore by viewModel.isLoadMore.collectAsState()
+    val gridState = rememberLazyGridState()
 
     val filteredMovies = if (searchQuery.isEmpty()) {
         trendingMovies
@@ -79,6 +94,24 @@ fun SearchScreen(
         trendingMovies.filter {
             it.title.contains(searchQuery, ignoreCase = true) ||
                 it.subtitle.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    val shouldLoadMore = remember {
+        derivedStateOf {
+            val layoutInfo = gridState.layoutInfo
+            val totalItemsNumber = layoutInfo.totalItemsCount
+            val lastVisibleItemIndex = (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
+
+            //load khi thấy item cuối
+            lastVisibleItemIndex > 0 && lastVisibleItemIndex >= totalItemsNumber
+        }
+    }
+
+    LaunchedEffect(shouldLoadMore.value) {
+        if (shouldLoadMore.value) {
+            println("DEBUG: Reached bottom, calling loadMore(). Current results: ${searchResults.size}")
+            viewModel.loadMore()
         }
     }
 
@@ -102,7 +135,8 @@ fun SearchScreen(
         )
 
         LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
+            state = gridState,
+            columns = GridCells.Adaptive(minSize = 100.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(
@@ -116,7 +150,10 @@ fun SearchScreen(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 SearchHeader(
                     searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it }
+                    onSearchQueryChange = {
+                        searchQuery = it
+                        viewModel.onSearchQueryChanged(it)
+                    }
                 )
             }
 
@@ -160,14 +197,33 @@ fun SearchScreen(
                 }
             }
 
-            items(filteredMovies) { movie ->
-                SearchMovieCard(
-                    movie = movie,
-                    onClick = { onOpenMovieDetail(movie.movieId) }
-                )
+            if (isLoading) {
+                items(9) {
+                    SearchMovieCardSkeleton()
+                }
+            } else if (searchQuery.isEmpty()) {
+                items(trendingMovies) { movie ->
+                    SearchMovieCard(
+                        movie = movie,
+                        onClick = { onOpenMovieDetail(movie.movieId) }
+                    )
+                }
+            } else {
+                items(searchResults) { movie ->
+                    SearchMovieCard(
+                        movie = movie,
+                        onClick = { onOpenMovieDetail(movie.movieId) }
+                    )
+                }
             }
 
-            if (filteredMovies.isEmpty()) {
+            if (isLoadMore) {
+                items(3) { // hiển thị thêm 3 skeleton ở cuối
+                    SearchMovieCardSkeleton()
+                }
+            }
+
+            if (!isLoading && searchQuery.isNotEmpty() && searchResults.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
                         modifier = Modifier
@@ -343,127 +399,137 @@ fun SearchCategoryChips(
 fun SearchMovieCard(
     movie: SearchMovieUi,
     onClick: () -> Unit = {}
+) {    Box(
+    modifier = Modifier
+        .fillMaxWidth()
+        .aspectRatio(0.68f)
+        .clip(RoundedCornerShape(18.dp))
+        .background(Color(0xFF131A2F))
+        .clickable(onClick = onClick)
 ) {
-    val badgeBgColor = when (movie.badgeColor) {
-        "blue" -> Color(0xFF3B7DD8)
-        "green" -> Color(0xFF4CAF50)
-        else -> Color(0xFF6B7280)
+    AsyncImage(
+        model = movie.posterUrl,
+        contentDescription = movie.title,
+        modifier = Modifier.fillMaxSize(),
+        contentScale = ContentScale.Crop,
+        placeholder = painterResource(id = R.drawable.logo_app),
+        error = painterResource(id = R.drawable.logo_app)
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color.Black.copy(alpha = 0.2f),
+                        Color.Black.copy(alpha = 0.85f)
+                    ),
+                    startY = 100f
+                )
+            )
+    )
+
+    if (movie.rating.isNotEmpty() && movie.rating != "N/A") {
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.Black.copy(alpha = 0.6f))
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                tint = Color(0xFFFFD76A),
+                modifier = Modifier.size(10.dp)
+            )
+            Text(
+                text = movie.rating,
+                color = Color(0xFFFFE08A),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp
+            )
+        }
     }
 
+    // 4. Thông tin Phim (Căn dưới)
+    Column(
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .fillMaxWidth()
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        // Badge (Chất lượng/Số tập) - Dùng nền xám mờ đồng bộ
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color.White.copy(alpha = 0.25f))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = movie.badge,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            text = movie.title,
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 15.sp
+        )
+
+        Text(
+            text = movie.subtitle,
+            color = Color.White.copy(alpha = 0.6f),
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+}
+
+@Composable
+fun SearchMovieCardSkeleton() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(2f / 3f)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF2A3354),
-                        Color(0xFF131A2F)
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clickable(onClick = onClick)
+            .background(Color.White.copy(alpha = 0.05f)) // Màu nền mờ
     ) {
+        // Hiệu ứng loading đơn giản
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.verticalGradient(
+                    Brush.linearGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.7f)
-                        ),
-                        startY = 0f,
-                        endY = Float.POSITIVE_INFINITY
+                            Color.White.copy(alpha = 0.05f),
+                            Color.Transparent
+                        )
                     )
                 )
         )
-
-        Icon(
-            imageVector = Icons.Outlined.Search,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.08f),
-            modifier = Modifier
-                .size(48.dp)
-                .align(Alignment.Center)
-        )
-
-        if (movie.rating.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .padding(horizontal = 5.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Star,
-                    contentDescription = null,
-                    tint = Color(0xFFFFD76A),
-                    modifier = Modifier.size(10.dp)
-                )
-                Text(
-                    text = movie.rating,
-                    color = Color(0xFFFFE08A),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 9.sp
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(badgeBgColor.copy(alpha = 0.85f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = movie.badge,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 8.sp
-                )
-            }
-
-            Text(
-                text = movie.title,
-                color = Color.White,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 11.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 14.sp
-            )
-
-            Text(
-                text = movie.subtitle,
-                color = Color.White.copy(alpha = 0.55f),
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = 9.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
     }
 }
 
