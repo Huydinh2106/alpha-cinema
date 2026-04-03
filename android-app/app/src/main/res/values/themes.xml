@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Theme chính dùng sau Splash -->
+    <style name="Theme.AlphaCinema" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+    </style>
 
-    <style name="Theme.AlphaCinema" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- System Splash Screen của Android 12+ được "vô hiệu hoá" bằng cách:
+         - Nền tối đúng màu app (#070B16)
+         - Icon trong suốt hoàn toàn → KHÔNG thấy gì cả
+         Kết quả: người dùng chỉ thấy màn đen → fade vào Splash của mình -->
+    <style name="Theme.AlphaCinema.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_bg</item>
+        <!-- Icon trong suốt = không hiện gì -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/transparent_icon</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_bg</item>
+        <!-- Thời gian hiển thị tối thiểu = 0 → tắt ngay -->
+        <item name="windowSplashScreenAnimationDuration">0</item>
+        <item name="postSplashScreenTheme">@style/Theme.AlphaCinema</item>
+    </style>
 </resources>
