@@ -45,6 +45,11 @@ sealed interface AppRoute {
     data class Main(val screen: ScreenType) : AppRoute
     data class MovieDetailRoute(val slug: String) : AppRoute
     data class PlayerRoute(val slug: String, val episodeId: String?) : AppRoute
+    data class MovieListRoute(
+        val title: String,
+        val filterKind: FilterKind,
+        val slug: String
+    ) : AppRoute
 }
 
 sealed interface SplashState {
@@ -137,7 +142,16 @@ fun MainContent(
             when (route) {
                 is AppRoute.Main -> {
                     when (route.screen) {
-                        ScreenType.HOME -> HomeScreen(onPlayMovie = ::openPlayerFromHome)
+                        ScreenType.HOME -> HomeScreen(
+                            onPlayMovie = ::openPlayerFromHome,
+                            onSeeMore = { kind, slug, title ->
+                                currentRoute = AppRoute.MovieListRoute(
+                                    title = title,
+                                    filterKind = kind,
+                                    slug = slug
+                                )
+                            }
+                        )
                         ScreenType.SEARCH -> SearchScreen(onOpenMovieDetail = ::openMovieDetail)
                         ScreenType.SUPPORT -> SupportScreen()
                         ScreenType.ACCOUNT -> AccountScreen()
@@ -243,6 +257,16 @@ fun MainContent(
                             }
                         )
                     }
+                }
+
+                is AppRoute.MovieListRoute -> {
+                    MovieListScreen(
+                        title = route.title,
+                        filterKind = route.filterKind,
+                        slug = route.slug,
+                        onBack = { currentRoute = AppRoute.Main(currentMainScreen) },
+                        onOpenMovieDetail = ::openMovieDetail
+                    )
                 }
             }
         }

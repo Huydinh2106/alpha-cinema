@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 
 package com.example.alphacinema
 
@@ -12,15 +12,22 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -30,15 +37,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,11 +66,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+
+// ── UI data class (kept here so AppScreen / other screens can still reference it) ──
 
 data class SearchMovieUi(
     val movieId: String,
@@ -72,64 +86,57 @@ data class SearchMovieUi(
     val posterUrl: String = ""
 )
 
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     onOpenMovieDetail: (String) -> Unit = {},
     viewModel: SearchViewModel = viewModel()
 ) {
     val trendingMovies = MovieDetailFakeData.searchMovies
-    val categories = listOf("Tất cả", "Phim bộ", "Phim lẻ", "Anime", "TV Show")
 
     val searchResults by viewModel.searchResults.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("Tất cả") }
+    val isLoading    by viewModel.isLoading.collectAsState()
+    val isLoadMore   by viewModel.isLoadMore.collectAsState()
+    val selectedFilter by viewModel.selectedFilter.collectAsState()
 
-    val isLoadMore by viewModel.isLoadMore.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    var showFilterSheet by remember { mutableStateOf(false) }
+
     val gridState = rememberLazyGridState()
 
-    val filteredMovies = if (searchQuery.isEmpty()) {
-        trendingMovies
-    } else {
-        trendingMovies.filter {
-            it.title.contains(searchQuery, ignoreCase = true) ||
-                it.subtitle.contains(searchQuery, ignoreCase = true)
-        }
-    }
+    val isFiltered     = selectedFilter.kind != FilterKind.ALL
+    val isSearchActive = searchQuery.length >= 2 || isFiltered
 
+    // Load more when reaching the bottom
     val shouldLoadMore = remember {
         derivedStateOf {
-            val layoutInfo = gridState.layoutInfo
-            val totalItemsNumber = layoutInfo.totalItemsCount
-            val lastVisibleItemIndex = (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
-
-            //load khi thấy item cuối
-            lastVisibleItemIndex > 0 && lastVisibleItemIndex >= totalItemsNumber
+            val info = gridState.layoutInfo
+            val last = (info.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
+            last > 0 && last >= info.totalItemsCount
         }
     }
-
     LaunchedEffect(shouldLoadMore.value) {
-        if (shouldLoadMore.value) {
-            println("DEBUG: Reached bottom, calling loadMore(). Current results: ${searchResults.size}")
-            viewModel.loadMore()
-        }
+        if (shouldLoadMore.value && isSearchActive) viewModel.loadMore()
     }
+
+    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomPad = navBarHeight + 104.dp
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF070B16))
     ) {
+        // Top gradient decoration
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(300.dp)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1A2240).copy(alpha = 0.6f),
-                            Color(0xFF070B16)
-                        )
+                        colors = listOf(Color(0xFF1A2240).copy(alpha = 0.6f), Color(0xFF070B16))
                     )
                 )
         )
@@ -140,31 +147,80 @@ fun SearchScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 120.dp
+                start = 16.dp, end = 16.dp, top = 16.dp, bottom = bottomPad
             ),
             modifier = Modifier.fillMaxSize()
         ) {
+            // ── Search bar ────────────────────────────────────────────────────
             item(span = { GridItemSpan(maxLineSpan) }) {
                 SearchHeader(
                     searchQuery = searchQuery,
                     onSearchQueryChange = {
                         searchQuery = it
                         viewModel.onSearchQueryChanged(it)
+                    },
+                    isFiltered = isFiltered,
+                    filterLabel = if (isFiltered) selectedFilter.label else null,
+                    onFilterClick = { showFilterSheet = true },
+                    applyStatusBarPadding = true
+                )
+            }
+
+            // ── Active filter badge ───────────────────────────────────────────
+            if (isFiltered) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Đang lọc:",
+                            color = Color.White.copy(alpha = 0.5f),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        // Active filter chip with ✕
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFFF6E29A))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { viewModel.setFilter(SEARCH_FILTERS[0]) }
+                                .padding(horizontal = 12.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(
+                                text = selectedFilter.label,
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "Bỏ lọc",
+                                tint = Color.Black.copy(alpha = 0.7f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        // Hint when type filter + keyword (API limitation)
+                        if (selectedFilter.kind == FilterKind.MOVIE_TYPE && searchQuery.length >= 2) {
+                            Text(
+                                text = "* Tìm kiếm không lọc được theo loại phim",
+                                color = Color.White.copy(alpha = 0.35f),
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
-                )
+                }
             }
 
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                SearchCategoryChips(
-                    categories = categories,
-                    selectedCategory = selectedCategory,
-                    onCategorySelected = { selectedCategory = it }
-                )
-            }
-
+            // ── Section title ─────────────────────────────────────────────────
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(
                     modifier = Modifier
@@ -180,13 +236,17 @@ fun SearchScreen(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = if (searchQuery.isEmpty()) "Được tìm kiếm nhiều" else "Kết quả tìm kiếm",
+                        text = when {
+                            isLoading -> "Đang tải..."
+                            isSearchActive -> "Kết quả tìm kiếm"
+                            else -> "Được tìm kiếm nhiều"
+                        },
                         color = Color.White,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    if (searchQuery.isEmpty()) {
+                    if (!isSearchActive) {
                         Icon(
                             imageVector = Icons.Outlined.TrendingUp,
                             contentDescription = null,
@@ -197,38 +257,24 @@ fun SearchScreen(
                 }
             }
 
-            if (isLoading) {
-                items(9) {
-                    SearchMovieCardSkeleton()
+            // ── Content ───────────────────────────────────────────────────────
+            when {
+                isLoading -> items(9) { SearchMovieCardSkeleton() }
+                !isSearchActive -> items(trendingMovies) { movie ->
+                    SearchMovieCard(movie = movie, onClick = { onOpenMovieDetail(movie.movieId) })
                 }
-            } else if (searchQuery.isEmpty()) {
-                items(trendingMovies) { movie ->
-                    SearchMovieCard(
-                        movie = movie,
-                        onClick = { onOpenMovieDetail(movie.movieId) }
-                    )
-                }
-            } else {
-                items(searchResults) { movie ->
-                    SearchMovieCard(
-                        movie = movie,
-                        onClick = { onOpenMovieDetail(movie.movieId) }
-                    )
+                else -> items(searchResults) { movie ->
+                    SearchMovieCard(movie = movie, onClick = { onOpenMovieDetail(movie.movieId) })
                 }
             }
 
-            if (isLoadMore) {
-                items(3) { // hiển thị thêm 3 skeleton ở cuối
-                    SearchMovieCardSkeleton()
-                }
-            }
+            if (isLoadMore) items(3) { SearchMovieCardSkeleton() }
 
-            if (!isLoading && searchQuery.isNotEmpty() && searchResults.isEmpty()) {
+            // Empty state
+            if (!isLoading && isSearchActive && searchResults.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 60.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 60.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -241,271 +287,406 @@ fun SearchScreen(
                         Text(
                             text = "Không tìm thấy kết quả",
                             color = Color.White.copy(alpha = 0.5f),
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Thử tìm kiếm với từ khóa khác",
+                            text = "Thử từ khóa khác hoặc bỏ bộ lọc",
                             color = Color.White.copy(alpha = 0.3f),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
             }
         }
     }
+
+    // ── Filter bottom sheet ───────────────────────────────────────────────────
+    if (showFilterSheet) {
+        FilterBottomSheet(
+            filters = SEARCH_FILTERS,
+            selected = selectedFilter,
+            onSelect = { filter ->
+                viewModel.setFilter(filter)
+                showFilterSheet = false
+            },
+            onDismiss = { showFilterSheet = false }
+        )
+    }
 }
+
+// ── Search header ─────────────────────────────────────────────────────────────
 
 @Composable
 fun SearchHeader(
     searchQuery: String,
-    onSearchQueryChange: (String) -> Unit
+    onSearchQueryChange: (String) -> Unit,
+    isFiltered: Boolean = false,
+    filterLabel: String? = null,
+    onFilterClick: () -> Unit = {},
+    applyStatusBarPadding: Boolean = false
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFF1A1F2E),
-                        Color(0xFF1E2438)
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.15f),
-                        Color(0xFFF6E29A).copy(alpha = 0.1f)
-                    )
-                ),
-                shape = RoundedCornerShape(26.dp)
-            )
-            .padding(horizontal = 16.dp),
+            .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Search,
-            contentDescription = null,
-            tint = Color(0xFFF6E29A).copy(alpha = 0.7f),
-            modifier = Modifier.size(22.dp)
-        )
-
-        BasicTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
+        // Search field
+        Row(
             modifier = Modifier
                 .weight(1f)
-                .align(Alignment.CenterVertically),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = Color.White,
-                fontSize = 15.sp
-            ),
-            decorationBox = { innerTextField ->
-                if (searchQuery.isEmpty()) {
-                    Text(
-                        text = "Tìm kiếm phim, diễn viên, thể loại...",
-                        color = Color.White.copy(alpha = 0.4f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontSize = 15.sp
+                .height(52.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF1A1F2E), Color(0xFF1E2438))
                     )
-                }
-                innerTextField()
-            },
-            singleLine = true
-        )
-
-        if (searchQuery.isNotEmpty()) {
+                )
+                .border(
+                    1.dp,
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.15f),
+                            Color(0xFFF6E29A).copy(alpha = 0.1f)
+                        )
+                    ),
+                    RoundedCornerShape(26.dp)
+                )
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Icon(
-                imageVector = Icons.Outlined.Close,
-                contentDescription = "Xóa",
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .clickable { onSearchQueryChange("") }
+                imageVector = Icons.Outlined.Search,
+                contentDescription = null,
+                tint = Color(0xFFF6E29A).copy(alpha = 0.7f),
+                modifier = Modifier.size(22.dp)
             )
-        } else {
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier.weight(1f).align(Alignment.CenterVertically),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = Color.White,
+                    fontSize = 15.sp
+                ),
+                decorationBox = { innerTextField ->
+                    if (searchQuery.isEmpty()) {
+                        Text(
+                            text = "Tìm kiếm phim, diễn viên...",
+                            color = Color.White.copy(alpha = 0.4f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 15.sp
+                        )
+                    }
+                    innerTextField()
+                },
+                singleLine = true
+            )
+            if (searchQuery.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "Xóa",
+                    tint = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .clickable { onSearchQueryChange("") }
+                )
+            }
+        }
+
+        // Filter button – yellow filled when a filter is active
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(if (isFiltered) Color(0xFFF6E29A) else Color(0xFF1A1F2E))
+                .border(
+                    1.dp,
+                    if (isFiltered) Color.Transparent else Color.White.copy(alpha = 0.15f),
+                    CircleShape
+                )
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onFilterClick
+                ),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(
                 imageVector = Icons.Outlined.Tune,
                 contentDescription = "Bộ lọc",
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
+                tint = if (isFiltered) Color.Black else Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(22.dp)
             )
         }
     }
 }
 
-@Composable
-fun SearchCategoryChips(
-    categories: List<String>,
-    selectedCategory: String,
-    onCategorySelected: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        categories.forEach { category ->
-            val isSelected = category == selectedCategory
-            val bgColor by animateColorAsState(
-                targetValue = if (isSelected) Color(0xFFF6E29A) else Color.Transparent,
-                animationSpec = tween(250),
-                label = "chipBg"
-            )
-            val textColor by animateColorAsState(
-                targetValue = if (isSelected) Color.Black else Color.White.copy(alpha = 0.75f),
-                animationSpec = tween(250),
-                label = "chipText"
-            )
+// ── Filter Bottom Sheet ───────────────────────────────────────────────────────
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .then(
-                        if (isSelected) Modifier.background(bgColor)
-                        else Modifier.border(
-                            1.dp,
-                            Color.White.copy(alpha = 0.2f),
-                            RoundedCornerShape(20.dp)
-                        )
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun FilterBottomSheet(
+    filters: List<SearchFilter>,
+    selected: SearchFilter,
+    onSelect: (SearchFilter) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val typeFilters  = filters.filter { it.kind == FilterKind.ALL || it.kind == FilterKind.MOVIE_TYPE }
+    val genreFilters = filters.filter { it.kind == FilterKind.GENRE }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color(0xFF10192E),
+        scrimColor = Color.Black.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(top = 4.dp, bottom = 28.dp)
+        ) {
+            // Header
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Bộ lọc",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
                     )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onCategorySelected(category) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
+                    Text(
+                        text = "Chọn loại phim hoặc thể loại",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                if (selected.kind != FilterKind.ALL) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelect(SEARCH_FILTERS[0]) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Đặt lại",
+                            color = Color(0xFFF6E29A),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Loại phim section ─────────────────────────────────────────────
+            Text(
+                text = "Loại phim",
+                color = Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = category,
-                    color = textColor,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontSize = 12.sp,
-                    maxLines = 1
-                )
+                typeFilters.forEach { filter ->
+                    FilterChip(filter = filter, selected = selected, onSelect = onSelect)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // ── Thể loại / genre section ──────────────────────────────────────
+            Text(
+                text = "Thể loại",
+                color = Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                genreFilters.forEach { filter ->
+                    FilterChip(filter = filter, selected = selected, onSelect = onSelect)
+                }
             }
         }
     }
 }
 
 @Composable
-fun SearchMovieCard(
-    movie: SearchMovieUi,
-    onClick: () -> Unit = {}
-) {    Box(
-    modifier = Modifier
-        .fillMaxWidth()
-        .aspectRatio(0.68f)
-        .clip(RoundedCornerShape(18.dp))
-        .background(Color(0xFF131A2F))
-        .clickable(onClick = onClick)
+private fun FilterChip(
+    filter: SearchFilter,
+    selected: SearchFilter,
+    onSelect: (SearchFilter) -> Unit
 ) {
-    AsyncImage(
-        model = movie.posterUrl,
-        contentDescription = movie.title,
-        modifier = Modifier.fillMaxSize(),
-        contentScale = ContentScale.Crop,
-        placeholder = painterResource(id = R.drawable.logo_app),
-        error = painterResource(id = R.drawable.logo_app)
+    val isSelected = filter == selected
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) Color(0xFFF6E29A) else Color(0xFF1A2237),
+        animationSpec = tween(200), label = "chipBg"
     )
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) Color.Black else Color.White.copy(alpha = 0.80f),
+        animationSpec = tween(200), label = "chipText"
+    )
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(22.dp))
+            .background(bgColor)
+            .then(
+                if (!isSelected) Modifier.border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(22.dp))
+                else Modifier
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onSelect(filter) }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        if (isSelected) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.size(13.dp)
+            )
+        }
+        Text(
+            text = filter.label,
+            color = textColor,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            style = MaterialTheme.typography.labelLarge,
+            fontSize = 13.sp
+        )
+    }
+}
 
+// ── Movie card ────────────────────────────────────────────────────────────────
+
+@Composable
+fun SearchMovieCard(movie: SearchMovieUi, onClick: () -> Unit = {}) {
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Color.Black.copy(alpha = 0.2f),
-                        Color.Black.copy(alpha = 0.85f)
-                    ),
-                    startY = 100f
-                )
-            )
-    )
-
-    if (movie.rating.isNotEmpty() && movie.rating != "N/A") {
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.Black.copy(alpha = 0.6f))
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = null,
-                tint = Color(0xFFFFD76A),
-                modifier = Modifier.size(10.dp)
-            )
-            Text(
-                text = movie.rating,
-                color = Color(0xFFFFE08A),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                fontSize = 10.sp
-            )
-        }
-    }
-
-    // 4. Thông tin Phim (Căn dưới)
-    Column(
-        modifier = Modifier
-            .align(Alignment.BottomStart)
             .fillMaxWidth()
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .aspectRatio(0.68f)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF131A2F))
+            .clickable(onClick = onClick)
     ) {
-        // Badge (Chất lượng/Số tập) - Dùng nền xám mờ đồng bộ
+        AsyncImage(
+            model = movie.posterUrl,
+            contentDescription = movie.title,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            placeholder = painterResource(id = R.drawable.logo_app),
+            error = painterResource(id = R.drawable.logo_app)
+        )
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color.White.copy(alpha = 0.25f))
-                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.2f),
+                            Color.Black.copy(alpha = 0.85f)
+                        ),
+                        startY = 100f
+                    )
+                )
+        )
+        if (movie.rating.isNotEmpty() && movie.rating != "N/A") {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Star,
+                    contentDescription = null,
+                    tint = Color(0xFFFFD76A),
+                    modifier = Modifier.size(10.dp)
+                )
+                Text(
+                    text = movie.rating,
+                    color = Color(0xFFFFE08A),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp
+                )
+            }
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.25f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = movie.badge,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = movie.badge,
+                text = movie.title,
                 color = Color.White,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                fontSize = 9.sp
+                fontSize = 12.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 15.sp
+            )
+            Text(
+                text = movie.subtitle,
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        Text(
-            text = movie.title,
-            color = Color.White,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            lineHeight = 15.sp
-        )
-
-        Text(
-            text = movie.subtitle,
-            color = Color.White.copy(alpha = 0.6f),
-            style = MaterialTheme.typography.labelSmall,
-            fontSize = 10.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
-}
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 
 @Composable
 fun SearchMovieCardSkeleton() {
@@ -514,19 +695,14 @@ fun SearchMovieCardSkeleton() {
             .fillMaxWidth()
             .aspectRatio(2f / 3f)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f)) // Màu nền mờ
+            .background(Color.White.copy(alpha = 0.05f))
     ) {
-        // Hiệu ứng loading đơn giản
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.linearGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.White.copy(alpha = 0.05f),
-                            Color.Transparent
-                        )
+                        listOf(Color.Transparent, Color.White.copy(alpha = 0.05f), Color.Transparent)
                     )
                 )
         )
