@@ -1,9 +1,12 @@
 package com.example.alphacinema
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,15 +16,20 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -29,51 +37,54 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.alphacinema.data.model.SupportChatMessage
+import com.example.alphacinema.data.model.SupportMessageSender
+import com.example.alphacinema.ui.viewmodel.SupportViewModel
 
-private data class SupportMessageUi(
-    val id: String,
-    val text: String,
-    val fromUser: Boolean,
-    val time: String
+private val SupportScreenShape = RoundedCornerShape(28.dp)
+private val SupportInputShape = RoundedCornerShape(24.dp)
+private val SupportReservedBottomSpace = 112.dp
+private val UserBubbleShape = RoundedCornerShape(
+    topStart = 22.dp,
+    topEnd = 22.dp,
+    bottomStart = 22.dp,
+    bottomEnd = 8.dp
+)
+private val BotBubbleShape = RoundedCornerShape(
+    topStart = 22.dp,
+    topEnd = 22.dp,
+    bottomStart = 8.dp,
+    bottomEnd = 22.dp
 )
 
 @Composable
-fun SupportScreen() {
+fun SupportScreen(
+    supportViewModel: SupportViewModel = viewModel()
+) {
     var input by remember { mutableStateOf("") }
-    var messages by remember {
-        mutableStateOf(
-            listOf(
-                SupportMessageUi(
-                    id = "1",
-                    text = "Xin chào, AlphaCinema có thể hỗ trợ gì cho bạn hôm nay?",
-                    fromUser = false,
-                    time = "19:20"
-                ),
-                SupportMessageUi(
-                    id = "2",
-                    text = "Mình muốn biết gói thành viên tháng có gì.",
-                    fromUser = true,
-                    time = "19:21"
-                ),
-                SupportMessageUi(
-                    id = "3",
-                    text = "Gói tháng hiện có xem không quảng cáo, tải offline và ưu tiên chất lượng cao.",
-                    fromUser = false,
-                    time = "19:21"
-                )
-            )
-        )
+    val messages by supportViewModel.messages.collectAsState()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size)
+        }
     }
 
     Box(
@@ -82,46 +93,66 @@ fun SupportScreen() {
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF111A2E),
-                        Color(0xFF0C1324),
-                        Color(0xFF070B16)
+                        Color(0xFF10182B),
+                        Color(0xFF0A1120),
+                        Color(0xFF060913)
                     )
                 )
             )
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(240.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x44F6E29A),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                // Reserve room above the floating GlassBottomBar from AppScreen.
+                .padding(bottom = SupportReservedBottomSpace)
+        ) {
             SupportTopBar()
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 18.dp,
+                    end = 16.dp,
+                    bottom = 20.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                item { Spacer(modifier = Modifier.height(10.dp)) }
+                item {
+                    SupportIntroCard()
+                }
+
                 items(messages, key = { it.id }) { message ->
                     MessageBubble(message = message)
                 }
-                item { Spacer(modifier = Modifier.height(10.dp)) }
             }
 
-            InputBar(
+            SupportInputBar(
                 value = input,
                 onValueChange = { input = it },
                 onSend = {
                     val content = input.trim()
                     if (content.isNotEmpty()) {
-                        messages = messages + SupportMessageUi(
-                            id = (messages.size + 1).toString(),
-                            text = content,
-                            fromUser = true,
-                            time = "Bây giờ"
-                        )
                         input = ""
-
-                        // TODO: Gọi chatbot API tại đây với nội dung `content`.
-                        // TODO: Khi API trả về, append câu trả lời bot vào `messages`.
+                        supportViewModel.sendMessage(content)
                     }
                 }
             )
@@ -131,89 +162,193 @@ fun SupportScreen() {
 
 @Composable
 private fun SupportTopBar() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color(0xCC121C33),
-        shadowElevation = 8.dp
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 14.dp)
+        Text(
+            text = "H\u1ed7 tr\u1ee3",
+            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Hỗ trợ",
+                text = "Tr\u1ee3 l\u00fd AlphaCinema lu\u00f4n s\u1eb5n s\u00e0ng gi\u1ea3i \u0111\u00e1p",
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Surface(
+                color = Color(0x22F6E29A),
+                shape = RoundedCornerShape(999.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color(0xFFF6E29A),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "AI Chat",
+                        color = Color(0xFFF6E29A),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SupportIntroCard() {
+    Surface(
+        color = Color(0xFF101C31).copy(alpha = 0.88f),
+        shape = SupportScreenShape,
+        tonalElevation = 2.dp,
+        shadowElevation = 10.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.08f),
+                shape = SupportScreenShape
+            )
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "H\u1ecfi nhanh, tr\u1ea3 l\u1eddi r\u00f5",
                 color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Trợ lý AlphaCinema",
-                color = Color(0xFFF6E29A),
-                style = MaterialTheme.typography.labelLarge
+                text = "B\u1ea1n c\u00f3 th\u1ec3 h\u1ecfi v\u1ec1 phim, th\u00f4ng tin \u1ee9ng d\u1ee5ng ho\u1eb7c c\u00e1ch s\u1eed d\u1ee5ng AlphaCinema. C\u00e1c c\u00e2u tr\u1ea3 l\u1eddi s\u1ebd \u0111\u01b0\u1ee3c l\u1ea5y t\u1eeb chatbot API th\u1eadt.",
+                color = Color.White.copy(alpha = 0.74f),
+                style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 21.sp
             )
         }
     }
 }
 
 @Composable
-private fun MessageBubble(message: SupportMessageUi) {
-    val bubbleColor = if (message.fromUser) Color(0xFFF6E29A) else Color(0xFF1B2742)
-    val textColor = if (message.fromUser) Color.Black else Color.White
+private fun MessageBubble(message: SupportChatMessage) {
+    val fromUser = message.sender == SupportMessageSender.USER
+    val isLoading = message.sender == SupportMessageSender.LOADING
+    val bubbleColor = when (message.sender) {
+        SupportMessageSender.USER -> Color(0xFFF6E29A)
+        SupportMessageSender.BOT -> Color(0xFF17233A)
+        SupportMessageSender.LOADING -> Color(0xFF111B2E)
+    }
+    val textColor = if (fromUser) Color(0xFF111111) else Color.White
+    val bubbleShape = if (fromUser) UserBubbleShape else BotBubbleShape
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (message.fromUser) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start
     ) {
-        Column(horizontalAlignment = if (message.fromUser) Alignment.End else Alignment.Start) {
-            Surface(
-                color = bubbleColor,
-                shadowElevation = 4.dp,
-                shape = RoundedCornerShape(
-                    topStart = 18.dp,
-                    topEnd = 18.dp,
-                    bottomStart = if (message.fromUser) 18.dp else 6.dp,
-                    bottomEnd = if (message.fromUser) 6.dp else 18.dp
-                ),
-                modifier = Modifier.widthIn(max = 290.dp)
-            ) {
+        Column(
+            horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start,
+            modifier = Modifier.widthIn(max = 320.dp)
+        ) {
+            AnimatedVisibility(visible = !fromUser) {
                 Text(
-                    text = message.text,
-                    color = textColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp)
+                    text = if (isLoading) "AlphaCinema \u0111ang so\u1ea1n" else "Tr\u1ee3 l\u00fd AlphaCinema",
+                    color = Color.White.copy(alpha = 0.42f),
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 5.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(2.dp))
+
+            Surface(
+                color = bubbleColor,
+                shadowElevation = if (fromUser) 4.dp else 8.dp,
+                shape = bubbleShape,
+                modifier = Modifier
+                    .clip(bubbleShape)
+                    .border(
+                        width = 1.dp,
+                        color = if (fromUser) Color.Transparent else Color.White.copy(alpha = 0.08f),
+                        shape = bubbleShape
+                    )
+            ) {
+                if (isLoading) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFFF6E29A)
+                        )
+                        Text(
+                            text = message.text,
+                            color = Color.White.copy(alpha = 0.84f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    Text(
+                        text = message.text,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(5.dp))
+
             Text(
-                text = message.time,
-                color = Color.White.copy(alpha = 0.4f),
+                text = message.timestamp,
+                color = Color.White.copy(alpha = 0.34f),
                 style = MaterialTheme.typography.labelSmall,
-                textAlign = if (message.fromUser) TextAlign.End else TextAlign.Start
+                textAlign = if (fromUser) TextAlign.End else TextAlign.Start,
+                modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
     }
 }
 
 @Composable
-private fun InputBar(
+private fun SupportInputBar(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
     Surface(
-        color = Color(0xD4142037),
-        shadowElevation = 12.dp,
+        color = Color(0xE0131D31),
+        shadowElevation = 18.dp,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
                 .navigationBarsPadding()
                 .imePadding(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedTextField(
                 value = value,
@@ -221,36 +356,40 @@ private fun InputBar(
                 modifier = Modifier.weight(1f),
                 placeholder = {
                     Text(
-                        text = "Nhập tin nhắn...",
-                        color = Color.White.copy(alpha = 0.45f)
+                        text = "H\u1ecfi v\u1ec1 phim, t\u00e0i kho\u1ea3n, g\u00f3i th\u00e0nh vi\u00ean...",
+                        color = Color.White.copy(alpha = 0.42f)
                     )
                 },
-                singleLine = true,
-                shape = RoundedCornerShape(20.dp),
+                minLines = 1,
+                maxLines = 4,
+                shape = SupportInputShape,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF1A2542),
-                    unfocusedContainerColor = Color(0xFF16203A),
+                    focusedContainerColor = Color(0xFF16233B),
+                    unfocusedContainerColor = Color(0xFF10192D),
                     focusedBorderColor = Color(0xFFF6E29A),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.20f),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
                     cursorColor = Color(0xFFF6E29A)
                 )
             )
 
             Button(
                 onClick = onSend,
+                enabled = value.isNotBlank(),
                 shape = CircleShape,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFF6E29A),
-                    contentColor = Color.Black
+                    contentColor = Color.Black,
+                    disabledContainerColor = Color.White.copy(alpha = 0.10f),
+                    disabledContentColor = Color.White.copy(alpha = 0.28f)
                 ),
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(52.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.Send,
-                    contentDescription = "Gửi"
+                    contentDescription = "G\u1eedi"
                 )
             }
         }
