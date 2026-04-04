@@ -1,28 +1,39 @@
 package com.example.alphacinema
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,14 +45,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+
+fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 @Composable
 fun PlayerScreen(
@@ -66,14 +82,23 @@ fun PlayerScreen(
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             settings.loadWithOverviewMode = true
             settings.useWideViewPort = true
+            
+            // Tối ưu tốc độ 
+            settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.allowFileAccess = true
+            
             webChromeClient = WebChromeClient()
             webViewClient = WebViewClient()
             setBackgroundColor(android.graphics.Color.BLACK)
         }
     }
 
+    // Xoay ngang màn hình
     DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             webView.stopLoading()
             webView.destroy()
         }
@@ -83,26 +108,31 @@ fun PlayerScreen(
     DisposableEffect(videoUrl) {
         if (videoUrl.isNotBlank()) {
             if (videoUrl.contains(".m3u8")) {
-                // HLS stream - use hls.js player
                 val html = """
                     <!DOCTYPE html>
                     <html>
                     <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                         <style>
                             * { margin: 0; padding: 0; box-sizing: border-box; }
-                            body { background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; }
-                            video { width: 100%; max-height: 100vh; background: #000; }
+                            body { background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+                            video { width: 100%; height: 100%; object-fit: contain; background: #000; outline: none; }
+                            video::-webkit-media-controls-enclosure { border-radius: 0; }
                         </style>
                     </head>
                     <body>
-                        <video id="video" controls autoplay playsinline></video>
+                        <video id="video" controls autoplay playsinline poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></video>
                         <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
                         <script>
                             var video = document.getElementById('video');
                             var videoSrc = '${videoUrl}';
                             if (Hls.isSupported()) {
-                                var hls = new Hls();
+                                var hls = new Hls({
+                                    maxBufferLength: 30,
+                                    maxMaxBufferLength: 600,
+                                    enableWorker: true,
+                                    lowLatencyMode: true
+                                });
                                 hls.loadSource(videoSrc);
                                 hls.attachMedia(video);
                                 hls.on(Hls.Events.MANIFEST_PARSED, function() { video.play(); });
@@ -116,7 +146,6 @@ fun PlayerScreen(
                 """.trimIndent()
                 webView.loadDataWithBaseURL("https://phimapi.com", html, "text/html", "utf-8", null)
             } else {
-                // Embed URL
                 webView.loadUrl(videoUrl)
             }
         }
@@ -136,7 +165,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp)
+                        .aspectRatio(16f / 9f) // Ratio chuẩn cho player
                         .background(Color.Black)
                 ) {
                     if (videoUrl.isNotBlank()) {
@@ -151,19 +180,61 @@ fun PlayerScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    Icons.Outlined.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color(0xFFF6E29A),
-                                    modifier = Modifier.size(64.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF1E2436)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF6E29A),
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
                                 Text(
-                                    "Không tìm thấy nguồn phát",
+                                    text = "Đang tải nguồn phát...",
                                     color = Color.White.copy(alpha = 0.5f),
                                     fontSize = 14.sp
                                 )
                             }
                         }
+                    }
+
+                    // Tấm nền Gradient (nằm đè lên trên player) để làm nền cho nút quay lại
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.8f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                            .align(Alignment.TopCenter)
+                    )
+
+                    // Nút Back
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(top = 8.dp, start = 16.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .align(Alignment.TopStart)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Quay lại",
+                            tint = Color.White
+                        )
                     }
                 }
             }
@@ -171,26 +242,27 @@ fun PlayerScreen(
             // Movie info
             item {
                 Column(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 24.dp)
                 ) {
                     Text(
                         text = movie.title,
                         color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = episode?.name ?: "Phát nội dung chính",
                         color = Color(0xFFF6E29A),
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
                     if (movie.subtitle.isNotBlank()) {
                         Text(
                             text = movie.subtitle,
                             color = Color.White.copy(alpha = 0.5f),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodyMedium
                         )
                     }
                 }
@@ -204,64 +276,64 @@ fun PlayerScreen(
                         color = Color.White,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp)
                     )
                 }
 
                 items(movie.episodes) { ep ->
                     val isCurrent = ep.id == episode?.id
-                    val epVideoUrl = episodeVideoUrls[ep.id]
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 4.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isCurrent) Color(0x22F6E29A) else Color.White.copy(alpha = 0.06f))
+                            .padding(horizontal = 32.dp, vertical = 6.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isCurrent) Color(0x22F6E29A) else Color(0xFF131A2F))
                             .border(
                                 1.dp,
-                                if (isCurrent) Color(0x66F6E29A) else Color.White.copy(alpha = 0.1f),
-                                RoundedCornerShape(12.dp)
+                                if (isCurrent) Color(0x66F6E29A) else Color.White.copy(alpha = 0.08f),
+                                RoundedCornerShape(14.dp)
                             )
                             .clickable { onSelectEpisode(ep) }
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (isCurrent) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.1f)),
+                                .background(if (isCurrent) Color(0xFFF6E29A) else Color(0xFF1A2237)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Outlined.PlayArrow,
                                 contentDescription = null,
-                                tint = if (isCurrent) Color.Black else Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(20.dp)
+                                tint = if (isCurrent) Color.Black else Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.size(22.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = ep.name,
-                                color = Color.White,
+                                color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.8f),
                                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyLarge
                             )
                             if (ep.duration.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = ep.duration,
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.labelSmall
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    style = MaterialTheme.typography.labelMedium
                                 )
                             }
                         }
                         if (isCurrent) {
                             Text(
-                                "Đang xem",
+                                "Đang phát",
                                 color = Color(0xFFF6E29A),
                                 style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }
@@ -269,22 +341,7 @@ fun PlayerScreen(
             }
 
             // Bottom padding
-            item { Spacer(modifier = Modifier.height(40.dp)) }
-        }
-
-        // Back button
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .padding(start = 8.dp, top = 8.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.5f))
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ArrowBack,
-                contentDescription = "Back",
-                tint = Color.White
-            )
+            item { Spacer(modifier = Modifier.height(48.dp)) }
         }
     }
 }
