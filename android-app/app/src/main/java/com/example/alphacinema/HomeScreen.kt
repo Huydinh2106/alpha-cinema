@@ -253,13 +253,15 @@ package com.example.alphacinema
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp)
+                    // Bỏ padding horizontal tại đây
                     .padding(top = topPad, bottom = bottomPad)
             ) {
-                CategoryChips(
-                    selectedChip = selectedChip,
-                    onChipSelected = { viewModel.setCategory(it) }
-                )
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    CategoryChips(
+                        selectedChip = selectedChip,
+                        onChipSelected = { viewModel.setCategory(it) }
+                    )
+                }
                 Spacer(modifier = Modifier.height(22.dp))
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     HeroCarousel(pagerState, movies, onMovieClick = onPlayMovie)
@@ -276,13 +278,17 @@ package com.example.alphacinema
                     }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
-                MovieInfoSection(
-                    movie = movies[currentMovieIndex],
-                    currentMovieIndex = currentMovieIndex,
-                    total = movies.size,
-                    onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
-                )
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    MovieInfoSection(
+                        movie = movies[currentMovieIndex],
+                        currentMovieIndex = currentMovieIndex,
+                        total = movies.size,
+                        onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
+                    )
+                }
                 Spacer(modifier = Modifier.height(26.dp))
+                
+                // RecommendationGroupsSection sẽ quản lý padding của riêng nó để tràn viền
                 RecommendationGroupsSection(
                     groups = recommendationGroups,
                     onMovieClick = { recommendMovie ->
@@ -305,7 +311,9 @@ package com.example.alphacinema
                     onSeeMore = onSeeMore
                 )
                 Spacer(modifier = Modifier.height(22.dp))
-                InterestSection()
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    InterestSection()
+                }
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
@@ -830,7 +838,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
         }
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), // Giảm padding tiêu đề và nút > xuống 12dp
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -865,7 +873,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
 
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 2.dp)
+                contentPadding = PaddingValues(start = 12.dp, end = 20.dp) // Đồng bộ lề trái thẻ phim là 12dp
             ) {
                 items(group.movies) { movie ->
                     RecommendationMovieCard(
