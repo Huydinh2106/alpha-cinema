@@ -30,6 +30,16 @@ interface PhimApiService {
         @Query("sort_type") sortType: String = "desc"
     ): MovieListResponse
 
+    @GET("v1/api/tim-kiem")
+    suspend fun searchMovies(
+        @Query("keyword") keyword: String,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 21,
+        @Query("category") category: String? = null,
+        @Query("country") country: String? = null,
+        @Query("year") year: String? = null
+    ): MovieListResponse
+
     @GET("phim/{slug}")
     suspend fun getMovieDetail(
         @retrofit2.http.Path("slug") slug: String
