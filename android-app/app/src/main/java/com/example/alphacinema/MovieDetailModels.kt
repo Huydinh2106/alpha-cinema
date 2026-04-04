@@ -3,14 +3,14 @@ package com.example.alphacinema
 enum class MovieDetailTab(val title: String) {
     EPISODES("Tập phim"),
     CAST("Diễn viên"),
-    RECOMMENDATIONS("Đề xuất")
+    RECOMMENDATIONS("Đề xuất"),
+    COMMENTS("Bình luận"),
+    RATINGS("Đánh giá")
 }
 
 enum class MovieDetailAction(val label: String) {
     FAVORITE("Yêu thích"),
     ADD_TO_LIST("Thêm vào"),
-    RATE("Đánh giá"),
-    COMMENT("Bình luận"),
     SHARE("Chia sẻ")
 }
 
