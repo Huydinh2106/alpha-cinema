@@ -2,9 +2,16 @@
 
 package com.example.alphacinema
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +24,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +36,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -56,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -194,7 +204,12 @@ fun AccountScreen() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .verticalScroll(rememberScrollState())
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+                // Extra bottom space to avoid content hiding behind GlassBottomBar
+                .padding(bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
@@ -208,68 +223,136 @@ fun AccountScreen() {
             if (currentUser != null) {
                 // LOGGED IN: show avatar, name, email
                 val photoUrl = currentUser?.photoUrl?.toString()
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (photoUrl != null) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = "Avatar",
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .background(
-                                    Brush.linearGradient(listOf(Color(0xFFF6E29A), Color(0xFFD4A843))),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = (currentUser?.displayName?.firstOrNull() ?: currentUser?.email?.firstOrNull() ?: 'A').uppercase(),
-                                color = Color(0xFF070B16),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                var showLogoutMenu by remember { mutableStateOf(false) }
 
-                    Column(modifier = Modifier.padding(start = 14.dp)) {
-                        Text(
-                            text = currentUser?.displayName ?: "Người dùng",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = currentUser?.email ?: "",
-                            color = Color.White.copy(alpha = 0.6f),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-
-                // Logout button
-                Button(
-                    onClick = {
-                        auth.signOut()
-                        currentUser = null
-                    },
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2A1A1A),
-                        contentColor = Color(0xFFFF6B6B)
-                    )
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .border(1.dp, Color.White.copy(alpha = if (showLogoutMenu) 0.18f else 0.10f), RoundedCornerShape(18.dp))
+                        .clickable { showLogoutMenu = !showLogoutMenu }
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
-                    Icon(Icons.Outlined.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("Đăng xuất", fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Avatar
+                        if (photoUrl != null) {
+                            AsyncImage(
+                                model = photoUrl,
+                                contentDescription = "Avatar",
+                                modifier = Modifier
+                                    .size(60.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(60.dp)
+                                    .background(
+                                        Brush.linearGradient(listOf(Color(0xFFF6E29A), Color(0xFFD4A843))),
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = (currentUser?.displayName?.firstOrNull() ?: currentUser?.email?.firstOrNull() ?: 'A').uppercase(),
+                                    color = Color(0xFF070B16),
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 14.dp)
+                        ) {
+                            Text(
+                                text = currentUser?.displayName ?: "Người dùng",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = currentUser?.email ?: "",
+                                color = Color.White.copy(alpha = 0.55f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
+                        // Chevron indicator
+                        val chevronRotation by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (showLogoutMenu) 180f else 0f,
+                            animationSpec = tween(250),
+                            label = "chevron"
+                        )
+                        Icon(
+                            imageVector = Icons.Outlined.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.45f),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .rotate(chevronRotation)
+                        )
+                    }
+
+                    // --- Expandable logout section ---
+                    AnimatedVisibility(
+                        visible = showLogoutMenu,
+                        enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(200)),
+                        exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(150))
+                    ) {
+                        Column {
+                            // Divider
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 14.dp, bottom = 10.dp)
+                                    .height(1.dp)
+                                    .background(Color.White.copy(alpha = 0.10f))
+                            )
+
+                            // Logout row
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        auth.signOut()
+                                        currentUser = null
+                                        showLogoutMenu = false
+                                    }
+                                    .padding(vertical = 6.dp, horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .background(Color(0x22FF6B6B), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ExitToApp,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF6B6B),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Đăng xuất",
+                                    color = Color(0xFFFF6B6B),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
                 }
             } else {
                 // NOT LOGGED IN: show default avatar + login/register buttons

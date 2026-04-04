@@ -56,10 +56,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.ui.viewmodel.SupportViewModel
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 
 private val SupportScreenShape = RoundedCornerShape(28.dp)
 private val SupportInputShape = RoundedCornerShape(24.dp)
-private val SupportReservedBottomSpace = 112.dp
 private val UserBubbleShape = RoundedCornerShape(
     topStart = 22.dp,
     topEnd = 22.dp,
@@ -119,7 +121,8 @@ fun SupportScreen(
             modifier = Modifier
                 .fillMaxSize()
                 // Reserve room above the floating GlassBottomBar from AppScreen.
-                .padding(bottom = SupportReservedBottomSpace)
+                // Use dynamic WindowInsets so it works on all screen ratios.
+                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 104.dp)
         ) {
             SupportTopBar()
 
