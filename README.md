@@ -15,33 +15,9 @@
 - Tương tác hội thoại tự nhiên
 - Cá nhân hóa trải nghiệm
 
-### Backend & System
-- API server xử lý dữ liệu
-- Worker xử lý background jobs
-- Kiến trúc scalable
-
-## Cấu trúc dự án
-
-```
-alpha-cinema/
-│
-├── android-app/     # Mobile app (Android)
-├── backend/         # API Server
-├── worker/          # Background jobs
-├── infra/           # Infrastructure & deployment
-├── docs/            # Documentation
-│
-├── docker-compose.yml
-├── .env.example
-└── README.md
 ```
 
 ## Công nghệ sử dụng
-
-### Backend
-- Node.js / NestJS
-- REST API / GraphQL
-- JWT Authentication
 
 ### Mobile
 - Android (Kotlin / Java)
@@ -50,11 +26,6 @@ alpha-cinema/
 - OpenAI API / LLM
 - NLP (Natural Language Processing)
 - Recommendation system
-
-### DevOps
-- Docker
-- Docker Compose
-- GitHub Actions (CI/CD)
 
 ## Chatbot hoạt động
 
@@ -70,34 +41,12 @@ Hệ thống:
 
 ## Cài đặt & chạy
 
-### 1. Clone repo
+### Clone repo
 
 ```bash
-git clone https://github.com/your-username/alpha-cinema.git
+git clone https://github.com/Huydinh2106/alpha-cinema.git
 cd alpha-cinema
 ```
-### 2. Cấu hình môi trường
-
-```bash
-cp .env.example .env
-```
-
-Cập nhật:
-- Database URL
-- API Keys (OpenAI,...)
-
-### 3. Chạy Docker
-
-```bash
-docker-compose up --build
-```
-
-### 4. Truy cập
-
-- Backend: http://localhost:3000
-
-## 📡 API mẫu
-
 ### Get movies
 
 ```http

@@ -1,4 +1,4 @@
-﻿@file:OptIn(ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalFoundationApi::class)
 package com.example.alphacinema
     import androidx.compose.foundation.ExperimentalFoundationApi
     import androidx.compose.foundation.Image
@@ -6,6 +6,7 @@ package com.example.alphacinema
     import androidx.compose.foundation.border
     import androidx.compose.foundation.clickable
     import androidx.compose.foundation.interaction.collectIsPressedAsState
+    import androidx.compose.foundation.combinedClickable
     import androidx.compose.foundation.lazy.LazyRow
     import androidx.compose.foundation.lazy.items
     import androidx.compose.foundation.layout.*
@@ -30,6 +31,9 @@ package com.example.alphacinema
     import androidx.compose.animation.core.animateFloatAsState
     import androidx.compose.animation.core.tween
     import androidx.compose.runtime.*
+    import androidx.lifecycle.viewmodel.compose.viewModel
+    import com.example.alphacinema.ui.viewmodel.HomeViewModel
+    import com.example.alphacinema.data.model.MovieItem
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.draw.blur
@@ -64,14 +68,23 @@ package com.example.alphacinema
         val year: String,
         val season: String,
         val episode: String,
-        val posterUrl: String = ""
+        val posterUrl: String = "",
+        val slug: String = ""
     )
 
     data class RecommendMovieUi(
         val title: String,
+        val originName: String,
+        val quality: String,
         val genre: String,
         val rating: String,
-        val posterUrl: String = ""
+        val posterUrl: String = "",
+        val slug: String = "",
+        val description: String = "",
+        val age: String = "",
+        val year: String = "",
+        val episode: String = "",
+        val genres: List<String> = emptyList()
     )
 
     data class RecommendGroupUi(
@@ -85,96 +98,110 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun HomeScreen(
-        onPlayMovie: (MovieUi) -> Unit = {}
-    ) {
-        val movies = listOf(
-            MovieUi(
-                title = "Thế Giới Không Lối Thoát",
-                subtitle = "Alice in Borderland",
-                description = "Một game thủ lông bông cùng hai người bạn nhận ra họ đã lọt vào thế giới Tokyo song song, nơi họ buộc phải tham gia những trò chơi sinh tồn cực kỳ nguy hiểm...",
-                rating = "7.8",
-                age = "T18",
-                year = "2020",
-                season = "Phần 3",
-                episode = "Tập 6",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BNGEyOGJiNmEtMmI1OC00MDI4LWIxNzctYzg2YjYyMTk3MTdiXkEyXkFqcGc@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Dune: Hành Tinh Cát 2",
-                subtitle = "Dune: Part Two",
-                description = "Paul Atreides liên minh với người Fremen để báo thù những kẻ đã hủy diệt gia đình anh, đồng thời cố gắng ngăn chặn tương lai khủng khiếp mà chỉ mình anh nhìn thấy.",
-                rating = "8.6",
-                age = "T13",
-                year = "2024",
-                season = "",
-                episode = "",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BN2QyZGU4ZDctOWMzMy00NTc5LThlOGQtODhmNDI1NmY5YzAwXkEyXkFqcGdeQXVyMDM2NDM2MQ@@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Joker",
-                subtitle = "Joker",
-                description = "Tại thành phố Gotham năm 1981, Arthur Fleck - một diễn viên hài thất bại - bị xã hội ruồng bỏ và dần dần trượt vào vực thẳm của điên loạn, biến thành tên tội phạm Joker.",
-                rating = "8.4",
-                age = "T18",
-                year = "2019",
-                season = "",
-                episode = "",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BNGVjNWI4ZGUtNzE0MS00YTJmLWE0ZDctN2ZiYTk2YmI3NTYyXkEyXkFqcGdeQXVyMTkxNjUyNQ@@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Interstellar",
-                subtitle = "Interstellar",
-                description = "Khi Trái Đất đang dần trở nên không thể sinh sống, một nhóm phi hành gia được cử đi tìm kiếm hành tinh mới cho nhân loại qua một lỗ sâu bí ẩn.",
-                rating = "8.7",
-                age = "T13",
-                year = "2014",
-                season = "",
-                episode = "",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BYzdjMDAxZGItMjI2My00ODA1LTlkNzItOWFjMDU5ZDJlYWY3XkEyXkFqcGc@._V1_.jpg"
-            ),
-            MovieUi(
-                title = "Squid Game",
-                subtitle = "Squid Game",
-                description = "Hàng trăm người chơi đang cần tiền chấp nhận lời mời kỳ lạ tham gia các trò chơi trẻ em. Phần thưởng hấp dẫn đang chờ, nhưng cái giá phải trả rất đắt.",
-                rating = "8.0",
-                age = "T18",
-                year = "2021",
-                season = "Phần 2",
-                episode = "Tập 7",
-                posterUrl = "https://m.media-amazon.com/images/M/MV5BYWE3MDVkN2EtNjQ5MS00ZDQ4LTliNzYtMjc2YWMzMDEwMTA3XkEyXkFqcGdeQXVyMTEzMTI1Mjk3._V1_.jpg"
-            )
-        )
+    fun HomeScreen(viewModel: HomeViewModel = viewModel(), onPlayMovie: (MovieUi) -> Unit = {}) {
+        val isLoading by viewModel.isLoading.collectAsState()
+        val error by viewModel.error.collectAsState()
+        
+        val heroItems by viewModel.heroMovies.collectAsState()
+        val phimBoMoi by viewModel.phimBoMoi.collectAsState()
+        val phimLeHot by viewModel.phimLeHot.collectAsState()
+        val phimHanhDong by viewModel.phimHanhDong.collectAsState()
+        val selectedChip by viewModel.selectedChip.collectAsState()
 
-        val recommendationGroups = listOf(
-            RecommendGroupUi(
-                title = "Đề xuất cho bạn",
-                movies = listOf(
-                    RecommendMovieUi("Dark", "Tâm lý", "8.7", "https://m.media-amazon.com/images/M/MV5BOTk2NzUyOTctZDdlMS00MDJlLTgzNTEtNzQzYjFhNzY0ZGFmXkEyXkFqcGdeQXVyMjg1NDcxNDE@._V1_.jpg"),
-                    RecommendMovieUi("The Platform", "Sinh tồn", "7.0", "https://m.media-amazon.com/images/M/MV5BMjAzMjlhNGQtMjAzZC00ODIzLWE4YTAtMDkyYmFiZmE2YWYzXkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Prison Break", "Hành động", "8.3", "https://m.media-amazon.com/images/M/MV5BMTg3NTkwNzAxOF5BMl5BanBnXkFtZTcwMjM1NjI5MQ@@._V1_.jpg"),
-                    RecommendMovieUi("1899", "Bí ẩn", "7.3", "https://m.media-amazon.com/images/M/MV5BYjdkODg1OGItNjc2Yi00YjRiLWI5ZjAtOWMwZjlmMDFiNjBlXkEyXkFqcGc@._V1_.jpg")
+        val movies = remember(heroItems) {
+            heroItems.map {
+                MovieUi(
+                    title = it.name,
+                    subtitle = it.origin_name ?: "",
+                    description = "",
+                    rating = it.getRating(),
+                    age = "",
+                    year = it.year?.toString() ?: "",
+                    season = "",
+                    episode = it.episode_current ?: "",
+                    posterUrl = it.getFullPosterUrl(),
+                    slug = it.slug
                 )
-            ),
-            RecommendGroupUi(
-                title = "Top 10 bộ phim bán chạy nhất",
-                movies = listOf(
-                    RecommendMovieUi("Dune: Part Two", "Viễn tưởng", "8.0", "https://m.media-amazon.com/images/M/MV5BN2QyZGU4ZDctOWMzMy00NTc5LThlOGQtODhmNDI1NmY5YzAwXkEyXkFqcGdeQXVyMDM2NDM2MQ@@._V1_.jpg"),
-                    RecommendMovieUi("Joker", "Tâm lý", "8.4", "https://m.media-amazon.com/images/M/MV5BNGVjNWI4ZGUtNzE0MS00YTJmLWE0ZDctN2ZiYTk2YmI3NTYyXkEyXkFqcGdeQXVyMTkxNjUyNQ@@._V1_.jpg"),
-                    RecommendMovieUi("John Wick 4", "Hành động", "7.4", "https://m.media-amazon.com/images/M/MV5BMDExZGMyOTMtMDgyYi00NGIwLWJhMTEtOTdkZGFjNmZiMTEwXkEyXkFqcGdeQXVyMjM4NTM5NDY@._V1_.jpg"),
-                    RecommendMovieUi("Interstellar", "Khoa học", "8.7", "https://m.media-amazon.com/images/M/MV5BYzdjMDAxZGItMjI2My00ODA1LTlkNzItOWFjMDU5ZDJlYWY3XkEyXkFqcGc@._V1_.jpg")
-                )
-            ),
-            RecommendGroupUi(
-                title = "Top 10 bộ phim mới nhất",
-                movies = listOf(
-                    RecommendMovieUi("Oppenheimer", "Lịch sử", "8.3", "https://m.media-amazon.com/images/M/MV5BN2JkMDc5MGQtZjg3YS00NmFiLWIyZmQtZjZjMjc3MmJlZTQ1XkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Rebel Moon", "Phiêu lưu", "5.6", "https://m.media-amazon.com/images/M/MV5BNjMwOWYyYTAtNjE3OS00MzUyLThmNmMtYjI3NDdlNGIzMGI2XkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Silo", "Bí ẩn", "8.1", "https://m.media-amazon.com/images/M/MV5BMDI2NjQ1NjctZGI2MC00YzgyLTk3Y2ItMjkwMjNlODg3NTcwXkEyXkFqcGc@._V1_.jpg"),
-                    RecommendMovieUi("Shogun", "Lịch sử", "8.8", "https://m.media-amazon.com/images/M/MV5BMWI2N2Q1MjgtMjYxYi00OGJmLTk5NzctMDk5YTljMmE2NjcxXkEyXkFqcGc@._V1_.jpg")
-                )
-            )
-        )
+            }.ifEmpty { // fallback to prevent empty state crashes if the list is empty during initial load
+                List(5) {
+                    MovieUi("Đang tải...", "Đang kết nối dữ liệu", "Vui lòng chờ trong giây lát...", "-", "", "", "", "")
+                }
+            }
+        }
+
+        val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, selectedChip) {
+            val allGroups = mutableListOf<RecommendGroupUi>()
+            val boMoiList = phimBoMoi.map { 
+                RecommendMovieUi(
+                    title = it.name, 
+                    originName = it.origin_name ?: "", 
+                    quality = it.quality ?: "HD", 
+                    genre = it.category?.firstOrNull()?.name ?: "", 
+                    rating = it.getRating(), 
+                    posterUrl = it.getFullPosterUrl(), 
+                    slug = it.slug,
+                    description = "Bộ phim mang đến câu chuyện hấp dẫn, xoay quanh các nhân vật với hàng loạt biến cố bất ngờ. Cùng theo dõi để khám phá những bí mật được ẩn giấu đằng sau.",
+                    age = "T16",
+                    year = it.year?.toString() ?: "2024",
+                    episode = it.episode_current ?: "Tập 1",
+                    genres = it.category?.map { c -> c.name } ?: emptyList()
+                ) 
+            }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } }
+            
+            val leHotList = phimLeHot.map { 
+                RecommendMovieUi(
+                    title = it.name, 
+                    originName = it.origin_name ?: "", 
+                    quality = it.quality ?: "HD", 
+                    genre = it.category?.firstOrNull()?.name ?: "", 
+                    rating = it.getRating(), 
+                    posterUrl = it.getFullPosterUrl(), 
+                    slug = it.slug,
+                    description = "Bộ phim mang đến câu chuyện hấp dẫn, xoay quanh các nhân vật với hàng loạt biến cố bất ngờ. Cùng theo dõi để khám phá những bí mật được ẩn giấu đằng sau.",
+                    age = "T16",
+                    year = it.year?.toString() ?: "2024",
+                    episode = it.episode_current ?: "Tập 1",
+                    genres = it.category?.map { c -> c.name } ?: emptyList()
+                ) 
+            }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } }
+            
+            val hanhDongList = phimHanhDong.map { 
+                RecommendMovieUi(
+                    title = it.name, 
+                    originName = it.origin_name ?: "", 
+                    quality = it.quality ?: "HD", 
+                    genre = it.category?.firstOrNull()?.name ?: "", 
+                    rating = it.getRating(), 
+                    posterUrl = it.getFullPosterUrl(), 
+                    slug = it.slug,
+                    description = "Bộ phim mang đến câu chuyện hấp dẫn, xoay quanh các nhân vật với hàng loạt biến cố bất ngờ. Cùng theo dõi để khám phá những bí mật được ẩn giấu đằng sau.",
+                    age = "T16",
+                    year = it.year?.toString() ?: "2024",
+                    episode = it.episode_current ?: "Tập 1",
+                    genres = it.category?.map { c -> c.name } ?: emptyList()
+                ) 
+            }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } }
+
+            if (selectedChip == "Đề xuất" || selectedChip == "Phim bộ") {
+                allGroups.add(RecommendGroupUi(
+                    title = "Phim bộ mới",
+                    movies = boMoiList
+                ))
+            }
+            if (selectedChip == "Đề xuất" || selectedChip == "Phim lẻ") {
+                allGroups.add(RecommendGroupUi(
+                    title = "Phim lẻ hot",
+                    movies = leHotList
+                ))
+            }
+            if (selectedChip == "Đề xuất" || selectedChip == "Thể loại") {
+                allGroups.add(RecommendGroupUi(
+                    title = "Phim hành động",
+                    movies = hanhDongList
+                ))
+            }
+            allGroups
+        }
 
         val movieCount = movies.size
         val initialPage = remember(movieCount) {
@@ -190,12 +217,13 @@ package com.example.alphacinema
         }
 
         val scrollState = rememberScrollState()
-        // Tính collapse fraction: 0 = đầu trang (mở rộng), 1 = đã cuộn (thu gọn)
         val collapseFraction by remember {
             derivedStateOf {
                 (scrollState.value / 200f).coerceIn(0f, 1f)
             }
         }
+
+        var previewMovie by remember { mutableStateOf<RecommendMovieUi?>(null) }
 
         Box(
             modifier = Modifier
@@ -211,9 +239,25 @@ package com.example.alphacinema
                     .padding(horizontal = 20.dp)
                     .padding(top = 90.dp, bottom = 110.dp)
             ) {
-                CategoryChips()
+                CategoryChips(
+                    selectedChip = selectedChip,
+                    onChipSelected = { viewModel.setCategory(it) }
+                )
                 Spacer(modifier = Modifier.height(22.dp))
-                HeroCarousel(pagerState, movies)
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    HeroCarousel(pagerState, movies, onMovieClick = onPlayMovie)
+                    if (isLoading && heroItems.isEmpty()) {
+                        CircularProgressIndicator(color = Color(0xFFF6E29A))
+                    } else if (error != null && heroItems.isEmpty()) {
+                        Text(
+                            text = "Lỗi tải phim",
+                            color = Color.Red,
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(20.dp))
                 MovieInfoSection(
                     movie = movies[currentMovieIndex],
@@ -222,7 +266,26 @@ package com.example.alphacinema
                     onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
                 )
                 Spacer(modifier = Modifier.height(26.dp))
-                RecommendationGroupsSection(groups = recommendationGroups)
+                RecommendationGroupsSection(
+                    groups = recommendationGroups,
+                    onMovieClick = { recommendMovie ->
+                        onPlayMovie(MovieUi(
+                            title = recommendMovie.title,
+                            subtitle = recommendMovie.originName,
+                            description = recommendMovie.description,
+                            rating = recommendMovie.rating,
+                            age = recommendMovie.age,
+                            year = recommendMovie.year,
+                            season = "",
+                            episode = recommendMovie.episode,
+                            posterUrl = recommendMovie.posterUrl,
+                            slug = recommendMovie.slug
+                        ))
+                    },
+                    onMovieLongClick = {
+                        previewMovie = it
+                    }
+                )
                 Spacer(modifier = Modifier.height(22.dp))
                 InterestSection()
                 Spacer(modifier = Modifier.height(20.dp))
@@ -236,6 +299,32 @@ package com.example.alphacinema
                     .align(Alignment.TopCenter)
                     .zIndex(10f)
             )
+
+            // Movie Preview Dialog Overlays
+            if (previewMovie != null) {
+                MoviePreviewDialog(
+                    movie = previewMovie!!,
+                    onDismiss = { previewMovie = null },
+                    onPlayClick = {
+                        val m = previewMovie!!
+                        previewMovie = null
+                        onPlayMovie(MovieUi(
+                            title = m.title, subtitle = m.originName, description = m.description,
+                            rating = m.rating, age = m.age, year = m.year, season = "", episode = m.episode,
+                            posterUrl = m.posterUrl, slug = m.slug
+                        ))
+                    },
+                    onDetailClick = {
+                        val m = previewMovie!!
+                        previewMovie = null
+                        onPlayMovie(MovieUi(
+                            title = m.title, subtitle = m.originName, description = m.description,
+                            rating = m.rating, age = m.age, year = m.year, season = "", episode = m.episode,
+                            posterUrl = m.posterUrl, slug = m.slug
+                        ))
+                    }
+                )
+            }
         }
     }
 
@@ -405,16 +494,22 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun CategoryChips() {
+    fun CategoryChips(
+        selectedChip: String,
+        onChipSelected: (String) -> Unit
+    ) {
+        val categories = listOf("Đề xuất", "Phim bộ", "Phim lẻ", "Thể loại")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            FilledChip(text = "Đề xuất", selected = true, modifier = Modifier.weight(1f))
-            OutlineChip(text = "Phim bộ", modifier = Modifier.weight(1f))
-            OutlineChip(text = "Phim lẻ", modifier = Modifier.weight(1f))
-            OutlineChip(text = "Thể loại", modifier = Modifier.weight(1f))
-
+            categories.forEach { category ->
+                if (selectedChip == category) {
+                    FilledChip(text = category, selected = true, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
+                } else {
+                    OutlineChip(text = category, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
+                }
+            }
         }
     }
 
@@ -457,7 +552,7 @@ package com.example.alphacinema
     }
 
 @Composable
-fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
+fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (MovieUi) -> Unit = {}) {
     val movieCount = movies.size
     BoxWithConstraints(
         modifier = Modifier
@@ -505,7 +600,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                     )
                     .background(
                         if (isCenter) Color(0xFF20253A) else Color(0xFF1B2031)
-                    ),
+                    )
+                    .clickable { onMovieClick(movie) },
                 contentAlignment = Alignment.Center
             ) {
                 // Hiển thị poster từ URL
@@ -580,7 +676,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                 }
 
                 Button(
-                    onClick = {},
+                    onClick = onPlayClick,
                     modifier = Modifier
                         .weight(1f)
                         .height(52.dp),
@@ -682,16 +778,24 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
     }
 
     @Composable
-    fun RecommendationGroupsSection(groups: List<RecommendGroupUi>) {
+    fun RecommendationGroupsSection(
+        groups: List<RecommendGroupUi>, 
+        onMovieClick: (RecommendMovieUi) -> Unit = {},
+        onMovieLongClick: (RecommendMovieUi) -> Unit = {}
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             groups.forEach { group ->
-                RecommendationGroup(group = group)
+                RecommendationGroup(group = group, onMovieClick = onMovieClick, onMovieLongClick = onMovieLongClick)
             }
         }
     }
 
     @Composable
-    fun RecommendationGroup(group: RecommendGroupUi) {
+    fun RecommendationGroup(
+        group: RecommendGroupUi, 
+        onMovieClick: (RecommendMovieUi) -> Unit = {},
+        onMovieLongClick: (RecommendMovieUi) -> Unit = {}
+    ) {
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -719,94 +823,122 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                 contentPadding = PaddingValues(horizontal = 2.dp)
             ) {
                 items(group.movies) { movie ->
-                    RecommendationMovieCard(movie = movie)
+                    RecommendationMovieCard(
+                        movie = movie, 
+                        onClick = { onMovieClick(movie) },
+                        onLongClick = { onMovieLongClick(movie) }
+                    )
                 }
             }
         }
     }
 
+    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
     @Composable
-    fun RecommendationMovieCard(movie: RecommendMovieUi) {
-        Box(
+    fun RecommendationMovieCard(movie: RecommendMovieUi, onClick: () -> Unit = {}, onLongClick: () -> Unit = {}) {
+        Column(
             modifier = Modifier
                 .width(132.dp)
-                .height(194.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.10f),
-                    shape = RoundedCornerShape(18.dp)
-                )
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF2A3354),
-                            Color(0xFF131A2F)
-                        )
-                    )
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick
                 )
         ) {
-            // Poster image
-            if (movie.posterUrl.isNotEmpty()) {
-                AsyncImage(
-                    model = movie.posterUrl,
-                    contentDescription = movie.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Outlined.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.16f),
-                    modifier = Modifier
-                        .size(52.dp)
-                        .align(Alignment.Center)
-                )
-            }
-
-            // Gradient overlay for text readability
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Transparent,
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.85f)
+                                Color(0xFF2A3354),
+                                Color(0xFF131A2F)
                             )
                         )
                     )
+            ) {
+                // Poster image
+                if (movie.posterUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = movie.posterUrl,
+                        contentDescription = movie.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.16f),
+                        modifier = Modifier
+                            .size(52.dp)
+                            .align(Alignment.Center)
+                    )
+                }
+
+                // Gradient overlay for text readability
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.4f)
+                                )
+                            )
+                        )
+                )
+
+                if (movie.quality.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF5C6273).copy(alpha = 0.95f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = movie.quality,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = movie.title,
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(10.dp)
-            ) {
+            Spacer(modifier = Modifier.height(2.dp))
+
+            if (movie.originName.isNotEmpty()) {
                 Text(
-                    text = movie.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
+                    text = movie.originName,
+                    color = Color.White.copy(alpha = 0.55f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = movie.genre,
-                    color = Color.White.copy(alpha = 0.72f),
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "IMDb ${movie.rating}",
-                    color = Color(0xFFFFE08A),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
@@ -971,7 +1103,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
                     indication = null,
                     onClick = onClick
                 )
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 21.dp, vertical = 8.dp)
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale
@@ -1005,4 +1137,168 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>) {
         }
     }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun MoviePreviewDialog(
+    movie: RecommendMovieUi,
+    onDismiss: () -> Unit,
+    onPlayClick: () -> Unit,
+    onDetailClick: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF212534))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = {} // Capture touches inside the card to avoid dismiss
+                    )
+            ) {
+                // Header Player area
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .background(Color(0xFF282C3D)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayArrow,
+                        contentDescription = "Preview Play",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier
+                            .size(70.dp)
+                            .border(3.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            .padding(14.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = movie.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Tags row
+                    val tags = mutableListOf<String>()
+                    if (movie.age.isNotEmpty()) tags.add(movie.age)
+                    if (movie.year.isNotEmpty()) tags.add(movie.year)
+                    tags.add("Phần 1")
+                    if (movie.episode.isNotEmpty()) tags.add(movie.episode)
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        tags.forEach { tag ->
+                            Box(
+                                modifier = Modifier
+                                    .border(1.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = tag,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Genres FlowRow
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        movie.genres.forEach { genre ->
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xFF383C4D), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = genre,
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = movie.description,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = 20.sp,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = onPlayClick,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFFE08A),
+                                contentColor = Color.Black
+                            )
+                        ) {
+                            Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Xem Ngay", fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = onDetailClick,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black
+                            )
+                        ) {
+                            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Chi tiết", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
 
