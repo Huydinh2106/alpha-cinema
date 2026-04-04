@@ -7,8 +7,8 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    // Base URL is the Firebase Cloud Functions endpoint
     private const val BASE_URL = "https://phimapi.com/"
+    private const val SUPPORT_CHAT_BASE_URL = "https://vankhoa2110-rag-alphacinema.hf.space/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -21,12 +21,19 @@ object RetrofitClient {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    val instance: PhimApiService by lazy {
-        val retrofit = Retrofit.Builder()
-            .baseUrl(BASE_URL)
+    private fun createRetrofit(baseUrl: String): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-        retrofit.create(PhimApiService::class.java)
+    }
+
+    val instance: PhimApiService by lazy {
+        createRetrofit(BASE_URL).create(PhimApiService::class.java)
+    }
+
+    val supportChatApi: SupportChatApiService by lazy {
+        createRetrofit(SUPPORT_CHAT_BASE_URL).create(SupportChatApiService::class.java)
     }
 }
