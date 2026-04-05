@@ -5,6 +5,7 @@ package com.example.alphacinema
     import androidx.compose.foundation.background
     import androidx.compose.foundation.border
     import androidx.compose.foundation.clickable
+    import androidx.compose.foundation.interaction.MutableInteractionSource
     import androidx.compose.foundation.interaction.collectIsPressedAsState
     import androidx.compose.foundation.combinedClickable
     import androidx.compose.foundation.lazy.LazyRow
@@ -27,6 +28,7 @@ package com.example.alphacinema
     import androidx.compose.material.icons.outlined.Search
     import androidx.compose.material.icons.outlined.Settings
     import androidx.compose.material.icons.outlined.Info
+    import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
     import androidx.compose.material3.*
     import androidx.compose.animation.core.animateFloatAsState
     import androidx.compose.animation.core.tween
@@ -58,6 +60,10 @@ package com.example.alphacinema
     import kotlin.math.PI
     import kotlin.math.cos
     import kotlin.math.sin
+    import androidx.compose.foundation.layout.WindowInsets
+    import androidx.compose.foundation.layout.asPaddingValues
+    import androidx.compose.foundation.layout.navigationBars
+    import androidx.compose.foundation.layout.statusBars
 
     data class MovieUi(
         val title: String,
@@ -98,7 +104,11 @@ package com.example.alphacinema
     }
 
     @Composable
-    fun HomeScreen(viewModel: HomeViewModel = viewModel(), onPlayMovie: (MovieUi) -> Unit = {}) {
+    fun HomeScreen(
+        viewModel: HomeViewModel = viewModel(),
+        onPlayMovie: (MovieUi) -> Unit = {},
+        onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> }
+    ) {
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
         
@@ -232,17 +242,26 @@ package com.example.alphacinema
         ) {
             BackgroundLayer(posterUrl = movies[currentMovieIndex].posterUrl)
 
+        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        // header height is approx 80dp (logo+title+subtitle+padding) + status bar
+        val topPad = statusBarHeight + 80.dp
+        // bottom bar (GlassBottomBar) is ~72dp pill + 12dp vertical padding each side + nav bar
+        val bottomPad = navBarHeight + 96.dp
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 90.dp, bottom = 110.dp)
+                    // Bỏ padding horizontal tại đây
+                    .padding(top = topPad, bottom = bottomPad)
             ) {
-                CategoryChips(
-                    selectedChip = selectedChip,
-                    onChipSelected = { viewModel.setCategory(it) }
-                )
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    CategoryChips(
+                        selectedChip = selectedChip,
+                        onChipSelected = { viewModel.setCategory(it) }
+                    )
+                }
                 Spacer(modifier = Modifier.height(22.dp))
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     HeroCarousel(pagerState, movies, onMovieClick = onPlayMovie)
@@ -259,13 +278,17 @@ package com.example.alphacinema
                     }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
-                MovieInfoSection(
-                    movie = movies[currentMovieIndex],
-                    currentMovieIndex = currentMovieIndex,
-                    total = movies.size,
-                    onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
-                )
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    MovieInfoSection(
+                        movie = movies[currentMovieIndex],
+                        currentMovieIndex = currentMovieIndex,
+                        total = movies.size,
+                        onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
+                    )
+                }
                 Spacer(modifier = Modifier.height(26.dp))
+                
+                // RecommendationGroupsSection sẽ quản lý padding của riêng nó để tràn viền
                 RecommendationGroupsSection(
                     groups = recommendationGroups,
                     onMovieClick = { recommendMovie ->
@@ -284,10 +307,13 @@ package com.example.alphacinema
                     },
                     onMovieLongClick = {
                         previewMovie = it
-                    }
+                    },
+                    onSeeMore = onSeeMore
                 )
                 Spacer(modifier = Modifier.height(22.dp))
-                InterestSection()
+                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    InterestSection()
+                }
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
@@ -779,26 +805,40 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
 
     @Composable
     fun RecommendationGroupsSection(
-        groups: List<RecommendGroupUi>, 
+        groups: List<RecommendGroupUi>,
         onMovieClick: (RecommendMovieUi) -> Unit = {},
-        onMovieLongClick: (RecommendMovieUi) -> Unit = {}
+        onMovieLongClick: (RecommendMovieUi) -> Unit = {},
+        onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> }
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             groups.forEach { group ->
-                RecommendationGroup(group = group, onMovieClick = onMovieClick, onMovieLongClick = onMovieLongClick)
+                RecommendationGroup(
+                    group = group,
+                    onMovieClick = onMovieClick,
+                    onMovieLongClick = onMovieLongClick,
+                    onSeeMore = onSeeMore
+                )
             }
         }
     }
 
     @Composable
     fun RecommendationGroup(
-        group: RecommendGroupUi, 
+        group: RecommendGroupUi,
         onMovieClick: (RecommendMovieUi) -> Unit = {},
-        onMovieLongClick: (RecommendMovieUi) -> Unit = {}
+        onMovieLongClick: (RecommendMovieUi) -> Unit = {},
+        onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> }
     ) {
+        // Map group title → (FilterKind, slug) for the "See more" action
+        val (seeMoreKind, seeMoreSlug) = when (group.title) {
+            "Phim bộ mới"    -> FilterKind.MOVIE_TYPE to "phim-bo"
+            "Phim lẻ hot"   -> FilterKind.MOVIE_TYPE to "phim-le"
+            "Phim hành động" -> FilterKind.GENRE      to "hanh-dong"
+            else             -> FilterKind.GENRE      to group.title.lowercase().replace(" ", "-")
+        }
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), // Giảm padding tiêu đề và nút > xuống 12dp
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -808,23 +848,36 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = "Xem thêm >",
-                    color = Color(0xFFF6E29A),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
+                // Minimal "›" arrow button
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onSeeMore(seeMoreKind, seeMoreSlug, group.title) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                        contentDescription = "Xem thêm",
+                        tint = Color(0xFFF6E29A),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 2.dp)
+                contentPadding = PaddingValues(start = 12.dp, end = 20.dp) // Đồng bộ lề trái thẻ phim là 12dp
             ) {
                 items(group.movies) { movie ->
                     RecommendationMovieCard(
-                        movie = movie, 
+                        movie = movie,
                         onClick = { onMovieClick(movie) },
                         onLongClick = { onMovieLongClick(movie) }
                     )
@@ -1010,7 +1063,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
     ) {
         Box(
             modifier = modifier
-                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 12.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(40.dp))
                 .background(
