@@ -5,7 +5,7 @@ import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.ServerTimestamp
 
 data class UserProfile(
-    @DocumentId val uid: String = "",
+    var uid: String = "",
     val email: String = "",
     val displayName: String = "",
     val photoUrl: String = "",
@@ -14,7 +14,7 @@ data class UserProfile(
 )
 
 data class WatchHistoryItem(
-    @DocumentId val movieId: String = "", // Same as slug
+    var movieId: String = "", // Same as slug
     val movieName: String = "",
     val posterUrl: String = "",
     val episodeId: String = "",
@@ -25,21 +25,21 @@ data class WatchHistoryItem(
 )
 
 data class FavoriteItem(
-    @DocumentId val movieId: String = "", // Same as slug
+    var movieId: String = "", // Same as slug
     val movieName: String = "",
     val posterUrl: String = "",
     @ServerTimestamp val addedAt: Timestamp? = null
 )
 
 data class MovieStats(
-    @DocumentId val movieId: String = "", // Same as slug
+    var movieId: String = "", // Same as slug
     val averageRating: Double = 0.0,
     val totalRatings: Long = 0,
     val totalComments: Long = 0
 )
 
 data class Comment(
-    @DocumentId val id: String = "", // Auto-generated
+    var id: String = "", // Auto-generated
     val userId: String = "",
     val userName: String = "",
     val userAvatar: String = "",
@@ -50,7 +50,29 @@ data class Comment(
 )
 
 data class Rating(
-    @DocumentId val userId: String = "",
+    var userId: String = "",
     val score: Int = 0, // 1 to 10
     @ServerTimestamp val createdAt: Timestamp? = null
+)
+
+data class FirestoreMovie(
+    var slug: String = "",
+    var title: String = "",
+    var originName: String = "",
+    var type: String = "single",
+    var status: String = "completed",
+    var posterUrl: String = "",
+    var thumbUrl: String = "",
+    var year: Long = 0L,
+    var content: String = "",
+    var categories: List<String> = emptyList(),
+    var countries: List<String> = emptyList(),
+    var actors: List<String> = emptyList(),
+    var directors: List<String> = emptyList(),
+    var searchKeywords: List<String> = emptyList(),
+    var ageRating: String = "13+",
+    @get:com.google.firebase.firestore.PropertyName("isKidsFriendly")
+    @set:com.google.firebase.firestore.PropertyName("isKidsFriendly")
+    var isKidsFriendly: Boolean = false,
+    @ServerTimestamp var modifiedTime: Timestamp? = null
 )
