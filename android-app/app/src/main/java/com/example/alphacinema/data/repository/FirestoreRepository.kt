@@ -17,6 +17,13 @@ import kotlinx.coroutines.tasks.await
 
 class FirestoreRepository {
     private val db = FirebaseFirestore.getInstance()
+    private var cachedAllMovies: List<com.example.alphacinema.data.model.FirestoreMovie>? = null
+
+    private fun String.removeAccents(): String {
+        val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
+        val pattern = java.util.regex.Pattern.compile("\\p{InCombiningDiacriticalMarks}+")
+        return pattern.matcher(normalized).replaceAll("").replace("đ", "d").replace("Đ", "D")
+    }
 
     suspend fun saveUser(firebaseUser: FirebaseUser) {
         val userRef = db.collection("users").document(firebaseUser.uid)
@@ -85,7 +92,9 @@ class FirestoreRepository {
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    val items = snapshot.documents.mapNotNull { it.toObject(WatchHistoryItem::class.java) }
+                    val items = snapshot.documents.mapNotNull { doc -> 
+                        doc.toObject(WatchHistoryItem::class.java)?.apply { this.movieId = doc.id } 
+                    }
                     trySend(items)
                 }
             }
@@ -131,7 +140,9 @@ class FirestoreRepository {
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    val items = snapshot.documents.mapNotNull { it.toObject(FavoriteItem::class.java) }
+                    val items = snapshot.documents.mapNotNull { doc -> 
+                        doc.toObject(FavoriteItem::class.java)?.apply { this.movieId = doc.id } 
+                    }
                     trySend(items)
                 }
             }
@@ -175,7 +186,9 @@ class FirestoreRepository {
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    val comments = snapshot.documents.mapNotNull { it.toObject(Comment::class.java) }
+                    val comments = snapshot.documents.mapNotNull { doc -> 
+                        doc.toObject(Comment::class.java)?.apply { this.id = doc.id } 
+                    }
                     trySend(comments)
                 }
             }
@@ -210,7 +223,7 @@ class FirestoreRepository {
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
-                    trySend(snapshot.toObject(Rating::class.java))
+                    trySend(snapshot.toObject(Rating::class.java)?.apply { this.userId = snapshot.id })
                 } else {
                     trySend(null)
                 }
@@ -232,11 +245,154 @@ class FirestoreRepository {
                     return@addSnapshotListener
                 }
                 if (snapshot != null && snapshot.exists()) {
-                    trySend(snapshot.toObject(MovieStats::class.java))
+                    trySend(snapshot.toObject(MovieStats::class.java)?.apply { this.movieId = snapshot.id })
                 } else {
                     trySend(null)
                 }
             }
         awaitClose { listener.remove() }
+    }
+
+    suspend fun getMovies(isKidsMode: Boolean, limit: Int = 20): List<com.example.alphacinema.data.model.FirestoreMovie> {
+        return try {
+            var query: Query = db.collection("movies")
+                .limit(limit.toLong())
+
+            if (isKidsMode) {
+                query = query.whereEqualTo("isKidsFriendly", true)
+            }
+
+            val snapshot = query.get().await()
+            android.util.Log.i("FirestoreRepository", "getMovies retrieved ${snapshot.documents.size} movies")
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    val m = doc.toObject(com.example.alphacinema.data.model.FirestoreMovie::class.java)
+                    m?.apply { slug = doc.id }
+                } catch (e: Exception) {
+                    android.util.Log.e("FirestoreRepository", "Failed to deserialize doc: ${doc.id}", e)
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getMovies failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getMoviesByType(type: String, isKidsMode: Boolean, limit: Int = 20, excludeSlugs: Set<String> = emptySet()): List<com.example.alphacinema.data.model.FirestoreMovie> {
+        return try {
+            var query: Query = db.collection("movies")
+                .whereEqualTo("type", type)
+                .limit((limit + excludeSlugs.size).toLong())
+
+            if (isKidsMode) {
+                query = query.whereEqualTo("isKidsFriendly", true)
+            }
+
+            android.util.Log.i("FirestoreRepository", "getMoviesByType querying type=$type, limit=${limit + excludeSlugs.size}")
+            val snapshot = query.get().await()
+            android.util.Log.i("FirestoreRepository", "getMoviesByType retrieved ${snapshot.documents.size} docs for type=$type")
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    val m = doc.toObject(com.example.alphacinema.data.model.FirestoreMovie::class.java)
+                    m?.apply { slug = doc.id }
+                } catch (e: Exception) {
+                    android.util.Log.e("FirestoreRepository", "Failed to deserialize doc: ${doc.id}", e)
+                    null
+                }
+            }.filter { it.slug !in excludeSlugs }.take(limit)
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getMoviesByType failed for type=$type", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getMoviesByCountry(country: String, isKidsMode: Boolean, limit: Int = 20, excludeSlugs: Set<String> = emptySet()): List<com.example.alphacinema.data.model.FirestoreMovie> {
+        return try {
+            var query: Query = db.collection("movies")
+                .whereArrayContains("countries", country)
+                .limit((limit + excludeSlugs.size).toLong())
+
+            if (isKidsMode) {
+                query = query.whereEqualTo("isKidsFriendly", true)
+            }
+
+            android.util.Log.i("FirestoreRepository", "getMoviesByCountry querying country=$country, limit=${limit + excludeSlugs.size}")
+            val snapshot = query.get().await()
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    val m = doc.toObject(com.example.alphacinema.data.model.FirestoreMovie::class.java)
+                    m?.apply { slug = doc.id }
+                } catch (e: Exception) {
+                    android.util.Log.e("FirestoreRepository", "Failed to deserialize doc: ${doc.id}", e)
+                    null
+                }
+            }.filter { it.slug !in excludeSlugs }.take(limit)
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getMoviesByCountry failed for country=$country", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getMoviesByCategory(category: String, isKidsMode: Boolean, limit: Int = 20, excludeSlugs: Set<String> = emptySet()): List<com.example.alphacinema.data.model.FirestoreMovie> {
+        return try {
+             var query: Query = db.collection("movies")
+                .whereArrayContains("categories", category)
+                .limit((limit + excludeSlugs.size).toLong())
+
+            if (isKidsMode) {
+                query = query.whereEqualTo("isKidsFriendly", true)
+            }
+
+            android.util.Log.i("FirestoreRepository", "getMoviesByCategory querying category=$category, limit=${limit + excludeSlugs.size}")
+            val snapshot = query.get().await()
+            android.util.Log.i("FirestoreRepository", "getMoviesByCategory retrieved ${snapshot.documents.size} docs for category=$category")
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    val m = doc.toObject(com.example.alphacinema.data.model.FirestoreMovie::class.java)
+                    m?.apply { slug = doc.id }
+                } catch (e: Exception) {
+                    android.util.Log.e("FirestoreRepository", "Failed to deserialize doc: ${doc.id}", e)
+                    null
+                }
+            }.filter { it.slug !in excludeSlugs }.take(limit)
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getMoviesByCategory failed for category=$category", e)
+            emptyList()
+        }
+    }
+
+    suspend fun searchMovies(keyword: String, isKidsMode: Boolean, limit: Int = 20): List<com.example.alphacinema.data.model.FirestoreMovie> {
+        if (keyword.isBlank()) return emptyList()
+        val normalizedQuery = keyword.trim().lowercase().removeAccents()
+        return try {
+            if (cachedAllMovies == null) {
+                val snapshot = db.collection("movies").get().await()
+                cachedAllMovies = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val m = doc.toObject(com.example.alphacinema.data.model.FirestoreMovie::class.java)
+                        m?.apply { slug = doc.id }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }
+
+            var results = cachedAllMovies ?: emptyList()
+            if (isKidsMode) {
+                results = results.filter { it.isKidsFriendly }
+            }
+
+            results = results.filter { movie ->
+                val titleNoAccents = movie.title.lowercase().removeAccents()
+                val originNameNoAccents = movie.originName.lowercase().removeAccents()
+                titleNoAccents.contains(normalizedQuery) || originNameNoAccents.contains(normalizedQuery)
+            }
+
+            results.take(limit)
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "searchMovies failed", e)
+            emptyList()
+        }
     }
 }

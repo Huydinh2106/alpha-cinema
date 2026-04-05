@@ -24,6 +24,7 @@ data class MovieItem(
     val episode_current: String?,
     val quality: String?,
     val lang: String?,
+    val ageRating: String? = null,
     val tmdb: TmdbInfo?,
     val category: List<CategoryInfo>?,
     val country: List<CountryInfo>?

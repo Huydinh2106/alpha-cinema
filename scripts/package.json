@@ -1,0 +1,12 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "populate-movies.js",
+  "scripts": {
+    "start": "node populate-movies.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

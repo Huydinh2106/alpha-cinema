@@ -13,6 +13,7 @@ import com.example.alphacinema.ui.theme.AlphaCinemaTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        com.example.alphacinema.data.local.SettingsManager.init(this)
         val splashScreen = installSplashScreen()
         enableEdgeToEdge()
 
