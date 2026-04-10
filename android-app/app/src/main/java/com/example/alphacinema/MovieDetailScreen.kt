@@ -1,7 +1,12 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package com.example.alphacinema
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +14,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,9 +34,12 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -56,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +90,9 @@ fun MovieDetailScreen(
 ) {
     var selectedTabName by rememberSaveable(movie.id) {
         mutableStateOf(MovieDetailTab.EPISODES.name)
+    }
+    var episodesExpanded by rememberSaveable(movie.id) {
+        mutableStateOf(false)
     }
     var descriptionExpanded by rememberSaveable(movie.id) {
         mutableStateOf(false)
@@ -131,7 +145,14 @@ fun MovieDetailScreen(
                 Spacer(modifier = Modifier.height(18.dp))
                 ButtonRow(
                     onPlay = { onPlayMovie(movie, movie.episodes.firstOrNull()) },
-                    onEpisodes = { selectedTabName = MovieDetailTab.EPISODES.name }
+                    onEpisodes = {
+                        if (selectedTabName == MovieDetailTab.EPISODES.name) {
+                            episodesExpanded = !episodesExpanded
+                        } else {
+                            selectedTabName = MovieDetailTab.EPISODES.name
+                            episodesExpanded = true
+                        }
+                    }
                 )
                 Spacer(modifier = Modifier.height(14.dp))
                 ActionRow(
@@ -174,9 +195,11 @@ fun MovieDetailScreen(
         item {
             Spacer(modifier = Modifier.height(10.dp))
             when (selectedTab) {
-                MovieDetailTab.EPISODES -> EpisodeTab(
+                MovieDetailTab.EPISODES -> EpisodeTabModern(
                     episodes = movie.episodes,
                     currentEpisodeText = movie.currentEpisode,
+                    expanded = episodesExpanded,
+                    onToggleExpanded = { episodesExpanded = !episodesExpanded },
                     onPlayEpisode = { onPlayMovie(movie, it) }
                 )
 
@@ -417,59 +440,357 @@ private fun ActionRow(
 private fun EpisodeTab(
     episodes: List<EpisodeUi>,
     currentEpisodeText: String,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onPlayEpisode: (EpisodeUi) -> Unit
 ) {
+    val currentEpisode = episodes.firstOrNull { episode ->
+        currentEpisodeText.contains(
+            episode.name.substringBefore(":"),
+            ignoreCase = true
+        )
+    } ?: episodes.firstOrNull()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        episodes.forEach { episode ->
-            val isCurrent = currentEpisodeText.contains(
-                episode.name.substringBefore(":"),
-                ignoreCase = true
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+                .clickable(onClick = onToggleExpanded)
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Danh sách tập phim",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = currentEpisode?.name ?: currentEpisodeText,
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${episodes.size} tập${if (expanded) " • Nhấn để thu gọn" else " • Nhấn để chọn tập"}",
+                    color = Color(0xFFF6E29A),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Icon(
+                imageVector = if (expanded) {
+                    Icons.Outlined.KeyboardArrowUp
+                } else {
+                    Icons.Outlined.KeyboardArrowDown
+                },
+                contentDescription = null,
+                tint = Color(0xFFF6E29A)
             )
+        }
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                episodes.forEach { episode ->
+                    val isCurrent = currentEpisodeText.contains(
+                        episode.name.substringBefore(":"),
+                        ignoreCase = true
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isCurrent) Color(0x22F6E29A) else Color.White.copy(alpha = 0.06f))
+                            .border(
+                                1.dp,
+                                if (isCurrent) Color(0x66F6E29A) else Color.White.copy(alpha = 0.12f),
+                                RoundedCornerShape(14.dp)
+                            )
+                            .clickable { onPlayEpisode(episode) }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PlayArrow,
+                            contentDescription = null,
+                            tint = if (isCurrent) Color(0xFFF6E29A) else Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = episode.name,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = episode.duration,
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                        if (isCurrent) {
+                            Text(
+                                text = "Đang xem",
+                                color = Color(0xFFF6E29A),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpisodeTabModern(
+    episodes: List<EpisodeUi>,
+    currentEpisodeText: String,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    onPlayEpisode: (EpisodeUi) -> Unit
+) {
+    if (episodes.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
+                .padding(18.dp)
+        ) {
+            Text(
+                text = "Chưa có danh sách tập phim.",
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        return
+    }
+
+    val currentEpisode = episodes.firstOrNull { episode ->
+        currentEpisodeText.contains(
+            episode.name.substringBefore(":"),
+            ignoreCase = true
+        )
+    } ?: episodes.firstOrNull()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1B2642),
+                            Color(0xFF10192E)
+                        )
+                    )
+                )
+                .border(
+                    1.dp,
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0x55F6E29A),
+                            Color.White.copy(alpha = 0.10f)
+                        )
+                    ),
+                    RoundedCornerShape(22.dp)
+                )
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0x22F6E29A)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.VideoLibrary,
+                        contentDescription = null,
+                        tint = Color(0xFFF6E29A)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Chọn tập phim",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${episodes.size} tập sẵn có",
+                        color = Color.White.copy(alpha = 0.66f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .clickable(onClick = onToggleExpanded)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (expanded) "Thu gọn" else "Mở danh sách",
+                            color = Color(0xFFF6E29A),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = Color(0xFFF6E29A)
+                        )
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isCurrent) Color(0x22F6E29A) else Color.White.copy(alpha = 0.06f))
-                    .border(
-                        1.dp,
-                        if (isCurrent) Color(0x66F6E29A) else Color.White.copy(alpha = 0.12f),
-                        RoundedCornerShape(14.dp)
-                    )
-                    .clickable { onPlayEpisode(episode) }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
+                    .clickable { currentEpisode?.let(onPlayEpisode) }
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.PlayArrow,
-                    contentDescription = null,
-                    tint = if (isCurrent) Color(0xFFF6E29A) else Color.White
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = episode.name,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = episode.duration,
-                        color = Color.White.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.labelMedium
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF6E29A)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayArrow,
+                        contentDescription = null,
+                        tint = Color(0xFF0A0F1E)
                     )
                 }
-                if (isCurrent) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = currentEpisode?.name ?: currentEpisodeText,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!currentEpisode?.duration.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = currentEpisode?.duration ?: "",
+                            color = Color.White.copy(alpha = 0.62f),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color(0x22F6E29A))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
                     Text(
                         text = "Đang xem",
                         color = Color(0xFFF6E29A),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Danh sách tập",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        episodes.forEach { episode ->
+                            val isCurrent = currentEpisode?.id == episode.id
+                            Column(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(if (isCurrent) Color(0xFFF6E29A) else Color(0xFF18233F))
+                                    .border(
+                                        1.dp,
+                                        if (isCurrent) SolidColor(Color(0xFFFFF4CA)) else SolidColor(Color.White.copy(alpha = 0.08f)),
+                                        RoundedCornerShape(18.dp)
+                                    )
+                                    .clickable { onPlayEpisode(episode) }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                val episodeBadge = episode.name.substringBefore(":").ifBlank { episode.name }
+                                Text(
+                                    text = episodeBadge,
+                                    color = if (isCurrent) Color(0xFF0A0F1E) else Color(0xFFF6E29A),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = episode.name.substringAfter(":", "").trim().ifBlank { "Phát nội dung" },
+                                    color = if (isCurrent) Color(0xFF15203A) else Color.White,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (episode.duration.isNotBlank()) {
+                                    Text(
+                                        text = episode.duration,
+                                        color = if (isCurrent) Color(0xCC15203A) else Color.White.copy(alpha = 0.58f),
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

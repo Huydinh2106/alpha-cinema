@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+﻿@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.example.alphacinema
 
@@ -92,6 +92,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -99,14 +100,34 @@ private const val WEB_CLIENT_ID = "1013232588133-86fl74ls04r8fkarnahh2b9pvie5g7k
 
 private data class AccountMenuItemUi(
     val title: String,
-    val icon: @Composable () -> Unit
+    val icon: @Composable () -> Unit,
+    val action: AccountMenuAction? = null
 )
 
 enum class PinDialogMode { SETUP, VERIFY }
 
+private enum class AccountMenuAction {
+    WATCHING,
+    MOVIE_LIBRARY,
+    FAVORITES,
+    POLICY,
+    FEEDBACK,
+    ADMIN
+}
+
+private enum class AccountPanelType {
+    WATCHING,
+    MOVIE_LIBRARY,
+    FAVORITES,
+    POLICY,
+    FEEDBACK
+}
+
 @Composable
 fun AccountScreen(
-    onOpenAdminPanel: () -> Unit = {}
+    onOpenAdminPanel: () -> Unit = {},
+    onOpenMovieDetail: (String) -> Unit = {},
+    onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -198,15 +219,25 @@ fun AccountScreen(
 
     val settingsManager = remember { SettingsManager.getInstance() }
     val isKidsModeEnabled by settingsManager.isKidsModeEnabled.collectAsState()
+    val watchHistoryFlow = remember(currentUser?.uid) {
+        currentUser?.uid?.let(firestoreRepository::getWatchHistory) ?: flowOf(emptyList())
+    }
+    val watchHistory by watchHistoryFlow.collectAsState(initial = emptyList())
+    val favoritesFlow = remember(currentUser?.uid) {
+        currentUser?.uid?.let(firestoreRepository::getFavorites) ?: flowOf(emptyList())
+    }
+    val favorites by favoritesFlow.collectAsState(initial = emptyList())
 
     var showPinDialog by remember { mutableStateOf(false) }
     var pinDialogMode by remember { mutableStateOf<PinDialogMode>(PinDialogMode.SETUP) }
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
+    var activePanel by remember { mutableStateOf<AccountPanelType?>(null) }
+    var feedbackInput by remember { mutableStateOf("") }
 
     val menuItems = mutableListOf(
         AccountMenuItemUi("Đang xem", { Icon(Icons.Outlined.WatchLater, contentDescription = null) }),
-        AccountMenuItemUi("Danh sách phim của tôi", { Icon(Icons.AutoMirrored.Outlined.ListAlt, contentDescription = null) }),
+        AccountMenuItemUi("Danh sách phim", { Icon(Icons.AutoMirrored.Outlined.ListAlt, contentDescription = null) }),
         AccountMenuItemUi("Yêu thích", { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null) }),
         AccountMenuItemUi("Chính sách", { Icon(Icons.Outlined.Info, contentDescription = null) }),
         AccountMenuItemUi("Góp ý", { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) })
@@ -219,6 +250,26 @@ fun AccountScreen(
     
     // Debug log (can be seen in Logcat)
     android.util.Log.d("AccountScreen", "User: ${currentUser?.email}, Profile: ${userProfile?.email}, isAdmin: ${userProfile?.isAdmin}")
+
+    fun openPanel(panel: AccountPanelType, requiresLogin: Boolean = false) {
+        if (requiresLogin && currentUser == null) {
+            authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+            return
+        }
+        activePanel = panel
+    }
+
+    fun resolveMenuAction(item: AccountMenuItemUi): AccountMenuAction {
+        return item.action ?: when (item.title) {
+            "Đang xem" -> AccountMenuAction.WATCHING
+            "Danh sách phim" -> AccountMenuAction.MOVIE_LIBRARY
+            "Yêu thích" -> AccountMenuAction.FAVORITES
+            "Chính sách" -> AccountMenuAction.POLICY
+            "Góp ý" -> AccountMenuAction.FEEDBACK
+            "Quản trị phim" -> AccountMenuAction.ADMIN
+            else -> AccountMenuAction.POLICY
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -256,6 +307,33 @@ fun AccountScreen(
                 color = Color.White,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold
+            )
+
+            KidsModeCard(
+                isKidsModeEnabled = isKidsModeEnabled,
+                currentUser = currentUser,
+                onRequireLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
+                onToggleMode = { checked ->
+                    if (checked) {
+                        if (settingsManager.getKidsModePin() == null) {
+                            pinDialogMode = PinDialogMode.SETUP
+                            pinInput = ""
+                            pinError = null
+                            showPinDialog = true
+                        } else {
+                            settingsManager.setKidsMode(true)
+                        }
+                    } else {
+                        if (settingsManager.getKidsModePin() != null) {
+                            pinDialogMode = PinDialogMode.VERIFY
+                            pinInput = ""
+                            pinError = null
+                            showPinDialog = true
+                        } else {
+                            settingsManager.setKidsMode(false)
+                        }
+                    }
+                }
             )
 
             // === User Info / Auth Buttons ===
@@ -472,9 +550,14 @@ fun AccountScreen(
                             Color.White.copy(alpha = 0.12f),
                             RoundedCornerShape(14.dp)
                         )
-                        .clickable { 
-                            if (item.title == "Quản trị phim") {
-                                onOpenAdminPanel()
+                        .clickable {
+                            when (resolveMenuAction(item)) {
+                                AccountMenuAction.WATCHING -> openPanel(AccountPanelType.WATCHING, requiresLogin = true)
+                                AccountMenuAction.MOVIE_LIBRARY -> openPanel(AccountPanelType.MOVIE_LIBRARY)
+                                AccountMenuAction.FAVORITES -> openPanel(AccountPanelType.FAVORITES, requiresLogin = true)
+                                AccountMenuAction.POLICY -> openPanel(AccountPanelType.POLICY)
+                                AccountMenuAction.FEEDBACK -> openPanel(AccountPanelType.FEEDBACK)
+                                AccountMenuAction.ADMIN -> onOpenAdminPanel()
                             }
                         }
                         .padding(horizontal = 14.dp, vertical = 14.dp),
@@ -510,65 +593,7 @@ fun AccountScreen(
                     )
                 }
             }
-            // --- Kids Mode Toggle ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
-                    .border(1.dp, Color(0xFFF6E29A).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Chế độ trẻ em",
-                        color = Color(0xFFF6E29A),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Lọc nội dung an toàn cho trẻ",
-                        color = Color.White.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
 
-                Switch(
-                    checked = isKidsModeEnabled,
-                    onCheckedChange = { checked ->
-                        if (currentUser == null) {
-                            authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
-                            return@Switch
-                        }
-                        if (checked) {
-                            if (settingsManager.getKidsModePin() == null) {
-                                pinDialogMode = PinDialogMode.SETUP
-                                pinInput = ""
-                                pinError = null
-                                showPinDialog = true
-                            } else {
-                                settingsManager.setKidsMode(true)
-                            }
-                        } else {
-                            if (settingsManager.getKidsModePin() != null) {
-                                pinDialogMode = PinDialogMode.VERIFY
-                                pinInput = ""
-                                pinError = null
-                                showPinDialog = true
-                            } else {
-                                settingsManager.setKidsMode(false)
-                            }
-                        }
-                    },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.Black,
-                        checkedTrackColor = Color(0xFFF6E29A),
-                        uncheckedThumbColor = Color.White,
-                        uncheckedTrackColor = Color(0xFF2A344A)
-                    )
-                )
-            }
 
             if (showPinDialog) {
                 AlertDialog(
@@ -634,12 +659,379 @@ fun AccountScreen(
 
         }
 
+        if (activePanel != null) {
+            AccountPanelBottomSheet(
+                panel = activePanel!!,
+                watchHistory = watchHistory,
+                favorites = favorites,
+                feedbackInput = feedbackInput,
+                onDismiss = { activePanel = null },
+                onFeedbackChange = { feedbackInput = it },
+                onSubmitFeedback = {
+                    val content = feedbackInput.trim()
+                    if (content.isBlank()) {
+                        android.widget.Toast.makeText(context, "Vui lòng nhập nội dung góp ý", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.widget.Toast.makeText(context, "Cảm ơn bạn đã gửi góp ý", android.widget.Toast.LENGTH_SHORT).show()
+                        feedbackInput = ""
+                        activePanel = null
+                    }
+                },
+                onOpenMovieDetail = { slug ->
+                    activePanel = null
+                    onOpenMovieDetail(slug)
+                },
+                onOpenMovieList = { title, filterKind, slug ->
+                    activePanel = null
+                    onOpenMovieList(title, filterKind, slug)
+                }
+            )
+        }
+
         if (state.showDialog) {
             AuthBottomSheet(
                 state = state,
                 onEvent = authStateHolder::onEvent
             )
         }
+    }
+}
+
+@Composable
+private fun KidsModeCard(
+    isKidsModeEnabled: Boolean,
+    currentUser: FirebaseUser?,
+    onRequireLogin: () -> Unit,
+    onToggleMode: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0xFFF6E29A).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Chế độ trẻ em",
+                color = Color(0xFFF6E29A),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (currentUser == null) {
+                    "Đăng nhập để bật bộ lọc nội dung an toàn"
+                } else {
+                    "Lọc nội dung an toàn cho trẻ"
+                },
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+
+        Switch(
+            checked = isKidsModeEnabled,
+            onCheckedChange = { checked ->
+                if (currentUser == null) {
+                    onRequireLogin()
+                } else {
+                    onToggleMode(checked)
+                }
+            },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.Black,
+                checkedTrackColor = Color(0xFFF6E29A),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color(0xFF2A344A)
+            )
+        )
+    }
+}
+
+@Composable
+private fun AccountPanelBottomSheet(
+    panel: AccountPanelType,
+    watchHistory: List<com.example.alphacinema.data.model.WatchHistoryItem>,
+    favorites: List<com.example.alphacinema.data.model.FavoriteItem>,
+    feedbackInput: String,
+    onDismiss: () -> Unit,
+    onFeedbackChange: (String) -> Unit,
+    onSubmitFeedback: () -> Unit,
+    onOpenMovieDetail: (String) -> Unit,
+    onOpenMovieList: (String, FilterKind, String) -> Unit
+) {
+    val sheetTitle = when (panel) {
+        AccountPanelType.WATCHING -> "Đang xem"
+        AccountPanelType.MOVIE_LIBRARY -> "Danh sách phim"
+        AccountPanelType.FAVORITES -> "Yêu thích"
+        AccountPanelType.POLICY -> "Chính sách"
+        AccountPanelType.FEEDBACK -> "Góp ý"
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color(0xFF10192E),
+        scrimColor = Color.Black.copy(alpha = 0.62f),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = sheetTitle,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = when (panel) {
+                            AccountPanelType.WATCHING -> "Tiếp tục những nội dung bạn đang theo dõi"
+                            AccountPanelType.MOVIE_LIBRARY -> "Mở nhanh các danh sách phim phổ biến"
+                            AccountPanelType.FAVORITES -> "Những phim bạn đã lưu yêu thích"
+                            AccountPanelType.POLICY -> "Thông tin sử dụng và quyền riêng tư"
+                            AccountPanelType.FEEDBACK -> "Chia sẻ góp ý để cải thiện AlphaCinema"
+                        },
+                        color = Color.White.copy(alpha = 0.68f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.76f)
+                    )
+                }
+            }
+
+            when (panel) {
+                AccountPanelType.WATCHING -> {
+                    if (watchHistory.isEmpty()) {
+                        AccountEmptyState("Bạn chưa có lịch sử xem nào.")
+                    } else {
+                        watchHistory.forEach { item ->
+                            AccountMediaRow(
+                                title = item.movieName,
+                                subtitle = item.episodeName.ifBlank { "Tiếp tục xem" },
+                                meta = if (item.duration > 0) {
+                                    "${(item.progress * 100 / item.duration).coerceIn(0, 100)}% đã xem"
+                                } else {
+                                    "Tiếp tục xem"
+                                },
+                                posterUrl = item.posterUrl,
+                                onClick = { onOpenMovieDetail(item.movieId) }
+                            )
+                        }
+                    }
+                }
+
+                AccountPanelType.MOVIE_LIBRARY -> {
+                    LibraryShortcutRow(
+                        title = "Phim bộ",
+                        description = "Series cập nhật liên tục",
+                        onClick = { onOpenMovieList("Phim bộ", FilterKind.MOVIE_TYPE, "series") }
+                    )
+                    LibraryShortcutRow(
+                        title = "Phim lẻ",
+                        description = "Các phim chiếu rạp và phim đơn",
+                        onClick = { onOpenMovieList("Phim lẻ", FilterKind.MOVIE_TYPE, "single") }
+                    )
+                    LibraryShortcutRow(
+                        title = "Hoạt hình",
+                        description = "Danh sách phim cho gia đình và thiếu nhi",
+                        onClick = { onOpenMovieList("Hoạt hình", FilterKind.MOVIE_TYPE, "hoathinh") }
+                    )
+                    LibraryShortcutRow(
+                        title = "TV Shows",
+                        description = "Các chương trình và nội dung giải trí",
+                        onClick = { onOpenMovieList("TV Shows", FilterKind.MOVIE_TYPE, "tvshows") }
+                    )
+                }
+
+                AccountPanelType.FAVORITES -> {
+                    if (favorites.isEmpty()) {
+                        AccountEmptyState("Bạn chưa có phim yêu thích nào.")
+                    } else {
+                        favorites.forEach { item ->
+                            AccountMediaRow(
+                                title = item.movieName,
+                                subtitle = "Phim đã lưu",
+                                meta = "Mở lại chi tiết phim",
+                                posterUrl = item.posterUrl,
+                                onClick = { onOpenMovieDetail(item.movieId) }
+                            )
+                        }
+                    }
+                }
+
+                AccountPanelType.POLICY -> {
+                    PolicyBlock(
+                        title = "Quyền riêng tư",
+                        content = "AlphaCinema chỉ sử dụng dữ liệu tài khoản để đồng bộ lịch sử xem, phim yêu thích và các tính năng cá nhân hóa."
+                    )
+                    PolicyBlock(
+                        title = "Nội dung và cộng đồng",
+                        content = "Người dùng chịu trách nhiệm với bình luận, đánh giá và hành vi sử dụng tài khoản. Nội dung vi phạm có thể bị ẩn hoặc xóa."
+                    )
+                    PolicyBlock(
+                        title = "Tài khoản",
+                        content = "Bạn nên bảo vệ mật khẩu, đăng xuất trên thiết bị lạ và không chia sẻ thông tin đăng nhập cho người khác."
+                    )
+                }
+
+                AccountPanelType.FEEDBACK -> {
+                    OutlinedTextField(
+                        value = feedbackInput,
+                        onValueChange = onFeedbackChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 4,
+                        maxLines = 6,
+                        label = { Text("Nội dung góp ý") },
+                        colors = authTextFieldColors()
+                    )
+                    Button(
+                        onClick = onSubmitFeedback,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFF6E29A),
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text("Gửi góp ý", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
+}
+
+@Composable
+private fun AccountMediaRow(
+    title: String,
+    subtitle: String,
+    meta: String,
+    posterUrl: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = posterUrl,
+            contentDescription = title,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Crop
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
+        ) {
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = Color.White.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
+            Text(meta, color = Color(0xFFF6E29A), style = MaterialTheme.typography.labelMedium)
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.55f),
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+@Composable
+private fun LibraryShortcutRow(
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text(description, color = Color.White.copy(alpha = 0.68f), style = MaterialTheme.typography.bodySmall)
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            contentDescription = null,
+            tint = Color(0xFFF6E29A),
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+@Composable
+private fun PolicyBlock(
+    title: String,
+    content: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(title, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+        Text(content, color = Color.White.copy(alpha = 0.72f), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun AccountEmptyState(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .padding(18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = message,
+            color = Color.White.copy(alpha = 0.72f),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -903,3 +1295,5 @@ private fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
     errorTextColor = Color(0xFFFFA7A7),
     errorContainerColor = Color(0xFF2A1D2C)
 )
+
+
