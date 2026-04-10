@@ -167,7 +167,15 @@ fun MainContent(
                         ScreenType.SEARCH -> SearchScreen(onOpenMovieDetail = ::openMovieDetail)
                         ScreenType.SUPPORT -> SupportScreen()
                         ScreenType.ACCOUNT -> AccountScreen(
-                            onOpenAdminPanel = { currentRoute = AppRoute.AdminRoute }
+                            onOpenAdminPanel = { currentRoute = AppRoute.AdminRoute },
+                            onOpenMovieDetail = ::openMovieDetail,
+                            onOpenMovieList = { title, filterKind, slug ->
+                                currentRoute = AppRoute.MovieListRoute(
+                                    title = title,
+                                    filterKind = filterKind,
+                                    slug = slug
+                                )
+                            }
                         )
                     }
                 }
