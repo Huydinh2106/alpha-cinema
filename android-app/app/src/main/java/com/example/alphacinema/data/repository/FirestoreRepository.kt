@@ -25,6 +25,36 @@ class FirestoreRepository {
         return pattern.matcher(normalized).replaceAll("").replace("đ", "d").replace("Đ", "D")
     }
 
+    suspend fun getUserProfile(uid: String): com.example.alphacinema.data.model.UserProfile? {
+        if (uid.isBlank()) return null
+        return try {
+            val snapshot = db.collection("users").document(uid).get().await()
+            snapshot.toObject(com.example.alphacinema.data.model.UserProfile::class.java)
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getUserProfile failed", e)
+            null
+        }
+    }
+
+    suspend fun checkIfAdmin(uid: String): Boolean {
+        if (uid.isBlank()) return false
+        return try {
+            val snapshot = db.collection("users").document(uid).get().await()
+            snapshot.getBoolean("isAdmin") == true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun saveMovie(movie: com.example.alphacinema.data.model.FirestoreMovie) {
+        try {
+            db.collection("movies").document(movie.slug).set(movie).await()
+            cachedAllMovies = null // Invalidate cache
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "saveMovie failed", e)
+        }
+    }
+
     suspend fun saveUser(firebaseUser: FirebaseUser) {
         val userRef = db.collection("users").document(firebaseUser.uid)
         

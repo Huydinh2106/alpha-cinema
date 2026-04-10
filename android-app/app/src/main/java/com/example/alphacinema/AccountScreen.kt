@@ -36,8 +36,9 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.Policy
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.WatchLater
@@ -66,6 +67,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.LaunchedEffect
 import com.example.alphacinema.data.local.SettingsManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,11 +105,25 @@ private data class AccountMenuItemUi(
 enum class PinDialogMode { SETUP, VERIFY }
 
 @Composable
-fun AccountScreen() {
+fun AccountScreen(
+    onOpenAdminPanel: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val auth = remember { FirebaseAuth.getInstance() }
     var currentUser by remember { mutableStateOf(auth.currentUser) }
+
+    val firestoreRepository = remember { com.example.alphacinema.data.repository.FirestoreRepository() }
+    var userProfile by remember { mutableStateOf<com.example.alphacinema.data.model.UserProfile?>(null) }
+
+    LaunchedEffect(currentUser) {
+        currentUser?.let {
+            userProfile = firestoreRepository.getUserProfile(it.uid)
+        } ?: run {
+            userProfile = null
+        }
+    }
+
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -188,13 +204,21 @@ fun AccountScreen() {
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
 
-    val menuItems = listOf(
+    val menuItems = mutableListOf(
         AccountMenuItemUi("Đang xem", { Icon(Icons.Outlined.WatchLater, contentDescription = null) }),
         AccountMenuItemUi("Danh sách phim của tôi", { Icon(Icons.AutoMirrored.Outlined.ListAlt, contentDescription = null) }),
         AccountMenuItemUi("Yêu thích", { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null) }),
-        AccountMenuItemUi("Chính sách", { Icon(Icons.Outlined.Policy, contentDescription = null) }),
+        AccountMenuItemUi("Chính sách", { Icon(Icons.Outlined.Info, contentDescription = null) }),
         AccountMenuItemUi("Góp ý", { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) })
-    )
+    ).apply {
+        val isAdminUser = userProfile?.isAdmin == true || currentUser?.email == "admin@alphacinema.com"
+        if (isAdminUser) {
+            add(0, AccountMenuItemUi("Quản trị phim", { Icon(Icons.Filled.Settings, contentDescription = null, tint = Color(0xFFF6E29A)) }))
+        }
+    }
+    
+    // Debug log (can be seen in Logcat)
+    android.util.Log.d("AccountScreen", "User: ${currentUser?.email}, Profile: ${userProfile?.email}, isAdmin: ${userProfile?.isAdmin}")
 
     Box(
         modifier = Modifier
@@ -448,7 +472,11 @@ fun AccountScreen() {
                             Color.White.copy(alpha = 0.12f),
                             RoundedCornerShape(14.dp)
                         )
-                        .clickable { }
+                        .clickable { 
+                            if (item.title == "Quản trị phim") {
+                                onOpenAdminPanel()
+                            }
+                        }
                         .padding(horizontal = 14.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
