@@ -6,11 +6,12 @@ import com.google.firebase.firestore.ServerTimestamp
 
 data class UserProfile(
     var uid: String = "",
-    val email: String = "",
-    val displayName: String = "",
-    val photoUrl: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    var email: String = "",
+    var displayName: String = "",
+    var photoUrl: String = "",
+    var isAdmin: Boolean = false,
+    @ServerTimestamp var createdAt: Timestamp? = null,
+    @ServerTimestamp var updatedAt: Timestamp? = null
 )
 
 data class WatchHistoryItem(

@@ -50,6 +50,7 @@ sealed interface AppRoute {
         val filterKind: FilterKind,
         val slug: String
     ) : AppRoute
+    object AdminRoute : AppRoute
 }
 
 sealed interface SplashState {
@@ -117,6 +118,17 @@ fun MainContent(
     val comments by movieDetailViewModel.comments.collectAsState()
     val userRating by movieDetailViewModel.userRating.collectAsState()
 
+    val adminViewModel: com.example.alphacinema.ui.viewmodel.AdminViewModel = viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return com.example.alphacinema.ui.viewmodel.AdminViewModel(
+                    apiService = com.example.alphacinema.data.api.RetrofitClient.instance,
+                    firestoreRepository = com.example.alphacinema.data.repository.FirestoreRepository()
+                ) as T
+            }
+        }
+    )
+
     fun openMovieDetail(slug: String) {
         movieDetailViewModel.loadMovieDetail(slug)
         currentRoute = AppRoute.MovieDetailRoute(slug = slug)
@@ -154,8 +166,17 @@ fun MainContent(
                         )
                         ScreenType.SEARCH -> SearchScreen(onOpenMovieDetail = ::openMovieDetail)
                         ScreenType.SUPPORT -> SupportScreen()
-                        ScreenType.ACCOUNT -> AccountScreen()
+                        ScreenType.ACCOUNT -> AccountScreen(
+                            onOpenAdminPanel = { currentRoute = AppRoute.AdminRoute }
+                        )
                     }
+                }
+
+                is AppRoute.AdminRoute -> {
+                    AdminScreen(
+                        onBack = { currentRoute = AppRoute.Main(ScreenType.ACCOUNT) },
+                        viewModel = adminViewModel
+                    )
                 }
 
                 is AppRoute.MovieDetailRoute -> {
