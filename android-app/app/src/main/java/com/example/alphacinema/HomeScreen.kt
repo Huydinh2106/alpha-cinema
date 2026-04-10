@@ -116,6 +116,13 @@ package com.example.alphacinema
         val phimBoMoi by viewModel.phimBoMoi.collectAsState()
         val phimLeHot by viewModel.phimLeHot.collectAsState()
         val phimHanhDong by viewModel.phimHanhDong.collectAsState()
+        
+        val pTrungQuoc by viewModel.phimTrungQuoc.collectAsState()
+        val pAuMy by viewModel.phimAuMy.collectAsState()
+        val pHanQuoc by viewModel.phimHanQuoc.collectAsState()
+        val pDienAnh by viewModel.phimDienAnh.collectAsState()
+        val pAnime by viewModel.animeMoi.collectAsState()
+
         val selectedChip by viewModel.selectedChip.collectAsState()
 
         val movies = remember(heroItems) {
@@ -125,7 +132,7 @@ package com.example.alphacinema
                     subtitle = it.origin_name ?: "",
                     description = "",
                     rating = it.getRating(),
-                    age = "",
+                    age = it.ageRating ?: "",
                     year = it.year?.toString() ?: "",
                     season = "",
                     episode = it.episode_current ?: "",
@@ -139,9 +146,10 @@ package com.example.alphacinema
             }
         }
 
-        val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, selectedChip) {
+        val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, pTrungQuoc, pAuMy, pHanQuoc, pDienAnh, pAnime, selectedChip) {
             val allGroups = mutableListOf<RecommendGroupUi>()
-            val boMoiList = phimBoMoi.map { 
+
+            fun mapToUi(list: List<com.example.alphacinema.data.model.MovieItem>) = list.map { 
                 RecommendMovieUi(
                     title = it.name, 
                     originName = it.origin_name ?: "", 
@@ -150,68 +158,41 @@ package com.example.alphacinema
                     rating = it.getRating(), 
                     posterUrl = it.getFullPosterUrl(), 
                     slug = it.slug,
-                    description = "Bộ phim mang đến câu chuyện hấp dẫn, xoay quanh các nhân vật với hàng loạt biến cố bất ngờ. Cùng theo dõi để khám phá những bí mật được ẩn giấu đằng sau.",
-                    age = "T16",
-                    year = it.year?.toString() ?: "2024",
-                    episode = it.episode_current ?: "Tập 1",
-                    genres = it.category?.map { c -> c.name } ?: emptyList()
-                ) 
-            }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } }
-            
-            val leHotList = phimLeHot.map { 
-                RecommendMovieUi(
-                    title = it.name, 
-                    originName = it.origin_name ?: "", 
-                    quality = it.quality ?: "HD", 
-                    genre = it.category?.firstOrNull()?.name ?: "", 
-                    rating = it.getRating(), 
-                    posterUrl = it.getFullPosterUrl(), 
-                    slug = it.slug,
-                    description = "Bộ phim mang đến câu chuyện hấp dẫn, xoay quanh các nhân vật với hàng loạt biến cố bất ngờ. Cùng theo dõi để khám phá những bí mật được ẩn giấu đằng sau.",
-                    age = "T16",
-                    year = it.year?.toString() ?: "2024",
-                    episode = it.episode_current ?: "Tập 1",
-                    genres = it.category?.map { c -> c.name } ?: emptyList()
-                ) 
-            }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } }
-            
-            val hanhDongList = phimHanhDong.map { 
-                RecommendMovieUi(
-                    title = it.name, 
-                    originName = it.origin_name ?: "", 
-                    quality = it.quality ?: "HD", 
-                    genre = it.category?.firstOrNull()?.name ?: "", 
-                    rating = it.getRating(), 
-                    posterUrl = it.getFullPosterUrl(), 
-                    slug = it.slug,
-                    description = "Bộ phim mang đến câu chuyện hấp dẫn, xoay quanh các nhân vật với hàng loạt biến cố bất ngờ. Cùng theo dõi để khám phá những bí mật được ẩn giấu đằng sau.",
-                    age = "T16",
+                    description = "Bộ phim cực kì hấp dẫn, lôi cuốn. Cùng thưởng thức ngay nhé!",
+                    age = it.ageRating ?: "",
                     year = it.year?.toString() ?: "2024",
                     episode = it.episode_current ?: "Tập 1",
                     genres = it.category?.map { c -> c.name } ?: emptyList()
                 ) 
             }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } }
 
+            val boMoiList = mapToUi(phimBoMoi)
+            val leHotList = mapToUi(phimLeHot)
+            val hanhDongList = mapToUi(phimHanhDong)
+            
+            val tqList = mapToUi(pTrungQuoc)
+            val amList = mapToUi(pAuMy)
+            val hqList = mapToUi(pHanQuoc)
+            val dienAnhList = mapToUi(pDienAnh)
+            val animeList = mapToUi(pAnime)
+
             if (selectedChip == "Đề xuất" || selectedChip == "Phim bộ") {
-                allGroups.add(RecommendGroupUi(
-                    title = "Phim bộ mới",
-                    movies = boMoiList
-                ))
+                allGroups.add(RecommendGroupUi("Phim bộ mới tải lên", boMoiList))
+                allGroups.add(RecommendGroupUi("Phim Hàn Quốc mới", hqList))
+                allGroups.add(RecommendGroupUi("Phim Trung Quốc mới", tqList))
+                allGroups.add(RecommendGroupUi("Siêu phẩm Âu Mỹ", amList))
             }
             if (selectedChip == "Đề xuất" || selectedChip == "Phim lẻ") {
-                allGroups.add(RecommendGroupUi(
-                    title = "Phim lẻ hot",
-                    movies = leHotList
-                ))
+                allGroups.add(RecommendGroupUi("Phim lẻ nổi bật", leHotList))
+                allGroups.add(RecommendGroupUi("Phim điện ảnh mới cóng", dienAnhList))
             }
             if (selectedChip == "Đề xuất" || selectedChip == "Thể loại") {
-                allGroups.add(RecommendGroupUi(
-                    title = "Phim hành động",
-                    movies = hanhDongList
-                ))
+                allGroups.add(RecommendGroupUi("Kho tàng Anime mới nhất", animeList))
+                allGroups.add(RecommendGroupUi("Hoạt hình 3D", hanhDongList))
             }
             allGroups
         }
+
 
         val movieCount = movies.size
         val initialPage = remember(movieCount) {
@@ -831,9 +812,9 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
     ) {
         // Map group title → (FilterKind, slug) for the "See more" action
         val (seeMoreKind, seeMoreSlug) = when (group.title) {
-            "Phim bộ mới"    -> FilterKind.MOVIE_TYPE to "phim-bo"
-            "Phim lẻ hot"   -> FilterKind.MOVIE_TYPE to "phim-le"
-            "Phim hành động" -> FilterKind.GENRE      to "hanh-dong"
+            "Phim bộ mới"    -> FilterKind.MOVIE_TYPE to "series"
+            "Phim lẻ hot"   -> FilterKind.MOVIE_TYPE to "single"
+            "Phim hoạt hình" -> FilterKind.MOVIE_TYPE to "hoathinh"
             else             -> FilterKind.GENRE      to group.title.lowercase().replace(" ", "-")
         }
         Column {
@@ -965,6 +946,25 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
+                        )
+                    }
+                }
+
+                if (movie.age.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (movie.age == "P" || movie.age == "G") Color(0xFF4CAF50).copy(alpha = 0.9f) else Color(0xFFE53935).copy(alpha = 0.9f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = movie.age,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
                         )
                     }
                 }

@@ -21,7 +21,9 @@ service cloud.firestore {
 
     match /movies/{movieId} {
       allow read: if true;
-      allow write: if isAuthenticated(); 
+      // Only admin users can write movies
+      allow write: if isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
       
       match /comments/{commentId} {
         allow read: if true;
