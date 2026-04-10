@@ -62,6 +62,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.AlertDialog
+import com.example.alphacinema.data.local.SettingsManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,6 +99,8 @@ private data class AccountMenuItemUi(
     val title: String,
     val icon: @Composable () -> Unit
 )
+
+enum class PinDialogMode { SETUP, VERIFY }
 
 @Composable
 fun AccountScreen() {
@@ -172,6 +179,14 @@ fun AccountScreen() {
         }
     )
     val state = authStateHolder.uiState
+
+    val settingsManager = remember { SettingsManager.getInstance() }
+    val isKidsModeEnabled by settingsManager.isKidsModeEnabled.collectAsState()
+
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pinDialogMode by remember { mutableStateOf<PinDialogMode>(PinDialogMode.SETUP) }
+    var pinInput by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
 
     val menuItems = listOf(
         AccountMenuItemUi("Đang xem", { Icon(Icons.Outlined.WatchLater, contentDescription = null) }),
@@ -467,6 +482,128 @@ fun AccountScreen() {
                     )
                 }
             }
+            // --- Kids Mode Toggle ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+                    .border(1.dp, Color(0xFFF6E29A).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Chế độ trẻ em",
+                        color = Color(0xFFF6E29A),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Lọc nội dung an toàn cho trẻ",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+
+                Switch(
+                    checked = isKidsModeEnabled,
+                    onCheckedChange = { checked ->
+                        if (currentUser == null) {
+                            authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+                            return@Switch
+                        }
+                        if (checked) {
+                            if (settingsManager.getKidsModePin() == null) {
+                                pinDialogMode = PinDialogMode.SETUP
+                                pinInput = ""
+                                pinError = null
+                                showPinDialog = true
+                            } else {
+                                settingsManager.setKidsMode(true)
+                            }
+                        } else {
+                            if (settingsManager.getKidsModePin() != null) {
+                                pinDialogMode = PinDialogMode.VERIFY
+                                pinInput = ""
+                                pinError = null
+                                showPinDialog = true
+                            } else {
+                                settingsManager.setKidsMode(false)
+                            }
+                        }
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.Black,
+                        checkedTrackColor = Color(0xFFF6E29A),
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color(0xFF2A344A)
+                    )
+                )
+            }
+
+            if (showPinDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPinDialog = false },
+                    containerColor = Color(0xFF10192E),
+                    titleContentColor = Color.White,
+                    textContentColor = Color.White.copy(alpha = 0.8f),
+                    title = {
+                        Text(if (pinDialogMode == PinDialogMode.SETUP) "Cài đặt mã PIN" else "Nhập mã PIN")
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                if (pinDialogMode == PinDialogMode.SETUP)
+                                    "Thiết lập mã PIN 4 số để bảo vệ chế độ trẻ em."
+                                else "Nhập mã PIN để tắt chế độ trẻ em."
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = pinInput,
+                                onValueChange = { if (it.length <= 4) pinInput = it.filter { c -> c.isDigit() } },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                isError = pinError != null,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                                visualTransformation = PasswordVisualTransformation(),
+                                colors = authTextFieldColors(),
+                                supportingText = { if (pinError != null) Text(pinError!!) }
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (pinInput.length < 4) {
+                                    pinError = "Mã PIN phải đủ 4 số"
+                                } else {
+                                    if (pinDialogMode == PinDialogMode.SETUP) {
+                                        settingsManager.setKidsModePin(pinInput)
+                                        settingsManager.setKidsMode(true)
+                                        showPinDialog = false
+                                    } else {
+                                        if (pinInput == settingsManager.getKidsModePin()) {
+                                            settingsManager.setKidsMode(false)
+                                            showPinDialog = false
+                                        } else {
+                                            pinError = "Mã PIN không đúng"
+                                        }
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Xác nhận", color = Color(0xFFF6E29A), fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showPinDialog = false }) {
+                            Text("Hủy", color = Color.White.copy(alpha = 0.7f))
+                        }
+                    }
+                )
+            }
+
         }
 
         if (state.showDialog) {

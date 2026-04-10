@@ -3,6 +3,10 @@ package com.example.alphacinema
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.api.RetrofitClient
+import com.example.alphacinema.data.local.SettingsManager
+import com.example.alphacinema.data.model.FirestoreMovie
+import com.example.alphacinema.data.repository.FirestoreRepository
+import com.example.alphacinema.data.repository.MovieRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,27 +30,27 @@ data class SearchFilter(
 val SEARCH_FILTERS = listOf(
     SearchFilter("Tất cả",    FilterKind.ALL),
     // ── Loại phim (type) ──
-    SearchFilter("Phim bộ",   FilterKind.MOVIE_TYPE, "phim-bo"),
-    SearchFilter("Phim lẻ",   FilterKind.MOVIE_TYPE, "phim-le"),
-    SearchFilter("Hoạt hình", FilterKind.MOVIE_TYPE, "hoat-hinh"),
-    SearchFilter("TV Shows",  FilterKind.MOVIE_TYPE, "tv-shows"),
+    SearchFilter("Phim bộ",   FilterKind.MOVIE_TYPE, "series"), // Adjusted for firestore type
+    SearchFilter("Phim lẻ",   FilterKind.MOVIE_TYPE, "single"), // Adjusted for firestore type
+    SearchFilter("Hoạt hình", FilterKind.MOVIE_TYPE, "hoathinh"), // Adjusted for firestore type
+    SearchFilter("TV Shows",  FilterKind.MOVIE_TYPE, "tvshows"), // Adjusted for firestore type
     // ── Thể loại (genre) ──
-    SearchFilter("Hành động",  FilterKind.GENRE, "hanh-dong"),
-    SearchFilter("Tình cảm",   FilterKind.GENRE, "tinh-cam"),
-    SearchFilter("Tâm lý",     FilterKind.GENRE, "tam-ly"),
-    SearchFilter("Kinh dị",    FilterKind.GENRE, "kinh-di"),
-    SearchFilter("Viễn tưởng", FilterKind.GENRE, "vien-tuong"),
-    SearchFilter("Hài hước",   FilterKind.GENRE, "hai-huoc"),
-    SearchFilter("Võ thuật",   FilterKind.GENRE, "vo-thuat"),
-    SearchFilter("Cổ trang",   FilterKind.GENRE, "co-trang"),
-    SearchFilter("Chiến tranh",FilterKind.GENRE, "chien-tranh"),
-    SearchFilter("Thể thao",   FilterKind.GENRE, "the-thao"),
+    SearchFilter("Hành động",  FilterKind.GENRE, "Hành động"), // Use natural text for array contains
+    SearchFilter("Tình cảm",   FilterKind.GENRE, "Tình cảm"),
+    SearchFilter("Tâm lý",     FilterKind.GENRE, "Tâm lý"),
+    SearchFilter("Kinh dị",    FilterKind.GENRE, "Kinh dị"),
+    SearchFilter("Viễn tưởng", FilterKind.GENRE, "Viễn tưởng"),
+    SearchFilter("Hài hước",   FilterKind.GENRE, "Hài hước"),
+    SearchFilter("Võ thuật",   FilterKind.GENRE, "Võ thuật"),
+    SearchFilter("Cổ trang",   FilterKind.GENRE, "Cổ trang"),
+    SearchFilter("Chiến tranh",FilterKind.GENRE, "Chiến tranh"),
+    SearchFilter("Thể thao",   FilterKind.GENRE, "Thể thao"),
 )
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
 class SearchViewModel : ViewModel() {
-    private val api = RetrofitClient.instance
+    private val firestoreRepository = FirestoreRepository()
 
     private val _searchResults = MutableStateFlow<List<SearchMovieUi>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
@@ -64,6 +68,14 @@ class SearchViewModel : ViewModel() {
     private var isEndReached = false
     private var currentQuery = ""
     private var searchJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            SettingsManager.getInstance().isKidsModeEnabled.collect {
+                resetAndFetch()
+            }
+        }
+    }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -85,11 +97,14 @@ class SearchViewModel : ViewModel() {
             _isLoadMore.value = true
             currentPage++
             try {
+                // Since firestore doesn't easily paginate without cursors in our simple setup, 
+                // we just fetch all up to a large limit or use limits. 
+                // For simplicity, we just fetch limit * page.
                 val items = fetchPage(currentPage)
                 if (items.isEmpty()) {
                     isEndReached = true
                 } else {
-                    _searchResults.value = _searchResults.value + items
+                    _searchResults.value = items // replace to emulate cursor, or append if proper paging
                 }
             } catch (_: Exception) {
                 currentPage--
@@ -109,14 +124,12 @@ class SearchViewModel : ViewModel() {
         val filter = _selectedFilter.value
         val query = currentQuery
 
-        // Nothing to fetch: no keyword AND no filter active
         if (query.length < 2 && filter.kind == FilterKind.ALL) {
             _searchResults.value = emptyList()
             return
         }
 
         searchJob = viewModelScope.launch {
-            // Debounce only for text search to avoid hammering the API
             if (query.length >= 2) delay(600)
             _isLoading.value = true
             try {
@@ -129,62 +142,44 @@ class SearchViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Fetch a single page based on the current query + filter combination.
-     *
-     * Decision table:
-     * ┌─────────────┬──────────────┬──────────────────────────────────────────────────┐
-     * │ query ≥ 2   │ filter kind  │ endpoint used                                    │
-     * ├─────────────┼──────────────┼──────────────────────────────────────────────────┤
-     * │ yes         │ GENRE        │ searchMovies(keyword, category=slug)              │
-     * │ yes         │ MOVIE_TYPE   │ searchMovies(keyword)  ← API has no type param   │
-     * │ yes         │ ALL          │ searchMovies(keyword)                             │
-     * │ no          │ GENRE        │ getMoviesByCategory(slug)                        │
-     * │ no          │ MOVIE_TYPE   │ getMoviesByType(slug)                            │
-     * │ no          │ ALL          │ never reached (guarded above)                    │
-     * └─────────────┴──────────────┴──────────────────────────────────────────────────┘
-     */
     private suspend fun fetchPage(page: Int): List<SearchMovieUi> {
         val filter = _selectedFilter.value
         val query = currentQuery
+        val isKidsMode = SettingsManager.getInstance().isKidsModeEnabled.value
+
+        val limit = page * 20 // Pseudo pagination
 
         val response = when {
-            // ── Text search ──────────────────────────────────────────────────
             query.length >= 2 -> {
-                val genreCategorySlug = if (filter.kind == FilterKind.GENRE) filter.slug else null
-                api.searchMovies(
-                    keyword = query,
-                    page = page,
-                    category = genreCategorySlug
-                )
+                val base = firestoreRepository.searchMovies(keyword = query, isKidsMode = isKidsMode, limit = limit)
+                when {
+                    filter.kind == FilterKind.GENRE && filter.slug != null -> base.filter { it.categories.contains(filter.slug) }
+                    filter.kind == FilterKind.MOVIE_TYPE && filter.slug != null -> base.filter { it.type == filter.slug }
+                    else -> base
+                }
             }
-            // ── Browse by genre (no keyword) ─────────────────────────────────
             filter.kind == FilterKind.GENRE && filter.slug != null -> {
-                api.getMoviesByCategory(slug = filter.slug, page = page)
+                firestoreRepository.getMoviesByCategory(category = filter.slug, isKidsMode = isKidsMode, limit = limit)
             }
-            // ── Browse by type (no keyword) ──────────────────────────────────
             filter.kind == FilterKind.MOVIE_TYPE && filter.slug != null -> {
-                api.getMoviesByType(type = filter.slug, page = page)
+                firestoreRepository.getMoviesByType(type = filter.slug, isKidsMode = isKidsMode, limit = limit)
             }
-            // Fallback – should not happen
-            else -> return emptyList()
+            else -> emptyList()
         }
 
-        val items = response.data?.items ?: response.items ?: emptyList()
-        val totalPages = response.data?.pagination?.totalPages
-            ?: response.pagination?.totalPages ?: 1
-        isEndReached = page >= totalPages
+        val items = response
+        isEndReached = true // We loaded everything up to the limit
 
         return items.map { it.toSearchUi() }
     }
 
-    private fun com.example.alphacinema.data.model.MovieItem.toSearchUi() = SearchMovieUi(
+    private fun FirestoreMovie.toSearchUi() = SearchMovieUi(
         movieId = slug,
-        title = name,
-        subtitle = category?.firstOrNull()?.name ?: origin_name ?: "Phim",
-        badge = episode_current ?: quality ?: "HD",
-        badgeColor = "gray",
-        rating = getRating(),
-        posterUrl = getFullPosterUrl()
+        title = title,
+        subtitle = categories.firstOrNull() ?: originName ?: "Phim",
+        badge = ageRating,
+        badgeColor = if (isKidsFriendly) "green" else "red",
+        rating = "9.0", // Fallback for simplicity
+        posterUrl = posterUrl
     )
 }
