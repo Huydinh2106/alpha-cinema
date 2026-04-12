@@ -6,18 +6,40 @@ data class SupportChatRequest(
     val question: String,
     @SerializedName("top_k")
     val topK: Int = 4,
+    @SerializedName("top_n_recommendations")
+    val topNRecommendations: Int = 3,
+    @SerializedName("generation_model")
+    val generationModel: String? = null,
     @SerializedName("session_id")
     val sessionId: String,
-    val history: List<SupportChatHistoryTurn> = emptyList(),
-    val memory: SupportChatMemoryContext = SupportChatMemoryContext(),
-    @SerializedName("response_contract")
-    val responseContract: SupportChatResponseContract = SupportChatResponseContract()
+    @SerializedName("remember_history")
+    val rememberHistory: Boolean = true,
+    @SerializedName("chat_history")
+    val chatHistory: List<SupportChatHistoryMessage>? = null
 )
 
-data class SupportChatHistoryTurn(
+data class SupportChatHistoryMessage(
     val role: String,
-    val content: String,
-    val timestamp: String? = null
+    val content: String
+)
+
+data class SupportChatApiResponse(
+    val answer: String? = null,
+    val intent: String? = null,
+    val mode: String? = null,
+    val sources: List<SupportChatSource> = emptyList(),
+    @SerializedName("standalone_question")
+    val standaloneQuestion: String? = null,
+    @SerializedName("session_id")
+    val sessionId: String? = null,
+    @SerializedName("history_message_count")
+    val historyMessageCount: Int? = null
+)
+
+data class SupportChatSource(
+    val title: String? = null,
+    val content: String? = null,
+    val url: String? = null
 )
 
 data class SupportChatMemoryContext(
@@ -123,7 +145,9 @@ data class SupportChatMessage(
 data class SupportChatReply(
     val text: String,
     val metadata: SupportChatMetadata? = null,
-    val memory: SupportChatMemoryContext? = null
+    val memory: SupportChatMemoryContext? = null,
+    val sessionId: String? = null,
+    val historyMessageCount: Int? = null
 )
 
 fun SupportChatAction.resolveRoute(): SupportChatRoute? = primaryRoute ?: fallbackRoute

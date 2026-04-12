@@ -25,7 +25,9 @@ internal data class ParsedSupportChatPayload(
     val text: String,
     val intent: ParsedSupportChatIntent = ParsedSupportChatIntent.UNKNOWN,
     val memory: SupportChatMemoryContext? = null,
-    val movieSuggestions: List<ParsedSupportChatMovieSuggestion> = emptyList()
+    val movieSuggestions: List<ParsedSupportChatMovieSuggestion> = emptyList(),
+    val sessionId: String? = null,
+    val historyMessageCount: Int? = null
 )
 
 internal enum class ParsedSupportChatIntent {
@@ -43,6 +45,8 @@ internal object SupportChatResponseParser {
         val root = runCatching { JsonParser.parseString(trimmed) }.getOrNull()
         val intent = root?.let(::extractIntent) ?: ParsedSupportChatIntent.UNKNOWN
         val memory = root?.let(::extractMemoryContext)
+        val sessionId = root?.let(::extractSessionId)
+        val historyMessageCount = root?.let(::extractHistoryMessageCount)
         val movieSuggestions = root
             ?.let(::extractMovieSuggestions)
             .orEmpty()
@@ -58,7 +62,9 @@ internal object SupportChatResponseParser {
             text = resolvedText,
             intent = intent,
             memory = memory,
-            movieSuggestions = movieSuggestions
+            movieSuggestions = movieSuggestions,
+            sessionId = sessionId,
+            historyMessageCount = historyMessageCount
         )
     }
 
@@ -221,6 +227,18 @@ internal object SupportChatResponseParser {
         )
     }
 
+    private fun extractSessionId(element: JsonElement?): String? {
+        element ?: return null
+        if (!element.isJsonObject) return null
+        return stringValue(element.asJsonObject, listOf("session_id", "sessionId"))
+    }
+
+    private fun extractHistoryMessageCount(element: JsonElement?): Int? {
+        element ?: return null
+        if (!element.isJsonObject) return null
+        return intValue(element.asJsonObject, listOf("history_message_count", "historyMessageCount"))
+    }
+
     private fun cleanReplyText(raw: String): String {
         return raw
             .removeSurrounding("\"")
@@ -278,6 +296,12 @@ internal object SupportChatResponseParser {
             .firstOrNull()
     }
 
+    private fun intValue(jsonObject: JsonObject, keys: List<String>): Int? {
+        return keys.asSequence()
+            .mapNotNull { key -> jsonObject.get(key)?.asIntOrNull() }
+            .firstOrNull()
+    }
+
     private fun stringList(jsonObject: JsonObject, keys: List<String>): List<String> {
         return keys.asSequence()
             .mapNotNull { key -> jsonObject.get(key) }
@@ -316,6 +340,16 @@ internal object SupportChatResponseParser {
         return when (primitive.asString.trim().lowercase(Locale.ROOT)) {
             "true", "1", "yes" -> true
             "false", "0", "no" -> false
+            else -> null
+        }
+    }
+
+    private fun JsonElement.asIntOrNull(): Int? {
+        if (!isJsonPrimitive) return null
+        val primitive = asJsonPrimitive
+        return when {
+            primitive.isNumber -> runCatching { primitive.asInt }.getOrNull()
+            primitive.isString -> primitive.asString.trim().toIntOrNull()
             else -> null
         }
     }

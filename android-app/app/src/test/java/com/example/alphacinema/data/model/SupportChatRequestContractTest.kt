@@ -1,6 +1,7 @@
 package com.example.alphacinema.data.model
 
 import com.google.gson.Gson
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,30 +12,26 @@ class SupportChatRequestContractTest {
     @Test
     fun supportChatRequest_serializesMemoryContractFields() {
         val request = SupportChatRequest(
-            question = "Nội quy của app là gì?",
+            question = "Noi quy cua app la gi?",
             topK = 4,
+            topNRecommendations = 3,
             sessionId = "session-123",
-            history = listOf(
-                SupportChatHistoryTurn(
+            rememberHistory = true,
+            chatHistory = listOf(
+                SupportChatHistoryMessage(
                     role = "user",
-                    content = "Nội quy của app là gì?",
-                    timestamp = "10:30"
+                    content = "Noi quy cua app la gi?"
                 )
-            ),
-            memory = SupportChatMemoryContext(
-                summary = "User is asking about app policy.",
-                lastIntent = "general_support",
-                topics = listOf("app_policy"),
-                kidsModeEnabled = false
             )
         )
 
         val json = gson.toJson(request)
 
         assertTrue(json.contains("\"session_id\":\"session-123\""))
-        assertTrue(json.contains("\"memory\""))
-        assertTrue(json.contains("\"last_intent\":\"general_support\""))
-        assertTrue(json.contains("\"response_contract\""))
-        assertTrue(json.contains("\"structured_movies_only_for_recommendation\":true"))
+        assertTrue(json.contains("\"remember_history\":true"))
+        assertTrue(json.contains("\"top_n_recommendations\":3"))
+        assertTrue(json.contains("\"chat_history\""))
+        assertFalse(json.contains("\"history\""))
+        assertFalse(json.contains("\"memory\""))
     }
 }

@@ -26,6 +26,22 @@ class SupportSuggestionPolicyTest {
     }
 
     @Test
+    fun shouldExposeMovieSuggestions_forContextualFollowUpAfterRecommendation() {
+        val memory = SupportChatMemoryContext(
+            lastIntent = "movie_recommendation",
+            genres = listOf("Tam ly")
+        )
+
+        assertTrue(
+            SupportSuggestionPolicy.shouldExposeMovieSuggestions(
+                question = "Con phim Han thi sao?",
+                parsedIntent = ParsedSupportChatIntent.UNKNOWN,
+                memory = memory
+            )
+        )
+    }
+
+    @Test
     fun shouldAvoidPreviouslySuggestedMovies_forDislikeFollowUpAfterRecommendation() {
         val memory = SupportChatMemoryContext(
             lastIntent = "movie_recommendation",
