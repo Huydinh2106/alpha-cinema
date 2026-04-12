@@ -15,18 +15,20 @@ class SupportChatResponseParserTest {
             """
             {
               "intent": "movie_recommendation",
-              "answer": "Bạn có thể xem: Úng Kính Ma Quái (2026)",
+              "answer": "Ban co the xem: Ung Kinh Ma Quai (2026)",
+              "session_id": "session-123",
+              "history_message_count": 4,
               "memory": {
                 "summary": "User prefers horror suggestions.",
                 "last_intent": "movie_recommendation",
                 "topics": ["movies"],
-                "genres": ["Kinh dị"],
+                "genres": ["Kinh di"],
                 "referenced_movie_slugs": ["ung-kinh-ma-quai-2026"]
               },
-              "movies": [
+              "recommendations": [
                 {
                   "id": "ung-kinh-ma-quai-2026",
-                  "name": "Úng Kính Ma Quái",
+                  "name": "Ung Kinh Ma Quai",
                   "year": 2026,
                   "poster": "https://example.com/poster.jpg",
                   "slug": "ung-kinh-ma-quai-2026",
@@ -37,12 +39,14 @@ class SupportChatResponseParserTest {
             """.trimIndent()
         )
 
-        assertEquals("Bạn có thể xem: Úng Kính Ma Quái (2026)", payload.text)
+        assertEquals("Ban co the xem: Ung Kinh Ma Quai (2026)", payload.text)
         assertEquals(ParsedSupportChatIntent.MOVIE_RECOMMENDATION, payload.intent)
         assertEquals("User prefers horror suggestions.", payload.memory?.summary)
-        assertEquals(listOf("Kinh dị"), payload.memory?.genres)
+        assertEquals(listOf("Kinh di"), payload.memory?.genres)
+        assertEquals("session-123", payload.sessionId)
+        assertEquals(4, payload.historyMessageCount)
         assertEquals(1, payload.movieSuggestions.size)
-        assertEquals("Úng Kính Ma Quái", payload.movieSuggestions.first().title)
+        assertEquals("Ung Kinh Ma Quai", payload.movieSuggestions.first().title)
         assertEquals("ung-kinh-ma-quai-2026", payload.movieSuggestions.first().slug)
     }
 
@@ -51,12 +55,12 @@ class SupportChatResponseParserTest {
         val payload = SupportChatResponseParser.parse(
             """
             {
-              "answer": "Xin chào, tôi vẫn hỗ trợ như trước."
+              "answer": "Xin chao, toi van ho tro nhu truoc."
             }
             """.trimIndent()
         )
 
-        assertEquals("Xin chào, tôi vẫn hỗ trợ như trước.", payload.text)
+        assertEquals("Xin chao, toi van ho tro nhu truoc.", payload.text)
         assertTrue(payload.movieSuggestions.isEmpty())
     }
 
@@ -77,7 +81,7 @@ class SupportChatResponseParserTest {
     fun supportRepository_doesNotExposeMovieSuggestionsForAppPolicyQuestion() {
         assertFalse(
             SupportSuggestionPolicy.shouldExposeMovieSuggestions(
-                question = "Nội quy của app là gì?",
+                question = "Noi quy cua app la gi?",
                 parsedIntent = ParsedSupportChatIntent.UNKNOWN
             )
         )
@@ -87,7 +91,7 @@ class SupportChatResponseParserTest {
     fun supportRepository_exposesMovieSuggestionsForRecommendationQuestion() {
         assertTrue(
             SupportSuggestionPolicy.shouldExposeMovieSuggestions(
-                question = "Gợi ý cho tôi một bộ phim kinh dị đi",
+                question = "Goi y cho toi mot bo phim kinh di di",
                 parsedIntent = ParsedSupportChatIntent.UNKNOWN
             )
         )

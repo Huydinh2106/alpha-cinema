@@ -2,9 +2,10 @@ package com.example.alphacinema.data.repository
 
 import com.example.alphacinema.data.api.RetrofitClient
 import com.example.alphacinema.data.local.SettingsManager
+import com.example.alphacinema.data.model.SupportChatApiResponse
 import com.example.alphacinema.data.model.FirestoreMovie
 import com.example.alphacinema.data.model.SupportChatActionFactory
-import com.example.alphacinema.data.model.SupportChatHistoryTurn
+import com.example.alphacinema.data.model.SupportChatHistoryMessage
 import com.example.alphacinema.data.model.SupportChatMemoryContext
 import com.example.alphacinema.data.model.SupportChatMetadata
 import com.example.alphacinema.data.model.SupportChatMovieItem
@@ -12,6 +13,7 @@ import com.example.alphacinema.data.model.SupportChatReply
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.SupportChatRequest
 import com.example.alphacinema.data.model.mergeWith
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
@@ -102,6 +104,7 @@ internal object SupportSuggestionPolicy {
         "khong thich",
         "khong hop",
         "chua ung",
+        "thi sao",
         "doi phim khac",
         "goi y lai",
         "phim khac",
@@ -117,12 +120,14 @@ internal object SupportSuggestionPolicy {
 class SupportRepository {
     private val api = RetrofitClient.supportChatApi
     private val firestoreRepository = FirestoreRepository()
+    private val gson = Gson()
 
     suspend fun askQuestion(
         question: String,
         sessionId: String,
-        history: List<SupportChatHistoryTurn> = emptyList(),
-        memory: SupportChatMemoryContext = SupportChatMemoryContext()
+        history: List<SupportChatHistoryMessage> = emptyList(),
+        memory: SupportChatMemoryContext = SupportChatMemoryContext(),
+        includeChatHistory: Boolean = false
     ): SupportChatReply {
         return withContext(Dispatchers.IO) {
             val isKidsMode = runCatching {
@@ -141,9 +146,12 @@ class SupportRepository {
                     SupportChatRequest(
                         question = question,
                         topK = 4,
+                        topNRecommendations = MAX_SUGGESTIONS,
                         sessionId = sessionId,
-                        history = history.takeLast(MAX_HISTORY_TURNS),
-                        memory = requestMemory
+                        rememberHistory = true,
+                        chatHistory = history
+                            .takeLast(MAX_HISTORY_TURNS)
+                            .takeIf { includeChatHistory && it.isNotEmpty() }
                     )
                 )
                 val body = response.body()?.string().orEmpty()
@@ -154,17 +162,22 @@ class SupportRepository {
             }.getOrElse {
                 return@withContext buildOfflineReply(
                     question = question,
+                    sessionId = sessionId,
                     isKidsMode = isKidsMode,
                     memory = requestMemory
                 )
             }
 
+            val apiResponse = runCatching {
+                gson.fromJson(rawBody, SupportChatApiResponse::class.java)
+            }.getOrNull()
             val parsed = SupportChatResponseParser.parse(rawBody)
-            val shouldExposeSuggestions = SupportSuggestionPolicy.shouldExposeMovieSuggestions(
-                question = question,
-                parsedIntent = parsed.intent,
-                memory = requestMemory
-            )
+            val shouldExposeSuggestions = parsed.movieSuggestions.isNotEmpty()
+                || SupportSuggestionPolicy.shouldExposeMovieSuggestions(
+                    question = question,
+                    parsedIntent = parsed.intent,
+                    memory = requestMemory
+                )
             val enrichedMovies = if (shouldExposeSuggestions) {
                 enrichMovieSuggestions(
                     parsedSuggestions = parsed.movieSuggestions,
@@ -203,15 +216,18 @@ class SupportRepository {
                 ?.let { SupportChatMetadata(movieItems = it) }
 
             SupportChatReply(
-                text = resolveReplyText(parsed.text, metadata),
+                text = resolveReplyText(apiResponse?.answer?.takeIf { it.isNotBlank() } ?: parsed.text, metadata),
                 metadata = metadata,
-                memory = requestMemory.mergeWith(parsed.memory)
+                memory = requestMemory.mergeWith(parsed.memory),
+                sessionId = apiResponse?.sessionId ?: parsed.sessionId,
+                historyMessageCount = apiResponse?.historyMessageCount ?: parsed.historyMessageCount
             )
         }
     }
 
     private suspend fun buildOfflineReply(
         question: String,
+        sessionId: String,
         isKidsMode: Boolean,
         memory: SupportChatMemoryContext
     ): SupportChatReply {
@@ -229,7 +245,8 @@ class SupportRepository {
         return SupportChatReply(
             text = resolveReplyText(FALLBACK_REPLY, metadata),
             metadata = metadata,
-            memory = memory
+            memory = memory,
+            sessionId = sessionId
         )
     }
 
