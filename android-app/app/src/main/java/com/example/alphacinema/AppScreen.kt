@@ -30,6 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.alphacinema.data.model.SupportChatAction
+import com.example.alphacinema.data.model.SupportChatRouteDestination
+import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.ui.viewmodel.HomeViewModel
 import com.example.alphacinema.ui.viewmodel.MovieDetailViewModel
 import kotlinx.coroutines.delay
@@ -129,14 +132,55 @@ fun MainContent(
         }
     )
 
+    fun showToast(message: String) {
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
     fun openMovieDetail(slug: String) {
+        if (slug.isBlank()) {
+            showToast("Không tìm thấy phim để mở.")
+            return
+        }
         movieDetailViewModel.loadMovieDetail(slug)
         currentRoute = AppRoute.MovieDetailRoute(slug = slug)
+    }
+
+    fun openPlayer(slug: String, episodeId: String? = null) {
+        if (slug.isBlank()) {
+            showToast("Phim này hiện chưa thể mở để xem.")
+            return
+        }
+        if (movieDetail?.id != slug) {
+            movieDetailViewModel.loadMovieDetail(slug)
+        }
+        currentRoute = AppRoute.PlayerRoute(
+            slug = slug,
+            episodeId = episodeId
+        )
     }
 
     fun openPlayerFromHome(movieUi: MovieUi) {
         if (movieUi.slug.isNotBlank()) {
             openMovieDetail(movieUi.slug)
+        }
+    }
+
+    fun handleSupportMovieAction(action: SupportChatAction) {
+        val route = action.resolveRoute()
+        val slug = route?.slug?.takeIf { it.isNotBlank() }
+            ?: route?.movieId?.takeIf { it.isNotBlank() }
+
+        if (route == null || slug == null) {
+            showToast("Phim này hiện chưa có đường mở phù hợp.")
+            return
+        }
+
+        when (route.destination) {
+            SupportChatRouteDestination.PLAYER -> openPlayer(
+                slug = slug,
+                episodeId = route.episodeId
+            )
+            SupportChatRouteDestination.DETAIL -> openMovieDetail(slug)
         }
     }
 
@@ -165,7 +209,9 @@ fun MainContent(
                             }
                         )
                         ScreenType.SEARCH -> SearchScreen(onOpenMovieDetail = ::openMovieDetail)
-                        ScreenType.SUPPORT -> SupportScreen()
+                        ScreenType.SUPPORT -> SupportScreen(
+                            onMovieAction = ::handleSupportMovieAction
+                        )
                         ScreenType.ACCOUNT -> AccountScreen(
                             onOpenAdminPanel = { currentRoute = AppRoute.AdminRoute },
                             onOpenMovieDetail = ::openMovieDetail,
@@ -188,52 +234,42 @@ fun MainContent(
                 }
 
                 is AppRoute.MovieDetailRoute -> {
-                    if (detailLoading) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF070B16)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(
-                                    color = Color(0xFFF6E29A),
-                                    modifier = Modifier.size(42.dp)
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    "Đang tải chi tiết phim...",
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
+                    val detailMovie = movieDetail?.takeIf { it.id == route.slug }
+
+                    LaunchedEffect(route.slug) {
+                        if (detailMovie == null) {
+                            movieDetailViewModel.loadMovieDetail(route.slug)
                         }
-                    } else if (movieDetail != null) {
+                    }
+
+                    if (detailLoading || detailMovie == null && detailError == null) {
+                        RouteLoadingState(message = "Đang tải chi tiết phim...")
+                    } else if (detailMovie != null) {
                         MovieDetailScreen(
-                            movie = movieDetail!!,
+                            movie = detailMovie,
                             isFavorite = isFavorite,
                             movieStats = movieStats,
                             userRating = userRating,
                             comments = comments,
                             onToggleFavorite = { movie ->
                                 movieDetailViewModel.toggleFavorite(movie.title, movie.posterUrl) { _, msg ->
-                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    showToast(msg)
                                 }
                             },
                             onPostComment = { content ->
                                 val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                                 movieDetailViewModel.postComment(user?.displayName ?: "Ẩn danh", user?.photoUrl?.toString() ?: "", content) { _, msg ->
-                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    showToast(msg)
                                 }
                             },
                             onSubmitRating = { score ->
                                 movieDetailViewModel.submitRating(score) { _, msg ->
-                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                    showToast(msg)
                                 }
                             },
                             onBack = { currentRoute = AppRoute.Main(currentMainScreen) },
                             onPlayMovie = { playingMovie, episode ->
-                                currentRoute = AppRoute.PlayerRoute(
+                                openPlayer(
                                     slug = route.slug,
                                     episodeId = episode?.id
                                 )
@@ -241,39 +277,38 @@ fun MainContent(
                             onOpenMovie = ::openMovieDetail
                         )
                     } else if (detailError != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF070B16)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    "Lỗi tải phim",
-                                    color = Color(0xFFFF6B6B),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    detailError ?: "",
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
+                        RouteErrorState(
+                            title = "Lỗi tải phim",
+                            message = detailError ?: ""
+                        )
                     }
                 }
 
                 is AppRoute.PlayerRoute -> {
-                    val movie = movieDetail
-                    if (movie != null) {
-                        val episode = movie.episodes.firstOrNull { it.id == route.episodeId }
-                            ?: movie.episodes.firstOrNull()
+                    val playerMovie = movieDetail?.takeIf { it.id == route.slug }
+
+                    LaunchedEffect(route.slug) {
+                        if (playerMovie == null) {
+                            movieDetailViewModel.loadMovieDetail(route.slug)
+                        }
+                    }
+
+                    if (detailLoading || playerMovie == null && detailError == null) {
+                        RouteLoadingState(message = "Đang chuẩn bị trình phát...")
+                    } else if (playerMovie != null) {
+                        val episode = playerMovie.episodes.firstOrNull { it.id == route.episodeId }
+                            ?: playerMovie.episodes.firstOrNull()
                         val videoUrl = episode?.let { episodeVideoUrls[it.id] } ?: ""
 
+                        LaunchedEffect(route.slug, videoUrl) {
+                            if (videoUrl.isBlank()) {
+                                currentRoute = AppRoute.MovieDetailRoute(route.slug)
+                                showToast("Phim này hiện chưa có nguồn phát. Mở trang chi tiết để bạn xem thêm.")
+                            }
+                        }
+
                         PlayerScreen(
-                            movie = movie,
+                            movie = playerMovie,
                             episode = episode,
                             onBack = { currentRoute = AppRoute.MovieDetailRoute(route.slug) },
                             videoUrl = videoUrl,
@@ -284,6 +319,14 @@ fun MainContent(
                                     episodeId = ep.id
                                 )
                             }
+                        )
+                    } else if (detailError != null) {
+                        LaunchedEffect(route.slug, detailError) {
+                            showToast("Không tìm thấy phim để phát.")
+                        }
+                        RouteErrorState(
+                            title = "Không thể mở trình phát",
+                            message = detailError ?: ""
                         )
                     }
                 }
@@ -309,6 +352,59 @@ fun MainContent(
                     currentRoute = AppRoute.Main(selectedScreen)
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun RouteLoadingState(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF070B16)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(
+                color = Color(0xFFF6E29A),
+                modifier = Modifier.size(42.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = message,
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun RouteErrorState(
+    title: String,
+    message: String
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF070B16)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = title,
+                color = Color(0xFFFF6B6B),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            if (message.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = message,
+                    color = Color.White.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }
