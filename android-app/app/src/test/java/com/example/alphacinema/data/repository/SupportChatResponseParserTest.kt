@@ -1,0 +1,99 @@
+package com.example.alphacinema.data.repository
+
+import com.example.alphacinema.data.model.SupportChatActionFactory
+import com.example.alphacinema.data.model.SupportChatRouteDestination
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SupportChatResponseParserTest {
+
+    @Test
+    fun parseStructuredMovieSuggestions_returnsTextAndMovieMetadata() {
+        val payload = SupportChatResponseParser.parse(
+            """
+            {
+              "intent": "movie_recommendation",
+              "answer": "Ban co the xem: Ung Kinh Ma Quai (2026)",
+              "session_id": "session-123",
+              "history_message_count": 4,
+              "memory": {
+                "summary": "User prefers horror suggestions.",
+                "last_intent": "movie_recommendation",
+                "topics": ["movies"],
+                "genres": ["Kinh di"],
+                "referenced_movie_slugs": ["ung-kinh-ma-quai-2026"]
+              },
+              "recommendations": [
+                {
+                  "id": "ung-kinh-ma-quai-2026",
+                  "name": "Ung Kinh Ma Quai",
+                  "year": 2026,
+                  "poster": "https://example.com/poster.jpg",
+                  "slug": "ung-kinh-ma-quai-2026",
+                  "playable": true
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+
+        assertEquals("Ban co the xem: Ung Kinh Ma Quai (2026)", payload.text)
+        assertEquals(ParsedSupportChatIntent.MOVIE_RECOMMENDATION, payload.intent)
+        assertEquals("User prefers horror suggestions.", payload.memory?.summary)
+        assertEquals(listOf("Kinh di"), payload.memory?.genres)
+        assertEquals("session-123", payload.sessionId)
+        assertEquals(4, payload.historyMessageCount)
+        assertEquals(1, payload.movieSuggestions.size)
+        assertEquals("Ung Kinh Ma Quai", payload.movieSuggestions.first().title)
+        assertEquals("ung-kinh-ma-quai-2026", payload.movieSuggestions.first().slug)
+    }
+
+    @Test
+    fun parseTextOnlyReply_keepsLegacyTextOnlyBehavior() {
+        val payload = SupportChatResponseParser.parse(
+            """
+            {
+              "answer": "Xin chao, toi van ho tro nhu truoc."
+            }
+            """.trimIndent()
+        )
+
+        assertEquals("Xin chao, toi van ho tro nhu truoc.", payload.text)
+        assertTrue(payload.movieSuggestions.isEmpty())
+    }
+
+    @Test
+    fun watchActionFactory_fallsBackToDetailWhenPlaybackUnavailable() {
+        val action = SupportChatActionFactory.createWatchMovieAction(
+            slug = "ung-kinh-ma-quai-2026",
+            movieId = "ung-kinh-ma-quai-2026",
+            preferredDestination = SupportChatRouteDestination.PLAYER,
+            playable = false
+        )
+
+        assertEquals(SupportChatRouteDestination.DETAIL, action.primaryRoute?.destination)
+        assertEquals("ung-kinh-ma-quai-2026", action.primaryRoute?.slug)
+    }
+
+    @Test
+    fun supportRepository_doesNotExposeMovieSuggestionsForAppPolicyQuestion() {
+        assertFalse(
+            SupportSuggestionPolicy.shouldExposeMovieSuggestions(
+                question = "Noi quy cua app la gi?",
+                parsedIntent = ParsedSupportChatIntent.UNKNOWN
+            )
+        )
+    }
+
+    @Test
+    fun supportRepository_exposesMovieSuggestionsForRecommendationQuestion() {
+        assertTrue(
+            SupportSuggestionPolicy.shouldExposeMovieSuggestions(
+                question = "Goi y cho toi mot bo phim kinh di di",
+                parsedIntent = ParsedSupportChatIntent.UNKNOWN
+            )
+        )
+    }
+}
