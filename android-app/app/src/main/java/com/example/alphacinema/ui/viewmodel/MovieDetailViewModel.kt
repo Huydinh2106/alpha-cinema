@@ -195,6 +195,32 @@ class MovieDetailViewModel : ViewModel() {
                         recommendations = emptyList()
                     )
                     _episodeVideoUrls.value = videoUrlMap
+
+                    // Thêm logic tìm kiếm phụ các Phần khác
+                    viewModelScope.launch {
+                        try {
+                            val baseName = movie.name.replace(Regex("(?i)\\(?\\s*(Phần|Mùa|Season|Part)\\s*\\d+\\)?"), "").trim()
+                            if (baseName.isNotBlank()) {
+                                val searchResponse = api.searchMovies(keyword = baseName, limit = 10)
+                                val related = searchResponse.data?.items ?: searchResponse.items ?: emptyList()
+                                val processedRelated = related.filter {
+                                    it.slug != slug && (it.name.contains(baseName, ignoreCase = true) || it.origin_name?.contains(baseName, ignoreCase = true) == true)
+                                }.map { rel ->
+                                    RecommendedMovieUi(
+                                        id = rel.slug,
+                                        title = rel.name,
+                                        year = rel.year?.toString() ?: "",
+                                        posterUrl = rel.getFullPosterUrl()
+                                    )
+                                }
+                                if (processedRelated.isNotEmpty()) {
+                                    _movieDetail.value = _movieDetail.value?.copy(relatedSeasons = processedRelated.sortedBy { it.title })
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Bỏ qua lỗi nếu không thể tải các phần khác
+                        }
+                    }
                 } else {
                     _error.value = "Không tìm thấy phim"
                 }
