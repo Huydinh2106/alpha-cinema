@@ -86,7 +86,7 @@ class HomeViewModel : ViewModel() {
 
                 val hqDeferred = safeRun { repository.getMoviesByCountry("Hàn Quốc", limit = 8) }
                 val tqDeferred = safeRun { repository.getMoviesByCountry("Trung Quốc", limit = 8) }
-                val amDeferred = safeRun { repository.getMoviesByCountry("Âu Mỹ", limit = 8) }
+                val amDeferred = safeRun { repository.getMoviesByCountry("Mỹ", limit = 8) }
                 val dienAnhDeferred = safeRun { repository.getMoviesByType("single", limit = 15) } // Fetch a bit more to filter single/theatrical better
                 val animeDeferred = safeRun { repository.getMoviesByType("hoathinh", limit = 15) }
 
