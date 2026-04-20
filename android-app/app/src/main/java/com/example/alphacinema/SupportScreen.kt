@@ -3,6 +3,8 @@ package com.example.alphacinema
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,13 +50,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatMessage
+import com.example.alphacinema.data.model.SupportChatMovieItem
 import com.example.alphacinema.data.model.SupportMessageSender
+import com.example.alphacinema.data.model.primaryAction
+import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.ui.viewmodel.SupportViewModel
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -77,7 +87,8 @@ private val BotBubbleShape = RoundedCornerShape(
 
 @Composable
 fun SupportScreen(
-    supportViewModel: SupportViewModel = viewModel()
+    supportViewModel: SupportViewModel = viewModel(),
+    onMovieAction: (SupportChatAction) -> Unit = {}
 ) {
     var input by remember { mutableStateOf("") }
     val messages by supportViewModel.messages.collectAsState()
@@ -144,7 +155,10 @@ fun SupportScreen(
                 }
 
                 items(messages, key = { it.id }) { message ->
-                    MessageBubble(message = message)
+                    MessageBubble(
+                        message = message,
+                        onMovieAction = onMovieAction
+                    )
                 }
             }
 
@@ -252,9 +266,13 @@ private fun SupportIntroCard() {
 }
 
 @Composable
-private fun MessageBubble(message: SupportChatMessage) {
+internal fun MessageBubble(
+    message: SupportChatMessage,
+    onMovieAction: (SupportChatAction) -> Unit = {}
+) {
     val fromUser = message.sender == SupportMessageSender.USER
     val isLoading = message.sender == SupportMessageSender.LOADING
+    val movieItems = message.metadata?.movieItems.orEmpty()
     val bubbleColor = when (message.sender) {
         SupportMessageSender.USER -> Color(0xFFF6E29A)
         SupportMessageSender.BOT -> Color(0xFF17233A)
@@ -310,12 +328,27 @@ private fun MessageBubble(message: SupportChatMessage) {
                         )
                     }
                 } else {
-                    Text(
-                        text = message.text,
-                        color = textColor,
-                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)
-                    )
+                    Column(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (message.text.isNotBlank()) {
+                            Text(
+                                text = message.text,
+                                color = textColor,
+                                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
+                            )
+                        }
+
+                        if (!fromUser && movieItems.isNotEmpty()) {
+                            movieItems.forEach { movieItem ->
+                                SupportMovieSuggestionCard(
+                                    movie = movieItem,
+                                    onMovieAction = onMovieAction
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -329,6 +362,131 @@ private fun MessageBubble(message: SupportChatMessage) {
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun SupportMovieSuggestionCard(
+    movie: SupportChatMovieItem,
+    onMovieAction: (SupportChatAction) -> Unit
+) {
+    val action = movie.primaryAction()
+    val isActionEnabled = action?.enabled == true && action.resolveRoute() != null
+
+    Surface(
+        color = Color.White.copy(alpha = 0.06f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(18.dp)
+            )
+            .testTag("support_movie_card_${movie.id}")
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (!movie.posterUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = movie.posterUrl,
+                        contentDescription = movie.title,
+                        contentScale = ContentScale.Crop,
+                        placeholder = painterResource(id = R.drawable.logo_app),
+                        error = painterResource(id = R.drawable.logo_app),
+                        modifier = Modifier
+                            .width(68.dp)
+                            .height(96.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = movie.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    if (movie.subtitle.isNotBlank()) {
+                        Text(
+                            text = movie.subtitle,
+                            color = Color.White.copy(alpha = 0.68f),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2
+                        )
+                    }
+
+                    if (movie.year.isNotBlank()) {
+                        Text(
+                            text = movie.year,
+                            color = Color(0xFFF6E29A),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            SupportMovieActionButton(
+                label = action?.label ?: "Xem phim",
+                enabled = isActionEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("support_movie_action_${movie.id}"),
+                onClick = {
+                    if (action != null) {
+                        onMovieAction(action)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SupportMovieActionButton(
+    label: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val containerColor = when {
+        !enabled -> Color.White.copy(alpha = 0.08f)
+        isPressed -> Color(0xFFE6D188)
+        else -> Color(0xFFF6E29A)
+    }
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        interactionSource = interactionSource,
+        shape = RoundedCornerShape(14.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 11.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = Color(0xFF08111E),
+            disabledContainerColor = Color.White.copy(alpha = 0.08f),
+            disabledContentColor = Color.White.copy(alpha = 0.34f)
+        ),
+        modifier = modifier
+    ) {
+        Text(
+            text = label,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

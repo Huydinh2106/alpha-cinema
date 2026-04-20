@@ -55,6 +55,18 @@ class FirestoreRepository {
         }
     }
 
+    suspend fun getMovieBySlug(slug: String): com.example.alphacinema.data.model.FirestoreMovie? {
+        if (slug.isBlank()) return null
+        return try {
+            val snapshot = db.collection("movies").document(slug).get().await()
+            snapshot.toObject(com.example.alphacinema.data.model.FirestoreMovie::class.java)
+                ?.apply { this.slug = snapshot.id }
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getMovieBySlug failed for slug=$slug", e)
+            null
+        }
+    }
+
     suspend fun saveUser(firebaseUser: FirebaseUser) {
         val userRef = db.collection("users").document(firebaseUser.uid)
         
