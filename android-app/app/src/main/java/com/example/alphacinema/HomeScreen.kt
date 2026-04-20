@@ -146,7 +146,7 @@ package com.example.alphacinema
             }
         }
 
-        val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, pTrungQuoc, pAuMy, pHanQuoc, pDienAnh, pAnime, selectedChip) {
+        val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, pTrungQuoc, pAuMy, pHanQuoc, pDienAnh, pAnime, selectedChip, isLoading) {
             val allGroups = mutableListOf<RecommendGroupUi>()
 
             fun mapToUi(list: List<com.example.alphacinema.data.model.MovieItem>) = list.map { 
@@ -164,7 +164,7 @@ package com.example.alphacinema
                     episode = it.episode_current ?: "Tập 1",
                     genres = it.category?.map { c -> c.name } ?: emptyList()
                 ) 
-            }.ifEmpty { List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } }
+            }.ifEmpty { if (isLoading) List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } else emptyList() }
 
             val boMoiList = mapToUi(phimBoMoi)
             val leHotList = mapToUi(phimLeHot)
@@ -176,19 +176,25 @@ package com.example.alphacinema
             val dienAnhList = mapToUi(pDienAnh)
             val animeList = mapToUi(pAnime)
 
+            fun addGroup(title: String, mappedList: List<RecommendMovieUi>) {
+                if (mappedList.isNotEmpty()) {
+                    allGroups.add(RecommendGroupUi(title, mappedList))
+                }
+            }
+
             if (selectedChip == "Đề xuất" || selectedChip == "Phim bộ") {
-                allGroups.add(RecommendGroupUi("Phim bộ mới tải lên", boMoiList))
-                allGroups.add(RecommendGroupUi("Phim Hàn Quốc mới", hqList))
-                allGroups.add(RecommendGroupUi("Phim Trung Quốc mới", tqList))
-                allGroups.add(RecommendGroupUi("Siêu phẩm Âu Mỹ", amList))
+                addGroup("Phim bộ mới tải lên", boMoiList)
+                addGroup("Phim Hàn Quốc mới", hqList)
+                addGroup("Phim Trung Quốc mới", tqList)
+                addGroup("Siêu phẩm Âu Mỹ", amList)
             }
             if (selectedChip == "Đề xuất" || selectedChip == "Phim lẻ") {
-                allGroups.add(RecommendGroupUi("Phim lẻ nổi bật", leHotList))
-                allGroups.add(RecommendGroupUi("Phim điện ảnh mới cóng", dienAnhList))
+                addGroup("Phim lẻ nổi bật", leHotList)
+                addGroup("Phim điện ảnh mới cóng", dienAnhList)
             }
             if (selectedChip == "Đề xuất" || selectedChip == "Thể loại") {
-                allGroups.add(RecommendGroupUi("Kho tàng Anime mới nhất", animeList))
-                allGroups.add(RecommendGroupUi("Hoạt hình 3D", hanhDongList))
+                addGroup("Kho tàng Anime mới nhất", animeList)
+                addGroup("Hoạt hình 3D", hanhDongList)
             }
             allGroups
         }
