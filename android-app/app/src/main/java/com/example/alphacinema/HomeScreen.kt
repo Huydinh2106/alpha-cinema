@@ -29,6 +29,10 @@ package com.example.alphacinema
     import androidx.compose.material.icons.outlined.Settings
     import androidx.compose.material.icons.outlined.Info
     import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+    import androidx.compose.material.icons.filled.Home
+    import androidx.compose.material.icons.filled.Search
+    import androidx.compose.material.icons.filled.HeadsetMic
+    import androidx.compose.material.icons.filled.Person
     import androidx.compose.material3.*
     import androidx.compose.animation.core.animateFloatAsState
     import androidx.compose.animation.core.tween
@@ -1067,124 +1071,86 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
         currentScreen: ScreenType = ScreenType.HOME,
         onNavigate: (ScreenType) -> Unit = {}
     ) {
-        Box(
-            modifier = modifier
-                .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 12.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(40.dp))
-                .background(
-                    Color(0xFF1A1D2B).copy(alpha = 0.92f)
-                )
-                .border(
-                    1.dp,
-                    Color.White.copy(alpha = 0.12f),
-                    RoundedCornerShape(40.dp)
-                )
+        NavigationBar(
+            modifier = modifier,
+            containerColor = Color(0xFF1A1D2B).copy(alpha = 0.95f),
+            contentColor = Color.White,
+            tonalElevation = 0.dp
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BottomItem(
-                    icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
-                    label = "Trang chủ",
-                    selected = currentScreen == ScreenType.HOME,
-                    onClick = { onNavigate(ScreenType.HOME) }
+            NavigationBarItem(
+                selected = currentScreen == ScreenType.HOME,
+                onClick = { onNavigate(ScreenType.HOME) },
+                icon = {
+                    Icon(
+                        imageVector = if (currentScreen == ScreenType.HOME) Icons.Filled.Home else Icons.Outlined.Home,
+                        contentDescription = "Trang chủ"
+                    )
+                },
+                label = { Text("Trang chủ", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFFF6E29A),
+                    selectedTextColor = Color.White,
+                    unselectedIconColor = Color.White.copy(alpha = 0.55f),
+                    unselectedTextColor = Color.White.copy(alpha = 0.55f),
+                    indicatorColor = Color(0xFFF6E29A).copy(alpha = 0.15f)
                 )
+            )
 
-                BottomItem(
-                    icon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    label = "Tìm kiếm",
-                    selected = currentScreen == ScreenType.SEARCH,
-                    onClick = { onNavigate(ScreenType.SEARCH) }
+            NavigationBarItem(
+                selected = currentScreen == ScreenType.SEARCH,
+                onClick = { onNavigate(ScreenType.SEARCH) },
+                icon = {
+                    Icon(
+                        imageVector = if (currentScreen == ScreenType.SEARCH) Icons.Filled.Search else Icons.Outlined.Search,
+                        contentDescription = "Tìm kiếm"
+                    )
+                },
+                label = { Text("Tìm kiếm", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFFF6E29A),
+                    selectedTextColor = Color.White,
+                    unselectedIconColor = Color.White.copy(alpha = 0.55f),
+                    unselectedTextColor = Color.White.copy(alpha = 0.55f),
+                    indicatorColor = Color(0xFFF6E29A).copy(alpha = 0.15f)
                 )
+            )
 
-                BottomItem(
-                    icon = { Icon(Icons.Outlined.HeadsetMic, contentDescription = null) },
-                    label = "Hỗ trợ",
-                    selected = currentScreen == ScreenType.SUPPORT,
-                    onClick = { onNavigate(ScreenType.SUPPORT) }
+            NavigationBarItem(
+                selected = currentScreen == ScreenType.SUPPORT,
+                onClick = { onNavigate(ScreenType.SUPPORT) },
+                icon = {
+                    Icon(
+                        imageVector = if (currentScreen == ScreenType.SUPPORT) Icons.Filled.HeadsetMic else Icons.Outlined.HeadsetMic,
+                        contentDescription = "Hỗ trợ"
+                    )
+                },
+                label = { Text("Hỗ trợ", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFFF6E29A),
+                    selectedTextColor = Color.White,
+                    unselectedIconColor = Color.White.copy(alpha = 0.55f),
+                    unselectedTextColor = Color.White.copy(alpha = 0.55f),
+                    indicatorColor = Color(0xFFF6E29A).copy(alpha = 0.15f)
                 )
+            )
 
-                BottomItem(
-                    icon = { Icon(Icons.Outlined.PersonOutline, contentDescription = null) },
-                    label = "Tài khoản",
-                    selected = currentScreen == ScreenType.ACCOUNT,
-                    onClick = { onNavigate(ScreenType.ACCOUNT) }
+            NavigationBarItem(
+                selected = currentScreen == ScreenType.ACCOUNT,
+                onClick = { onNavigate(ScreenType.ACCOUNT) },
+                icon = {
+                    Icon(
+                        imageVector = if (currentScreen == ScreenType.ACCOUNT) Icons.Filled.Person else Icons.Outlined.PersonOutline,
+                        contentDescription = "Tài khoản"
+                    )
+                },
+                label = { Text("Tài khoản", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFFF6E29A),
+                    selectedTextColor = Color.White,
+                    unselectedIconColor = Color.White.copy(alpha = 0.55f),
+                    unselectedTextColor = Color.White.copy(alpha = 0.55f),
+                    indicatorColor = Color(0xFFF6E29A).copy(alpha = 0.15f)
                 )
-            }
-        }
-    }
-
-    @Composable
-    fun BottomItem(
-        icon: @Composable () -> Unit,
-        label: String,
-        selected: Boolean,
-        onClick: () -> Unit = {}
-    ) {
-        val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-        val isPressed by interactionSource.collectIsPressedAsState()
-
-        val pressScale by androidx.compose.animation.core.animateFloatAsState(
-            targetValue = if (isPressed) 0.88f else 1.0f,
-            animationSpec = androidx.compose.animation.core.spring(
-                dampingRatio = 0.5f,
-                stiffness = 800f
-            ),
-            label = "pressScale"
-        )
-        val iconColor by androidx.compose.animation.animateColorAsState(
-            targetValue = if (selected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.55f),
-            animationSpec = androidx.compose.animation.core.tween(200),
-            label = "iconColor"
-        )
-        val textColor by androidx.compose.animation.animateColorAsState(
-            targetValue = if (selected) Color.White else Color.White.copy(alpha = 0.55f),
-            animationSpec = androidx.compose.animation.core.tween(200),
-            label = "textColor"
-        )
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .clip(RoundedCornerShape(36.dp))
-                .then(
-                    if (selected) Modifier.background(Color.White.copy(alpha = 0.12f))
-                    else Modifier
-                )
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick
-                )
-                .padding(horizontal = 21.dp, vertical = 8.dp)
-                .graphicsLayer {
-                    scaleX = pressScale
-                    scaleY = pressScale
-                }
-        ) {
-            CompositionLocalProvider(
-                LocalContentColor provides iconColor
-            ) {
-                icon()
-            }
-
-            Spacer(modifier = Modifier.height(3.dp))
-
-            Text(
-                text = label,
-                color = textColor,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         }
     }
