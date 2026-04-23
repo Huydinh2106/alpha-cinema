@@ -14,18 +14,21 @@ object MovieDetailFakeData {
             bannerUrl = "https://m.media-amazon.com/images/M/MV5BNGEyOGJiNmEtMmI1OC00MDI4LWIxNzctYzg2YjYyMTk3MTdiXkEyXkFqcGc@._V1_.jpg",
             posterUrl = "https://m.media-amazon.com/images/M/MV5BNGEyOGJiNmEtMmI1OC00MDI4LWIxNzctYzg2YjYyMTk3MTdiXkEyXkFqcGc@._V1_.jpg",
             episodes = listOf(
-                EpisodeUi("alice-ep-1", "Tập 1: Vào cuộc", "46 phút"),
-                EpisodeUi("alice-ep-2", "Tập 2: Trò chơi bắt đầu", "52 phút"),
-                EpisodeUi("alice-ep-3", "Tập 3: Lá bài đầu tiên", "48 phút"),
-                EpisodeUi("alice-ep-4", "Tập 4: Cái giá phải trả", "50 phút"),
-                EpisodeUi("alice-ep-5", "Tập 5: Sự thật lộ diện", "55 phút"),
-                EpisodeUi("alice-ep-6", "Tập 6: Không còn đường lùi", "53 phút")
+                EpisodeUi("alice-ep-1", "Phần 1: Tập 1", "46 phút"),
+                EpisodeUi("alice-ep-2", "Phần 1: Tập 2", "52 phút"),
+                EpisodeUi("alice-ep-3", "Phần 1: Tập 3", "48 phút"),
+                EpisodeUi("alice-ep-4", "Phần 2: Tập 1", "50 phút"),
+                EpisodeUi("alice-ep-5", "Phần 2: Tập 2", "55 phút"),
+                EpisodeUi("alice-ep-6", "Phần 2: Tập 3", "53 phút")
             ),
             cast = listOf(
                 CastUi("Kento Yamazaki", "Arisu"),
                 CastUi("Tao Tsuchiya", "Usagi"),
                 CastUi("Nijiro Murakami", "Chishiya"),
                 CastUi("Aya Asahina", "Kuina")
+            ),
+            relatedSeasons = listOf(
+                RecommendedMovieUi("alice-in-borderland-2", "Thế Giới Không Lối Thoát (Phần 2)", "2022", "https://m.media-amazon.com/images/M/MV5BNGEyOGJiNmEtMmI1OC00MDI4LWIxNzctYzg2YjYyMTk3MTdiXkEyXkFqcGc@._V1_.jpg")
             ),
             recommendations = listOf(
                 RecommendedMovieUi(
