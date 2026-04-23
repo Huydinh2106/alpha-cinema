@@ -3,7 +3,14 @@
 package com.example.alphacinema
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -30,30 +37,49 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.toRoute
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.ui.viewmodel.HomeViewModel
 import com.example.alphacinema.ui.viewmodel.MovieDetailViewModel
 import kotlinx.coroutines.delay
+import kotlinx.serialization.Serializable
+
+// ── Type-safe Route Definitions ─────────────────────────────────────────────
+
+@Serializable
+data object MainRoute
+
+@Serializable
+data class MovieDetailNavRoute(val slug: String)
+
+@Serializable
+data class PlayerNavRoute(val slug: String, val episodeId: String? = null)
+
+@Serializable
+data class MovieListNavRoute(val title: String, val filterKindName: String, val slug: String)
+
+@Serializable
+data object AdminNavRoute
+
+// ── Animation Constants ─────────────────────────────────────────────────────
+
+private const val ANIM_DURATION = 350
+private const val ANIM_DURATION_FAST = 250
+
+// ── Splash State ────────────────────────────────────────────────────────────
 
 enum class ScreenType {
     HOME,
     SEARCH,
     SUPPORT,
     ACCOUNT
-}
-
-sealed interface AppRoute {
-    data class Main(val screen: ScreenType) : AppRoute
-    data class MovieDetailRoute(val slug: String) : AppRoute
-    data class PlayerRoute(val slug: String, val episodeId: String?) : AppRoute
-    data class MovieListRoute(
-        val title: String,
-        val filterKind: FilterKind,
-        val slug: String
-    ) : AppRoute
-    object AdminRoute : AppRoute
 }
 
 sealed interface SplashState {
@@ -88,7 +114,7 @@ fun AppScreen(modifier: Modifier = Modifier) {
 
     Crossfade(
         targetState = splashState,
-        animationSpec = tween(durationMillis = 500, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         modifier = modifier.fillMaxSize(),
         label = "SplashTransition"
     ) { state ->
@@ -107,8 +133,8 @@ fun AppScreen(modifier: Modifier = Modifier) {
 fun MainContent(
     modifier: Modifier = Modifier
 ) {
+    val navController = rememberNavController()
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
-    var currentRoute by remember { mutableStateOf<AppRoute>(AppRoute.Main(ScreenType.HOME)) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val movieDetailViewModel: MovieDetailViewModel = viewModel()
@@ -142,7 +168,7 @@ fun MainContent(
             return
         }
         movieDetailViewModel.loadMovieDetail(slug)
-        currentRoute = AppRoute.MovieDetailRoute(slug = slug)
+        navController.navigate(MovieDetailNavRoute(slug = slug))
     }
 
     fun openPlayer(slug: String, episodeId: String? = null) {
@@ -153,10 +179,7 @@ fun MainContent(
         if (movieDetail?.id != slug) {
             movieDetailViewModel.loadMovieDetail(slug)
         }
-        currentRoute = AppRoute.PlayerRoute(
-            slug = slug,
-            episodeId = episodeId
-        )
+        navController.navigate(PlayerNavRoute(slug = slug, episodeId = episodeId))
     }
 
     fun openPlayerFromHome(movieUi: MovieUi) {
@@ -184,27 +207,81 @@ fun MainContent(
         }
     }
 
+    // Theo dõi current route để hiện/ẩn bottom bar
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val isOnMainRoute = navBackStackEntry?.destination?.hasRoute<MainRoute>() == true
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF070B16))
     ) {
-        Crossfade(
-            targetState = currentRoute,
-            animationSpec = tween(220),
+        NavHost(
+            navController = navController,
+            startDestination = MainRoute,
             modifier = Modifier.fillMaxSize(),
-            label = "ScreenTransition"
-        ) { route ->
-            when (route) {
-                is AppRoute.Main -> {
-                    when (route.screen) {
+            // Default enter/exit — dùng cho route không chỉ định riêng
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(ANIM_DURATION))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it / 4 },
+                    animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(ANIM_DURATION_FAST))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it / 4 },
+                    animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(ANIM_DURATION))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(ANIM_DURATION_FAST))
+            }
+        ) {
+            // ── Main (Home / Search / Support / Account) ────────────────
+            composable<MainRoute>(
+                enterTransition = { fadeIn(tween(300)) },
+                exitTransition = {
+                    // Khi navigate đi: slide nhẹ sang trái + fade
+                    slideOutHorizontally(
+                        targetOffsetX = { -it / 4 },
+                        animationSpec = tween(ANIM_DURATION)
+                    ) + fadeOut(tween(ANIM_DURATION_FAST))
+                },
+                popEnterTransition = {
+                    // Khi quay lại Main: slide nhẹ từ trái + fade in
+                    slideInHorizontally(
+                        initialOffsetX = { -it / 4 },
+                        animationSpec = tween(ANIM_DURATION)
+                    ) + fadeIn(tween(ANIM_DURATION))
+                },
+                popExitTransition = { fadeOut(tween(200)) }
+            ) {
+                // Giữ tab navigation bằng Crossfade bên trong MainRoute
+                Crossfade(
+                    targetState = currentMainScreen,
+                    animationSpec = tween(220),
+                    modifier = Modifier.fillMaxSize(),
+                    label = "TabTransition"
+                ) { screen ->
+                    when (screen) {
                         ScreenType.HOME -> HomeScreen(
                             onPlayMovie = ::openPlayerFromHome,
                             onSeeMore = { kind, slug, title ->
-                                currentRoute = AppRoute.MovieListRoute(
-                                    title = title,
-                                    filterKind = kind,
-                                    slug = slug
+                                navController.navigate(
+                                    MovieListNavRoute(
+                                        title = title,
+                                        filterKindName = kind.name,
+                                        slug = slug
+                                    )
                                 )
                             }
                         )
@@ -213,143 +290,198 @@ fun MainContent(
                             onMovieAction = ::handleSupportMovieAction
                         )
                         ScreenType.ACCOUNT -> AccountScreen(
-                            onOpenAdminPanel = { currentRoute = AppRoute.AdminRoute },
+                            onOpenAdminPanel = { navController.navigate(AdminNavRoute) },
                             onOpenMovieDetail = ::openMovieDetail,
                             onOpenMovieList = { title, filterKind, slug ->
-                                currentRoute = AppRoute.MovieListRoute(
-                                    title = title,
-                                    filterKind = filterKind,
-                                    slug = slug
+                                navController.navigate(
+                                    MovieListNavRoute(
+                                        title = title,
+                                        filterKindName = filterKind.name,
+                                        slug = slug
+                                    )
                                 )
                             }
                         )
                     }
                 }
+            }
 
-                is AppRoute.AdminRoute -> {
-                    AdminScreen(
-                        onBack = { currentRoute = AppRoute.Main(ScreenType.ACCOUNT) },
-                        viewModel = adminViewModel
+            // ── Movie Detail ────────────────────────────────────────────
+            composable<MovieDetailNavRoute>(
+                // Slide từ phải vào
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeIn(tween(ANIM_DURATION))
+                },
+                exitTransition = {
+                    // Khi mở Player từ Detail: bị đẩy xuống dưới nhẹ + fade
+                    fadeOut(tween(ANIM_DURATION_FAST))
+                },
+                popEnterTransition = {
+                    // Khi quay lại Detail từ Player: fade in
+                    fadeIn(tween(ANIM_DURATION))
+                },
+                popExitTransition = {
+                    // Khi quay lại Main: slide về phải
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeOut(tween(ANIM_DURATION_FAST))
+                }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<MovieDetailNavRoute>()
+                val detailMovie = movieDetail?.takeIf { it.id == route.slug }
+
+                LaunchedEffect(route.slug) {
+                    if (detailMovie == null) {
+                        movieDetailViewModel.loadMovieDetail(route.slug)
+                    }
+                }
+
+                if (detailLoading || detailMovie == null && detailError == null) {
+                    RouteLoadingState(message = "Đang tải chi tiết phim...")
+                } else if (detailMovie != null) {
+                    MovieDetailScreen(
+                        movie = detailMovie,
+                        isFavorite = isFavorite,
+                        movieStats = movieStats,
+                        userRating = userRating,
+                        comments = comments,
+                        onToggleFavorite = { movie ->
+                            movieDetailViewModel.toggleFavorite(movie.title, movie.posterUrl) { _, msg ->
+                                showToast(msg)
+                            }
+                        },
+                        onPostComment = { content ->
+                            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                            movieDetailViewModel.postComment(user?.displayName ?: "Ẩn danh", user?.photoUrl?.toString() ?: "", content) { _, msg ->
+                                showToast(msg)
+                            }
+                        },
+                        onSubmitRating = { score ->
+                            movieDetailViewModel.submitRating(score) { _, msg ->
+                                showToast(msg)
+                            }
+                        },
+                        onBack = { navController.popBackStack() },
+                        onPlayMovie = { playingMovie, episode ->
+                            openPlayer(
+                                slug = route.slug,
+                                episodeId = episode?.id
+                            )
+                        },
+                        onOpenMovie = ::openMovieDetail
                     )
-                }
-
-                is AppRoute.MovieDetailRoute -> {
-                    val detailMovie = movieDetail?.takeIf { it.id == route.slug }
-
-                    LaunchedEffect(route.slug) {
-                        if (detailMovie == null) {
-                            movieDetailViewModel.loadMovieDetail(route.slug)
-                        }
-                    }
-
-                    if (detailLoading || detailMovie == null && detailError == null) {
-                        RouteLoadingState(message = "Đang tải chi tiết phim...")
-                    } else if (detailMovie != null) {
-                        MovieDetailScreen(
-                            movie = detailMovie,
-                            isFavorite = isFavorite,
-                            movieStats = movieStats,
-                            userRating = userRating,
-                            comments = comments,
-                            onToggleFavorite = { movie ->
-                                movieDetailViewModel.toggleFavorite(movie.title, movie.posterUrl) { _, msg ->
-                                    showToast(msg)
-                                }
-                            },
-                            onPostComment = { content ->
-                                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                                movieDetailViewModel.postComment(user?.displayName ?: "Ẩn danh", user?.photoUrl?.toString() ?: "", content) { _, msg ->
-                                    showToast(msg)
-                                }
-                            },
-                            onSubmitRating = { score ->
-                                movieDetailViewModel.submitRating(score) { _, msg ->
-                                    showToast(msg)
-                                }
-                            },
-                            onBack = { currentRoute = AppRoute.Main(currentMainScreen) },
-                            onPlayMovie = { playingMovie, episode ->
-                                openPlayer(
-                                    slug = route.slug,
-                                    episodeId = episode?.id
-                                )
-                            },
-                            onOpenMovie = ::openMovieDetail
-                        )
-                    } else if (detailError != null) {
-                        RouteErrorState(
-                            title = "Lỗi tải phim",
-                            message = detailError ?: ""
-                        )
-                    }
-                }
-
-                is AppRoute.PlayerRoute -> {
-                    val playerMovie = movieDetail?.takeIf { it.id == route.slug }
-
-                    LaunchedEffect(route.slug) {
-                        if (playerMovie == null) {
-                            movieDetailViewModel.loadMovieDetail(route.slug)
-                        }
-                    }
-
-                    if (detailLoading || playerMovie == null && detailError == null) {
-                        RouteLoadingState(message = "Đang chuẩn bị trình phát...")
-                    } else if (playerMovie != null) {
-                        val episode = playerMovie.episodes.firstOrNull { it.id == route.episodeId }
-                            ?: playerMovie.episodes.firstOrNull()
-                        val videoUrl = episode?.let { episodeVideoUrls[it.id] } ?: ""
-
-                        LaunchedEffect(route.slug, videoUrl) {
-                            if (videoUrl.isBlank()) {
-                                currentRoute = AppRoute.MovieDetailRoute(route.slug)
-                                showToast("Phim này hiện chưa có nguồn phát. Mở trang chi tiết để bạn xem thêm.")
-                            }
-                        }
-
-                        PlayerScreen(
-                            movie = playerMovie,
-                            episode = episode,
-                            onBack = { currentRoute = AppRoute.MovieDetailRoute(route.slug) },
-                            videoUrl = videoUrl,
-                            episodeVideoUrls = episodeVideoUrls,
-                            onSelectEpisode = { ep ->
-                                currentRoute = AppRoute.PlayerRoute(
-                                    slug = route.slug,
-                                    episodeId = ep.id
-                                )
-                            }
-                        )
-                    } else if (detailError != null) {
-                        LaunchedEffect(route.slug, detailError) {
-                            showToast("Không tìm thấy phim để phát.")
-                        }
-                        RouteErrorState(
-                            title = "Không thể mở trình phát",
-                            message = detailError ?: ""
-                        )
-                    }
-                }
-
-                is AppRoute.MovieListRoute -> {
-                    MovieListScreen(
-                        title = route.title,
-                        filterKind = route.filterKind,
-                        slug = route.slug,
-                        onBack = { currentRoute = AppRoute.Main(currentMainScreen) },
-                        onOpenMovieDetail = ::openMovieDetail
+                } else if (detailError != null) {
+                    RouteErrorState(
+                        title = "Lỗi tải phim",
+                        message = detailError ?: ""
                     )
                 }
             }
+
+            // ── Player (slide từ dưới lên — kiểu Netflix fullscreen) ──
+            composable<PlayerNavRoute>(
+                enterTransition = {
+                    slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeIn(tween(ANIM_DURATION))
+                },
+                exitTransition = { fadeOut(tween(ANIM_DURATION_FAST)) },
+                popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
+                popExitTransition = {
+                    slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeOut(tween(ANIM_DURATION_FAST))
+                }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<PlayerNavRoute>()
+                val playerMovie = movieDetail?.takeIf { it.id == route.slug }
+
+                LaunchedEffect(route.slug) {
+                    if (playerMovie == null) {
+                        movieDetailViewModel.loadMovieDetail(route.slug)
+                    }
+                }
+
+                if (detailLoading || playerMovie == null && detailError == null) {
+                    RouteLoadingState(message = "Đang chuẩn bị trình phát...")
+                } else if (playerMovie != null) {
+                    val episode = playerMovie.episodes.firstOrNull { it.id == route.episodeId }
+                        ?: playerMovie.episodes.firstOrNull()
+                    val videoUrl = episode?.let { episodeVideoUrls[it.id] } ?: ""
+
+                    LaunchedEffect(route.slug, videoUrl) {
+                        if (videoUrl.isBlank()) {
+                            navController.popBackStack()
+                            navController.navigate(MovieDetailNavRoute(route.slug))
+                            showToast("Phim này hiện chưa có nguồn phát. Mở trang chi tiết để bạn xem thêm.")
+                        }
+                    }
+
+                    PlayerScreen(
+                        movie = playerMovie,
+                        episode = episode,
+                        onBack = { navController.popBackStack() },
+                        videoUrl = videoUrl,
+                        episodeVideoUrls = episodeVideoUrls,
+                        onSelectEpisode = { ep ->
+                            // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
+                            navController.navigate(
+                                PlayerNavRoute(slug = route.slug, episodeId = ep.id)
+                            ) {
+                                popUpTo<PlayerNavRoute> { inclusive = true }
+                            }
+                        }
+                    )
+                } else if (detailError != null) {
+                    LaunchedEffect(route.slug, detailError) {
+                        showToast("Không tìm thấy phim để phát.")
+                    }
+                    RouteErrorState(
+                        title = "Không thể mở trình phát",
+                        message = detailError ?: ""
+                    )
+                }
+            }
+
+            // ── Movie List ──────────────────────────────────────────────
+            composable<MovieListNavRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<MovieListNavRoute>()
+                val filterKind = try {
+                    FilterKind.valueOf(route.filterKindName)
+                } catch (_: Exception) {
+                    FilterKind.ALL
+                }
+                MovieListScreen(
+                    title = route.title,
+                    filterKind = filterKind,
+                    slug = route.slug,
+                    onBack = { navController.popBackStack() },
+                    onOpenMovieDetail = ::openMovieDetail
+                )
+            }
+
+            // ── Admin ───────────────────────────────────────────────────
+            composable<AdminNavRoute> {
+                AdminScreen(
+                    onBack = { navController.popBackStack() },
+                    viewModel = adminViewModel
+                )
+            }
         }
 
-        if (currentRoute is AppRoute.Main) {
+        // Bottom bar — chỉ hiển thị khi đang ở MainRoute
+        if (isOnMainRoute) {
             GlassBottomBar(
                 modifier = Modifier.align(Alignment.BottomCenter),
                 currentScreen = currentMainScreen,
                 onNavigate = { selectedScreen ->
                     currentMainScreen = selectedScreen
-                    currentRoute = AppRoute.Main(selectedScreen)
                 }
             )
         }
