@@ -1,59 +1,75 @@
 package com.example.alphacinema
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.api.RetrofitClient
-import com.example.alphacinema.data.local.SettingsManager
-import com.example.alphacinema.data.model.FirestoreMovie
-import com.example.alphacinema.data.repository.FirestoreRepository
-import com.example.alphacinema.data.repository.MovieRepository
+import com.example.alphacinema.data.local.SearchHistoryManager
+import com.example.alphacinema.data.model.MovieItem
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// ── Filter model ──────────────────────────────────────────────────────────────
+// ── Filter Models (New System) ──────────────────────────────────────────────────
 
-enum class FilterKind {
-    ALL,         // No filter → show trending
-    MOVIE_TYPE,  // phim-bo / phim-le / hoat-hinh / tv-shows  →  danh-sach/{slug}
-    GENRE        // hanh-dong / tinh-cam / …                  →  the-loai/{slug} + category= in search
+data class FilterOption(val label: String, val slug: String)
+
+data class SelectedFilterState(
+    val country: FilterOption? = null,
+    val category: FilterOption? = null,
+    val sortLang: FilterOption? = null,
+    val year: FilterOption? = null
+) {
+    fun isAnyFilterApplied(): Boolean = !(country == null && category == null && sortLang == null && year == null)
 }
 
-data class SearchFilter(
-    val label: String,
-    val kind: FilterKind,
-    val slug: String? = null   // null only for ALL
+val COUNTRY_OPTIONS = listOf(
+    "Việt Nam" to "viet-nam", "Trung Quốc" to "trung-quoc", "Thái Lan" to "thai-lan",
+    "Hồng Kông" to "hong-kong", "Pháp" to "phap", "Đức" to "duc", "Hà Lan" to "ha-lan",
+    "Mexico" to "mexico", "Thụy Điển" to "thuy-dien", "Philippines" to "philippines",
+    "Đan Mạch" to "dan-mach", "Thụy Sĩ" to "thuy-si", "Ukraina" to "ukraina",
+    "Hàn Quốc" to "han-quoc", "Âu Mỹ" to "au-my", "Ấn Độ" to "an-do", "Canada" to "canada",
+    "Tây Ban Nha" to "tay-ban-nha", "Indonesia" to "indonesia", "Ba Lan" to "ba-lan",
+    "Malaysia" to "malaysia", "Bồ Đào Nha" to "bo-dao-nha", "UAE" to "uae",
+    "Châu Phi" to "chau-phi", "Ả Rập Xê Út" to "a-rap-xe-ut", "Nhật Bản" to "nhat-ban",
+    "Đài Loan" to "dai-loan", "Anh" to "anh", "Thổ Nhĩ Kỳ" to "tho-nhi-ky", "Nga" to "nga",
+    "Úc" to "uc", "Brazil" to "brazil", "Ý" to "y", "Na Uy" to "na-uy", "Nam Phi" to "nam-phi"
+).map { FilterOption(it.first, it.second) }
+
+val CATEGORY_OPTIONS = listOf(
+    "Hành động" to "hanh-dong", "Miền Tây" to "mien-tay", "Trẻ em" to "tre-em",
+    "Lịch sử" to "lich-su", "Cổ trang" to "co-trang", "Chiến tranh" to "chien-tranh",
+    "Viễn tưởng" to "vien-tuong", "Kinh dị" to "kinh-di", "Tài liệu" to "tai-lieu",
+    "Bí ẩn" to "bi-an", "Phim 18+" to "phim-18", "Tình cảm" to "tinh-cam",
+    "Tâm lý" to "tam-ly", "Thể thao" to "the-thao", "Phiêu lưu" to "phieu-luu",
+    "Âm nhạc" to "am-nhac", "Gia đình" to "gia-dinh", "Học đường" to "hoc-duong",
+    "Hài hước" to "hai-huoc", "Hình sự" to "hinh-su", "Võ thuật" to "vo-thuat",
+    "Khoa học" to "khoa-hoc", "Thần thoại" to "than-thoai", "Chính kịch" to "chinh-kich",
+    "Kinh điển" to "kinh-dien", "Phim ngắn" to "phim-ngan"
+).map { FilterOption(it.first, it.second) }
+
+val VERSION_OPTIONS = listOf(
+    FilterOption("Vietsub", "vietsub"),
+    FilterOption("Thuyết Minh", "thuyet-minh"),
+    FilterOption("Lồng Tiếng", "long-tieng")
 )
 
-val SEARCH_FILTERS = listOf(
-    SearchFilter("Tất cả",    FilterKind.ALL),
-    // ── Loại phim (type) ──
-    SearchFilter("Phim bộ",   FilterKind.MOVIE_TYPE, "series"), // Adjusted for firestore type
-    SearchFilter("Phim lẻ",   FilterKind.MOVIE_TYPE, "single"), // Adjusted for firestore type
-    SearchFilter("Hoạt hình", FilterKind.MOVIE_TYPE, "hoathinh"), // Adjusted for firestore type
-    SearchFilter("TV Shows",  FilterKind.MOVIE_TYPE, "tvshows"), // Adjusted for firestore type
-    // ── Thể loại (genre) ──
-    SearchFilter("Hành động",  FilterKind.GENRE, "Hành động"), // Use natural text for array contains
-    SearchFilter("Tình cảm",   FilterKind.GENRE, "Tình cảm"),
-    SearchFilter("Tâm lý",     FilterKind.GENRE, "Tâm lý"),
-    SearchFilter("Kinh dị",    FilterKind.GENRE, "Kinh dị"),
-    SearchFilter("Viễn tưởng", FilterKind.GENRE, "Viễn tưởng"),
-    SearchFilter("Hài hước",   FilterKind.GENRE, "Hài hước"),
-    SearchFilter("Võ thuật",   FilterKind.GENRE, "Võ thuật"),
-    SearchFilter("Cổ trang",   FilterKind.GENRE, "Cổ trang"),
-    SearchFilter("Chiến tranh",FilterKind.GENRE, "Chiến tranh"),
-    SearchFilter("Thể thao",   FilterKind.GENRE, "Thể thao"),
-)
+val YEAR_OPTIONS = (2026 downTo 1970).map { FilterOption(it.toString(), it.toString()) }
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
 class SearchViewModel : ViewModel() {
-    private val firestoreRepository = FirestoreRepository()
+    private val api = RetrofitClient.instance
+    private var historyManager: SearchHistoryManager? = null
 
     private val _searchResults = MutableStateFlow<List<SearchMovieUi>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
+
+    private val _searchHistory = MutableStateFlow<List<String>>(emptyList())
+    val searchHistory = _searchHistory.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
@@ -61,29 +77,59 @@ class SearchViewModel : ViewModel() {
     private val _isLoadMore = MutableStateFlow(false)
     val isLoadMore = _isLoadMore.asStateFlow()
 
-    private val _selectedFilter = MutableStateFlow(SEARCH_FILTERS[0])
-    val selectedFilter = _selectedFilter.asStateFlow()
+    // Filter states
+    private val _appliedFilters = MutableStateFlow(SelectedFilterState())
+    val appliedFilters = _appliedFilters.asStateFlow()
+
+    private val _tempFilters = MutableStateFlow(SelectedFilterState())
+    val tempFilters = _tempFilters.asStateFlow()
 
     private var currentPage = 1
     private var isEndReached = false
     private var currentQuery = ""
     private var searchJob: Job? = null
 
-    init {
-        viewModelScope.launch {
-            SettingsManager.getInstance().isKidsModeEnabled.collect {
-                resetAndFetch()
-            }
+    fun initHistory(context: Context) {
+        if (historyManager == null) {
+            historyManager = SearchHistoryManager(context)
+            _searchHistory.value = historyManager?.getHistory() ?: emptyList()
         }
     }
 
-    // ── Public API ────────────────────────────────────────────────────────────
+    // ── Filter Logic ──────────────────────────────────────────────────────────
 
-    fun setFilter(filter: SearchFilter) {
-        if (_selectedFilter.value == filter) return
-        _selectedFilter.value = filter
+    fun updateTempCountry(option: FilterOption?) {
+        _tempFilters.update { it.copy(country = if (it.country == option) null else option) }
+    }
+
+    fun updateTempCategory(option: FilterOption?) {
+        _tempFilters.update { it.copy(category = if (it.category == option) null else option) }
+    }
+
+    fun updateTempVersion(option: FilterOption?) {
+        _tempFilters.update { it.copy(sortLang = if (it.sortLang == option) null else option) }
+    }
+
+    fun updateTempYear(option: FilterOption?) {
+        _tempFilters.update { it.copy(year = if (it.year == option) null else option) }
+    }
+
+    fun applyFilters() {
+        _appliedFilters.value = _tempFilters.value
         resetAndFetch()
     }
+
+    fun resetTempFilters() {
+        _tempFilters.value = _appliedFilters.value
+    }
+
+    fun clearAppliedFilters() {
+        _appliedFilters.value = SelectedFilterState()
+        _tempFilters.value = SelectedFilterState()
+        resetAndFetch()
+    }
+
+    // ── Search Logic ──────────────────────────────────────────────────────────
 
     fun onSearchQueryChanged(query: String) {
         if (currentQuery == query) return
@@ -91,20 +137,38 @@ class SearchViewModel : ViewModel() {
         resetAndFetch()
     }
 
+    fun onPerformSearch(query: String) {
+        if (query.isNotBlank()) {
+            historyManager?.addHistory(query)
+            _searchHistory.value = historyManager?.getHistory() ?: emptyList()
+        }
+    }
+
+    fun removeHistoryItem(query: String) {
+        historyManager?.removeHistory(query)
+        _searchHistory.value = historyManager?.getHistory() ?: emptyList()
+    }
+
+    fun clearAllHistory() {
+        historyManager?.clearHistory()
+        _searchHistory.value = emptyList()
+    }
+
     fun loadMore() {
         if (_isLoading.value || _isLoadMore.value || isEndReached) return
+
+        val isFilterActive = _appliedFilters.value.isAnyFilterApplied()
+        if (currentQuery.length < 1 && !isFilterActive) return
+
         viewModelScope.launch {
             _isLoadMore.value = true
             currentPage++
             try {
-                // Since firestore doesn't easily paginate without cursors in our simple setup, 
-                // we just fetch all up to a large limit or use limits. 
-                // For simplicity, we just fetch limit * page.
-                val items = fetchPage(currentPage)
+                val items = fetchFilteredResults(currentPage)
                 if (items.isEmpty()) {
                     isEndReached = true
                 } else {
-                    _searchResults.value = items // replace to emulate cursor, or append if proper paging
+                    _searchResults.value = _searchResults.value + items
                 }
             } catch (_: Exception) {
                 currentPage--
@@ -114,26 +178,26 @@ class SearchViewModel : ViewModel() {
         }
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
     private fun resetAndFetch() {
         searchJob?.cancel()
         currentPage = 1
         isEndReached = false
 
-        val filter = _selectedFilter.value
-        val query = currentQuery
+        val isFilterActive = _appliedFilters.value.isAnyFilterApplied()
 
-        if (query.length < 2 && filter.kind == FilterKind.ALL) {
+        if (currentQuery.trim().isEmpty() && !isFilterActive) {
             _searchResults.value = emptyList()
             return
         }
 
         searchJob = viewModelScope.launch {
-            if (query.length >= 2) delay(600)
+
+            if (currentQuery.length >= 1) delay(600)
             _isLoading.value = true
             try {
-                _searchResults.value = fetchPage(1)
+                val results = fetchFilteredResults(1)
+                _searchResults.value = results
+                isEndReached = results.isEmpty()
             } catch (_: Exception) {
                 _searchResults.value = emptyList()
             } finally {
@@ -142,44 +206,30 @@ class SearchViewModel : ViewModel() {
         }
     }
 
-    private suspend fun fetchPage(page: Int): List<SearchMovieUi> {
-        val filter = _selectedFilter.value
-        val query = currentQuery
-        val isKidsMode = SettingsManager.getInstance().isKidsModeEnabled.value
+    private suspend fun fetchFilteredResults(page: Int): List<SearchMovieUi> {
+        val filters = _appliedFilters.value
+        val keywordParam = currentQuery.trim()
+        val response = api.searchMovies(
+            keyword = keywordParam,
+            page = page,
+            limit = 21,
+            category = filters.category?.slug,
+            country = filters.country?.slug,
+            year = filters.year?.slug,
+            sortLang = filters.sortLang?.slug
+        )
 
-        val limit = page * 20 // Pseudo pagination
-
-        val response = when {
-            query.length >= 2 -> {
-                val base = firestoreRepository.searchMovies(keyword = query, isKidsMode = isKidsMode, limit = limit)
-                when {
-                    filter.kind == FilterKind.GENRE && filter.slug != null -> base.filter { it.categories.contains(filter.slug) }
-                    filter.kind == FilterKind.MOVIE_TYPE && filter.slug != null -> base.filter { it.type == filter.slug }
-                    else -> base
-                }
-            }
-            filter.kind == FilterKind.GENRE && filter.slug != null -> {
-                firestoreRepository.getMoviesByCategory(category = filter.slug, isKidsMode = isKidsMode, limit = limit)
-            }
-            filter.kind == FilterKind.MOVIE_TYPE && filter.slug != null -> {
-                firestoreRepository.getMoviesByType(type = filter.slug, isKidsMode = isKidsMode, limit = limit)
-            }
-            else -> emptyList()
-        }
-
-        val items = response
-        isEndReached = true // We loaded everything up to the limit
-
+        val items = response.data?.items ?: response.items ?: emptyList()
         return items.map { it.toSearchUi() }
     }
 
-    private fun FirestoreMovie.toSearchUi() = SearchMovieUi(
+    private fun MovieItem.toSearchUi() = SearchMovieUi(
         movieId = slug,
-        title = title,
-        subtitle = categories.firstOrNull() ?: originName ?: "Phim",
-        badge = ageRating,
-        badgeColor = if (isKidsFriendly) "green" else "red",
-        rating = "9.0", // Fallback for simplicity
-        posterUrl = posterUrl
+        title = name,
+        subtitle = category?.firstOrNull()?.name ?: origin_name ?: "Phim",
+        badge = episode_current ?: "HD",
+        badgeColor = "gray",
+        rating = getRating(),
+        posterUrl = getFullPosterUrl()
     )
 }
