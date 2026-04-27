@@ -37,7 +37,9 @@ interface PhimApiService {
         @Query("limit") limit: Int = 21,
         @Query("category") category: String? = null,
         @Query("country") country: String? = null,
-        @Query("year") year: String? = null
+        @Query("year") year: String? = null,
+        @Query("sort_lang") sortLang: String? = null,
+        @Query("sort_type") sortType: String = "desc"
     ): MovieListResponse
 
     @GET("phim/{slug}")
