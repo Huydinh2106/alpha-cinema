@@ -1,4 +1,4 @@
-﻿@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.example.alphacinema
 
@@ -309,33 +309,6 @@ fun AccountScreen(
                 fontWeight = FontWeight.ExtraBold
             )
 
-            KidsModeCard(
-                isKidsModeEnabled = isKidsModeEnabled,
-                currentUser = currentUser,
-                onRequireLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
-                onToggleMode = { checked ->
-                    if (checked) {
-                        if (settingsManager.getKidsModePin() == null) {
-                            pinDialogMode = PinDialogMode.SETUP
-                            pinInput = ""
-                            pinError = null
-                            showPinDialog = true
-                        } else {
-                            settingsManager.setKidsMode(true)
-                        }
-                    } else {
-                        if (settingsManager.getKidsModePin() != null) {
-                            pinDialogMode = PinDialogMode.VERIFY
-                            pinInput = ""
-                            pinError = null
-                            showPinDialog = true
-                        } else {
-                            settingsManager.setKidsMode(false)
-                        }
-                    }
-                }
-            )
-
             // === User Info / Auth Buttons ===
             if (currentUser != null) {
                 // LOGGED IN: show avatar, name, email
@@ -539,6 +512,33 @@ fun AccountScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+
+            KidsModeCard(
+                isKidsModeEnabled = isKidsModeEnabled,
+                currentUser = currentUser,
+                onRequireLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
+                onToggleMode = { checked ->
+                    if (checked) {
+                        if (settingsManager.getKidsModePin() == null) {
+                            pinDialogMode = PinDialogMode.SETUP
+                            pinInput = ""
+                            pinError = null
+                            showPinDialog = true
+                        } else {
+                            settingsManager.setKidsMode(true)
+                        }
+                    } else {
+                        if (settingsManager.getKidsModePin() != null) {
+                            pinDialogMode = PinDialogMode.VERIFY
+                            pinInput = ""
+                            pinError = null
+                            showPinDialog = true
+                        } else {
+                            settingsManager.setKidsMode(false)
+                        }
+                    }
+                }
+            )
 
             menuItems.forEach { item ->
                 Row(

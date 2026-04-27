@@ -45,5 +45,6 @@ data class MovieDetailUi(
     val posterUrl: String,
     val episodes: List<EpisodeUi>,
     val cast: List<CastUi>,
+    val relatedSeasons: List<RecommendedMovieUi> = emptyList(),
     val recommendations: List<RecommendedMovieUi>
 )
