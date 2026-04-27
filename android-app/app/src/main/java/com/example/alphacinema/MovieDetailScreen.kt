@@ -61,6 +61,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,18 +93,26 @@ fun MovieDetailScreen(
     onOpenMovie: (String) -> Unit
 ) {
     var selectedTabName by rememberSaveable(movie.id) {
-        mutableStateOf(MovieDetailTab.EPISODES.name)
-    }
-    var episodesExpanded by rememberSaveable(movie.id) {
-        mutableStateOf(false)
+        mutableStateOf(if (movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty()) MovieDetailTab.EPISODES.name else MovieDetailTab.CAST.name)
     }
     var descriptionExpanded by rememberSaveable(movie.id) {
         mutableStateOf(false)
     }
 
     val selectedTab = MovieDetailTab.valueOf(selectedTabName)
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    var activeEpisodeId by rememberSaveable(movie.id) {
+        val defaultEp = movie.episodes.firstOrNull { ep ->
+            movie.currentEpisode.contains(ep.name.substringBefore(":"), ignoreCase = true)
+        } ?: movie.episodes.firstOrNull()
+        mutableStateOf(defaultEp?.id)
+    }
+    val activeEpisode = movie.episodes.find { it.id == activeEpisodeId }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF070B16)),
@@ -144,15 +156,15 @@ fun MovieDetailScreen(
                 )
                 Spacer(modifier = Modifier.height(18.dp))
                 ButtonRow(
-                    onPlay = { onPlayMovie(movie, movie.episodes.firstOrNull()) },
-                    onEpisodes = {
-                        if (selectedTabName == MovieDetailTab.EPISODES.name) {
-                            episodesExpanded = !episodesExpanded
-                        } else {
+                    onPlay = { activeEpisode?.let { onPlayMovie(movie, it) } },
+                    onEpisodes = if (movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty()) {
+                        {
                             selectedTabName = MovieDetailTab.EPISODES.name
-                            episodesExpanded = true
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(2)
+                            }
                         }
-                    }
+                    } else null
                 )
                 Spacer(modifier = Modifier.height(14.dp))
                 ActionRow(
@@ -175,7 +187,7 @@ fun MovieDetailScreen(
                 contentColor = Color.White,
                 indicator = {}
             ) {
-                MovieDetailTab.entries.forEach { tab ->
+                MovieDetailTab.entries.filter { tab -> tab != MovieDetailTab.EPISODES || movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty() }.forEach { tab ->
                     val selected = tab == selectedTab
                     Tab(
                         selected = selected,
@@ -195,13 +207,16 @@ fun MovieDetailScreen(
         item {
             Spacer(modifier = Modifier.height(10.dp))
             when (selectedTab) {
-                MovieDetailTab.EPISODES -> EpisodeTabModern(
-                    episodes = movie.episodes,
-                    currentEpisodeText = movie.currentEpisode,
-                    expanded = episodesExpanded,
-                    onToggleExpanded = { episodesExpanded = !episodesExpanded },
-                    onPlayEpisode = { onPlayMovie(movie, it) }
-                )
+                MovieDetailTab.EPISODES -> if (movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty()) {
+                    EpisodeTabModern(
+                        episodes = movie.episodes,
+                        currentEpisode = activeEpisode,
+                        relatedSeasons = movie.relatedSeasons,
+                        currentMovieName = movie.title,
+                        onSelectEpisode = { activeEpisodeId = it.id },
+                        onOpenSeason = onOpenMovie
+                    )
+                }
 
                 MovieDetailTab.CAST -> CastTab(cast = movie.cast)
                 MovieDetailTab.RECOMMENDATIONS -> RecommendationTab(
@@ -357,7 +372,7 @@ private fun DescriptionBlock(
 @Composable
 private fun ButtonRow(
     onPlay: () -> Unit,
-    onEpisodes: () -> Unit
+    onEpisodes: (() -> Unit)?
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Button(
@@ -379,16 +394,18 @@ private fun ButtonRow(
             Text("Xem phim", fontWeight = FontWeight.Bold)
         }
 
-        OutlinedButton(
-            onClick = onEpisodes,
-            modifier = Modifier
-                .weight(1f)
-                .height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-        ) {
-            Text("Tập phim", fontWeight = FontWeight.SemiBold)
+        if (onEpisodes != null) {
+            OutlinedButton(
+                onClick = onEpisodes,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+            ) {
+                Text("Tập phim", fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
@@ -563,12 +580,13 @@ private fun EpisodeTab(
 @Composable
 private fun EpisodeTabModern(
     episodes: List<EpisodeUi>,
-    currentEpisodeText: String,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
-    onPlayEpisode: (EpisodeUi) -> Unit
+    currentEpisode: EpisodeUi?,
+    relatedSeasons: List<RecommendedMovieUi> = emptyList(),
+    currentMovieName: String = "",
+    onSelectEpisode: (EpisodeUi) -> Unit,
+    onOpenSeason: (String) -> Unit = {}
 ) {
-    if (episodes.isEmpty()) {
+    if (episodes.isEmpty() && relatedSeasons.isEmpty()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -587,209 +605,179 @@ private fun EpisodeTabModern(
         return
     }
 
-    val currentEpisode = episodes.firstOrNull { episode ->
-        currentEpisodeText.contains(
-            episode.name.substringBefore(":"),
-            ignoreCase = true
-        )
-    } ?: episodes.firstOrNull()
+    val groupedEpisodes = remember(episodes) {
+        episodes.groupBy { ep ->
+            val match = Regex("(?i)(Phần|Mùa)\\s*\\d+").find(ep.name)
+            match?.value ?: "Chung"
+        }
+    }
+
+    var selectedGroup by remember(episodes) {
+        val activeGroup = if (currentEpisode != null) {
+            val match = Regex("(?i)(Phần|Mùa)\\s*\\d+").find(currentEpisode.name)
+            match?.value ?: "Chung"
+        } else {
+            groupedEpisodes.keys.first()
+        }
+        mutableStateOf(activeGroup)
+    }
+
+    if (!groupedEpisodes.containsKey(selectedGroup)) {
+        selectedGroup = groupedEpisodes.keys.first()
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1B2642),
-                            Color(0xFF10192E)
-                        )
-                    )
-                )
-                .border(
-                    1.dp,
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0x55F6E29A),
-                            Color.White.copy(alpha = 0.10f)
-                        )
-                    ),
-                    RoundedCornerShape(22.dp)
-                )
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0x22F6E29A)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.VideoLibrary,
-                        contentDescription = null,
-                        tint = Color(0xFFF6E29A)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Chọn tập phim",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "${episodes.size} tập sẵn có",
-                        color = Color.White.copy(alpha = 0.66f),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .clickable(onClick = onToggleExpanded)
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (expanded) "Thu gọn" else "Mở danh sách",
-                            color = Color(0xFFF6E29A),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = Color(0xFFF6E29A)
-                        )
-                    }
-                }
-            }
+        if (relatedSeasons.isNotEmpty()) {
+            var seasonsExpanded by remember { mutableStateOf(false) }
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
-                    .clickable { currentEpisode?.let(onPlayEpisode) }
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                    .clickable { seasonsExpanded = !seasonsExpanded }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF6E29A)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.PlayArrow,
-                        contentDescription = null,
-                        tint = Color(0xFF0A0F1E)
+                Column {
+                    Text(
+                        text = "Phần phim khác",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Đang xem: $currentMovieName",
+                        color = Color(0xFFF6E29A),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = currentEpisode?.name ?: currentEpisodeText,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (!currentEpisode?.duration.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(2.dp))
+                Icon(
+                    imageVector = if (seasonsExpanded) androidx.compose.material.icons.Icons.Outlined.KeyboardArrowUp else androidx.compose.material.icons.Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = Color.White
+                )
+            }
+
+            if (seasonsExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val allSeasons = mutableListOf<RecommendedMovieUi>().apply {
+                        add(RecommendedMovieUi("current", currentMovieName, "", ""))
+                        addAll(relatedSeasons)
+                    }
+                    allSeasons.forEach { season ->
+                        val isCurrent = season.id == "current"
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isCurrent) Color(0xFFF6E29A).copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable {
+                                    if (!isCurrent) {
+                                        seasonsExpanded = false
+                                        onOpenSeason(season.id)
+                                    }
+                                }
+                                .padding(vertical = 12.dp, horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = season.title,
+                                color = if (isCurrent) Color(0xFFF6E29A) else Color.White,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        if (episodes.isNotEmpty()) {
+            Text(
+                text = "Danh sách tập phim",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        if (groupedEpisodes.keys.size > 1) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                groupedEpisodes.keys.forEach { groupName ->
+                    val isSelected = groupName == selectedGroup
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isSelected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.08f))
+                            .border(1.dp, if (isSelected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+                            .clickable { selectedGroup = groupName }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
                         Text(
-                            text = currentEpisode?.duration ?: "",
-                            color = Color.White.copy(alpha = 0.62f),
-                            style = MaterialTheme.typography.labelMedium
+                            text = groupName,
+                            color = if (isSelected) Color(0xFF0A0F1E) else Color.White,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color(0x22F6E29A))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Đang xem",
-                        color = Color(0xFFF6E29A),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
             }
+        }
 
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Danh sách tập",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        episodes.forEach { episode ->
-                            val isCurrent = currentEpisode?.id == episode.id
-                            Column(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(18.dp))
-                                    .background(if (isCurrent) Color(0xFFF6E29A) else Color(0xFF18233F))
-                                    .border(
-                                        1.dp,
-                                        if (isCurrent) SolidColor(Color(0xFFFFF4CA)) else SolidColor(Color.White.copy(alpha = 0.08f)),
-                                        RoundedCornerShape(18.dp)
-                                    )
-                                    .clickable { onPlayEpisode(episode) }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                val episodeBadge = episode.name.substringBefore(":").ifBlank { episode.name }
-                                Text(
-                                    text = episodeBadge,
-                                    color = if (isCurrent) Color(0xFF0A0F1E) else Color(0xFFF6E29A),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = episode.name.substringAfter(":", "").trim().ifBlank { "Phát nội dung" },
-                                    color = if (isCurrent) Color(0xFF15203A) else Color.White,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (episode.duration.isNotBlank()) {
-                                    Text(
-                                        text = episode.duration,
-                                        color = if (isCurrent) Color(0xCC15203A) else Color.White.copy(alpha = 0.58f),
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                            }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val columns = 3
+            val episodesToShow = groupedEpisodes[selectedGroup] ?: emptyList()
+            episodesToShow.chunked(columns).forEach { rowEpisodes ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    rowEpisodes.forEach { episode ->
+                        val isCurrent = currentEpisode?.id == episode.id
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isCurrent) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.08f))
+                                .border(1.dp, if (isCurrent) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                .clickable { onSelectEpisode(episode) }
+                                .padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            val badgeText = episode.name
+                                .replace(Regex("(?i)(Phần|Mùa)\\s*\\d+\\s*(:|-)"), "")
+                                .replace(Regex("(?i)tập\\s*"), "")
+                                .trim()
+                            Text(
+                                text = badgeText,
+                                color = if (isCurrent) Color(0xFF0A0F1E) else Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
+                    }
+                    repeat(columns - rowEpisodes.size) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
