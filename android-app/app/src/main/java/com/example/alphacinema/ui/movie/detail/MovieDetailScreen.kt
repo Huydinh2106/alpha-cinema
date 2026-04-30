@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
-package com.example.alphacinema
+package com.example.alphacinema.ui.movie.detail
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -77,6 +77,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.decode.SvgDecoder
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
+import com.example.alphacinema.ui.components.GradientPlayButton
 
 @Composable
 fun MovieDetailScreen(
@@ -375,24 +379,15 @@ private fun ButtonRow(
     onEpisodes: (() -> Unit)?
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(
+        GradientPlayButton(
             onClick = onPlay,
             modifier = Modifier
                 .weight(1f)
                 .height(52.dp),
+            label = "Xem phim",
             shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFF6E29A),
-                contentColor = Color.Black
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.PlayArrow,
-                contentDescription = null
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Xem phim", fontWeight = FontWeight.Bold)
-        }
+            contentPadding = PaddingValues(horizontal = 14.dp)
+        )
 
         if (onEpisodes != null) {
             OutlinedButton(
@@ -787,49 +782,110 @@ private fun EpisodeTabModern(
 
 @Composable
 private fun CastTab(cast: List<CastUi>) {
+    val columns = 3
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        cast.forEach { castItem ->
+        cast.chunked(columns).forEach { rowItems ->
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF1F2438)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = castItem.name.first().uppercase(),
-                        color = Color(0xFFF6E29A),
-                        fontWeight = FontWeight.Bold
-                    )
+                rowItems.forEach { castItem ->
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.06f))
+                            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(16.dp)),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (castItem.profileUrl != null) {
+                            AsyncImage(
+                                model = castItem.profileUrl,
+                                contentDescription = castItem.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp)
+                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color(0xFF1A1F35), Color(0xFF0E1225))
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = castItem.name.firstOrNull()?.uppercase() ?: "?",
+                                    color = Color(0xFFF6E29A),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 32.sp
+                                )
+                            }
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = castItem.name,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = castItem.role,
+                                color = Color.White.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = castItem.name,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = castItem.role,
-                        color = Color.White.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                repeat(columns - rowItems.size) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
+        }
+        // TMDB Attribution
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val context = LocalContext.current
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data("file:///android_asset/tmdb_logo.svg")
+                    .decoderFactory(SvgDecoder.Factory())
+                    .build(),
+                contentDescription = "TMDB Logo",
+                modifier = Modifier.height(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Powered by TMDB",
+                color = Color.White.copy(alpha = 0.4f),
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }

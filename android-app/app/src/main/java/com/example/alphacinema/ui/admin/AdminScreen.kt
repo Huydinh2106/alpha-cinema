@@ -1,4 +1,4 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.admin
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,8 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.alphacinema.data.model.MovieItem
-import com.example.alphacinema.ui.viewmodel.AdminUiState
-import com.example.alphacinema.ui.viewmodel.AdminViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

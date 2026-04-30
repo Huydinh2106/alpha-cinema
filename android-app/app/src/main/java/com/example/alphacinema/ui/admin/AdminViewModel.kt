@@ -1,4 +1,4 @@
-package com.example.alphacinema.ui.viewmodel
+package com.example.alphacinema.ui.admin
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

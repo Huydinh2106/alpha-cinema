@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
     private const val BASE_URL = "https://phimapi.com/"
     private const val SUPPORT_CHAT_BASE_URL = "https://vankhoa2110-rag-alphacinema.hf.space/"
+    private const val TMDB_BASE_URL = "https://api.themoviedb.org/3/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -35,5 +36,9 @@ object RetrofitClient {
 
     val supportChatApi: SupportChatApiService by lazy {
         createRetrofit(SUPPORT_CHAT_BASE_URL).create(SupportChatApiService::class.java)
+    }
+
+    val tmdbApi: TmdbApiService by lazy {
+        createRetrofit(TMDB_BASE_URL).create(TmdbApiService::class.java)
     }
 }

@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalFoundationApi::class)
 
-package com.example.alphacinema
+package com.example.alphacinema.ui.app
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -46,27 +46,22 @@ import androidx.navigation.toRoute
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
-import com.example.alphacinema.ui.viewmodel.HomeViewModel
-import com.example.alphacinema.ui.viewmodel.MovieDetailViewModel
+import com.example.alphacinema.ui.account.AccountScreen
+import com.example.alphacinema.ui.admin.AdminScreen
+import com.example.alphacinema.ui.admin.AdminViewModel
+import com.example.alphacinema.ui.home.GlassBottomBar
+import com.example.alphacinema.ui.home.HomeScreen
+import com.example.alphacinema.ui.home.HomeViewModel
+import com.example.alphacinema.ui.home.MovieUi
+import com.example.alphacinema.ui.movie.detail.EpisodeUi
+import com.example.alphacinema.ui.movie.detail.MovieDetailScreen
+import com.example.alphacinema.ui.movie.detail.MovieDetailViewModel
+import com.example.alphacinema.ui.movie.list.MovieListScreen
+import com.example.alphacinema.ui.player.PlayerScreen
+import com.example.alphacinema.ui.search.FilterKind
+import com.example.alphacinema.ui.search.SearchScreen
+import com.example.alphacinema.ui.support.SupportScreen
 import kotlinx.coroutines.delay
-import kotlinx.serialization.Serializable
-
-// ── Type-safe Route Definitions ─────────────────────────────────────────────
-
-@Serializable
-data object MainRoute
-
-@Serializable
-data class MovieDetailNavRoute(val slug: String)
-
-@Serializable
-data class PlayerNavRoute(val slug: String, val episodeId: String? = null)
-
-@Serializable
-data class MovieListNavRoute(val title: String, val filterKindName: String, val slug: String)
-
-@Serializable
-data object AdminNavRoute
 
 // ── Animation Constants ─────────────────────────────────────────────────────
 
@@ -147,10 +142,10 @@ fun MainContent(
     val comments by movieDetailViewModel.comments.collectAsState()
     val userRating by movieDetailViewModel.userRating.collectAsState()
 
-    val adminViewModel: com.example.alphacinema.ui.viewmodel.AdminViewModel = viewModel(
+    val adminViewModel: AdminViewModel = viewModel(
         factory = object : androidx.lifecycle.ViewModelProvider.Factory {
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return com.example.alphacinema.ui.viewmodel.AdminViewModel(
+                return AdminViewModel(
                     apiService = com.example.alphacinema.data.api.RetrofitClient.instance,
                     firestoreRepository = com.example.alphacinema.data.repository.FirestoreRepository()
                 ) as T

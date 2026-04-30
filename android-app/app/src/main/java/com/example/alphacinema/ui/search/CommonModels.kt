@@ -1,5 +1,4 @@
-package com.example.alphacinema
-
+package com.example.alphacinema.ui.search
 enum class FilterKind {
     ALL, MOVIE_TYPE, GENRE
 }
