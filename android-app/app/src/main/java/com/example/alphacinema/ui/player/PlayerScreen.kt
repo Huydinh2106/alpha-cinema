@@ -1,4 +1,4 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.player
 
 import android.app.Activity
 import android.content.Context
@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.alphacinema.ui.movie.detail.EpisodeUi
+import com.example.alphacinema.ui.movie.detail.MovieDetailUi
 
 fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this

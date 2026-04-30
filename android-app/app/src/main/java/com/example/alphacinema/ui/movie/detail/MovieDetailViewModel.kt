@@ -1,12 +1,9 @@
-package com.example.alphacinema.ui.viewmodel
+package com.example.alphacinema.ui.movie.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.alphacinema.CastUi
-import com.example.alphacinema.EpisodeUi
-import com.example.alphacinema.MovieDetailUi
-import com.example.alphacinema.RecommendedMovieUi
 import com.example.alphacinema.data.api.RetrofitClient
+import com.example.alphacinema.data.api.TmdbConfig
 import com.example.alphacinema.data.model.Comment
 import com.example.alphacinema.data.model.MovieDetail
 import com.example.alphacinema.data.model.MovieDetailResponse
@@ -20,6 +17,7 @@ import kotlinx.coroutines.launch
 
 class MovieDetailViewModel : ViewModel() {
     private val api = RetrofitClient.instance
+    private val tmdbApi = RetrofitClient.tmdbApi
     private val firestoreRepository = FirestoreRepository()
 
     private val _movieDetail = MutableStateFlow<MovieDetailUi?>(null)
@@ -195,6 +193,33 @@ class MovieDetailViewModel : ViewModel() {
                         recommendations = emptyList()
                     )
                     _episodeVideoUrls.value = videoUrlMap
+
+                    // Fetch cast photos from TMDB
+                    val tmdbId = movie.tmdb?.id
+                    val tmdbType = movie.tmdb?.type
+                    if (tmdbId != null) {
+                        viewModelScope.launch {
+                            try {
+                                val credits = if (tmdbType == "tv") {
+                                    tmdbApi.getTvCredits(tmdbId)
+                                } else {
+                                    tmdbApi.getMovieCredits(tmdbId)
+                                }
+                                val tmdbCast = credits.cast?.take(20)?.map { cast ->
+                                    CastUi(
+                                        name = cast.name ?: cast.original_name ?: "",
+                                        role = cast.character ?: "Diễn viên",
+                                        profileUrl = cast.profile_path?.let { "${TmdbConfig.IMAGE_BASE_URL}$it" }
+                                    )
+                                } ?: emptyList()
+                                if (tmdbCast.isNotEmpty()) {
+                                    _movieDetail.value = _movieDetail.value?.copy(cast = tmdbCast)
+                                }
+                            } catch (e: Exception) {
+                                // Keep original cast from phimapi if TMDB fails
+                            }
+                        }
+                    }
 
                     // Thêm logic tìm kiếm phụ các Phần khác
                     viewModelScope.launch {

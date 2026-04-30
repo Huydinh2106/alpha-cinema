@@ -1,5 +1,5 @@
 @file:OptIn(ExperimentalFoundationApi::class)
-package com.example.alphacinema
+package com.example.alphacinema.ui.home
     import androidx.compose.foundation.ExperimentalFoundationApi
     import androidx.compose.foundation.Image
     import androidx.compose.foundation.background
@@ -38,8 +38,11 @@ package com.example.alphacinema
     import androidx.compose.animation.core.tween
     import androidx.compose.runtime.*
     import androidx.lifecycle.viewmodel.compose.viewModel
-    import com.example.alphacinema.ui.viewmodel.HomeViewModel
+    import com.example.alphacinema.R
     import com.example.alphacinema.data.model.MovieItem
+    import com.example.alphacinema.ui.app.ScreenType
+    import com.example.alphacinema.ui.components.GradientPlayButton
+    import com.example.alphacinema.ui.search.FilterKind
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.draw.blur
@@ -128,13 +131,14 @@ package com.example.alphacinema
         val pAnime by viewModel.animeMoi.collectAsState()
 
         val selectedChip by viewModel.selectedChip.collectAsState()
+        val heroDescriptions by viewModel.heroDescriptions.collectAsState()
 
-        val movies = remember(heroItems) {
+        val movies = remember(heroItems, heroDescriptions) {
             heroItems.map {
                 MovieUi(
                     title = it.name,
                     subtitle = it.origin_name ?: "",
-                    description = "",
+                    description = heroDescriptions[it.slug] ?: "",
                     rating = it.getRating(),
                     age = it.ageRating ?: "",
                     year = it.year?.toString() ?: "",
@@ -269,7 +273,7 @@ package com.example.alphacinema
                     }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
-                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                Box(modifier = Modifier.padding(horizontal = 38.dp)) {
                     MovieInfoSection(
                         movie = movies[currentMovieIndex],
                         currentMovieIndex = currentMovieIndex,
@@ -672,38 +676,36 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
 
             Spacer(modifier = Modifier.height(22.dp))
 
+            val actionButtonHeight = 40.dp
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Button(
+                GradientPlayButton(
                     onClick = onPlayClick,
                     modifier = Modifier
                         .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFF6E29A),
-                        contentColor = Color.Black
-                    )
-                ) {
-                    Icon(Icons.Outlined.PlayArrow, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Xem Phim", fontWeight = FontWeight.Bold)
-                }
+                        .height(actionButtonHeight)
+                )
 
                 Button(
                     onClick = onPlayClick,
                     modifier = Modifier
                         .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
+                        .height(actionButtonHeight),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White.copy(alpha = 0.92f),
                         contentColor = Color.Black
                     )
                 ) {
-                    Icon(Icons.Outlined.Info, contentDescription = null)
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Thông tin", fontWeight = FontWeight.Bold)
                 }
@@ -713,13 +715,16 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
             FlowMetaRow(movie)
             Spacer(modifier = Modifier.height(18.dp))
 
-            Text(
-                text = movie.description,
-                color = Color.White.copy(alpha = 0.92f),
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (movie.description.isNotBlank()) {
+                Text(
+                    text = movie.description,
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
@@ -1294,19 +1299,12 @@ fun MoviePreviewDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Button(
+                        GradientPlayButton(
                             onClick = onPlayClick,
                             modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFFFE08A),
-                                contentColor = Color.Black
-                            )
-                        ) {
-                            Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Xem Ngay", fontWeight = FontWeight.Bold)
-                        }
+                            label = "Xem Ngay",
+                            shape = RoundedCornerShape(8.dp)
+                        )
 
                         Button(
                             onClick = onDetailClick,

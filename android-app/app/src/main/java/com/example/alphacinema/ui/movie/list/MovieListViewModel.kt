@@ -1,9 +1,11 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.movie.list
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.local.SettingsManager
 import com.example.alphacinema.data.repository.FirestoreRepository
+import com.example.alphacinema.ui.search.FilterKind
+import com.example.alphacinema.ui.search.SearchMovieUi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

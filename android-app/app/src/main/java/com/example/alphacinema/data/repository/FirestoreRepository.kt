@@ -1,6 +1,5 @@
 package com.example.alphacinema.data.repository
 
-import com.example.alphacinema.MovieUi
 import com.example.alphacinema.data.model.Comment
 import com.example.alphacinema.data.model.FavoriteItem
 import com.example.alphacinema.data.model.MovieStats

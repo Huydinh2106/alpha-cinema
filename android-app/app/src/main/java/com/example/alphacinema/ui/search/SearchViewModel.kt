@@ -1,4 +1,4 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.search
 
 import android.content.Context
 import androidx.lifecycle.ViewModel

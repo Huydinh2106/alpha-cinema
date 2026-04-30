@@ -1,10 +1,8 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.support
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,13 +57,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.alphacinema.R
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportChatMovieItem
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.primaryAction
 import com.example.alphacinema.data.model.resolveRoute
-import com.example.alphacinema.ui.viewmodel.SupportViewModel
+import com.example.alphacinema.ui.components.GradientPlayButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
@@ -461,33 +460,14 @@ private fun SupportMovieActionButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val containerColor = when {
-        !enabled -> Color.White.copy(alpha = 0.08f)
-        isPressed -> Color(0xFFE6D188)
-        else -> Color(0xFFF6E29A)
-    }
-
-    Button(
+    GradientPlayButton(
         onClick = onClick,
         enabled = enabled,
-        interactionSource = interactionSource,
+        label = label,
+        modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 11.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = Color(0xFF08111E),
-            disabledContainerColor = Color.White.copy(alpha = 0.08f),
-            disabledContentColor = Color.White.copy(alpha = 0.34f)
-        ),
-        modifier = modifier
-    ) {
-        Text(
-            text = label,
-            fontWeight = FontWeight.Bold
-        )
-    }
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 11.dp)
+    )
 }
 
 @Composable
