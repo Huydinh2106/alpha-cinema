@@ -1,7 +1,8 @@
-package com.example.alphacinema.ui.viewmodel
+package com.example.alphacinema.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.alphacinema.data.repository.FirestoreRepository
 import com.example.alphacinema.data.model.MovieItem
 import com.example.alphacinema.data.repository.MovieRepository
 import kotlinx.coroutines.async
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 
 class HomeViewModel : ViewModel() {
     private val repository = MovieRepository()
+    private val firestoreRepo = FirestoreRepository()
 
     // Loading states
     private val _isLoading = MutableStateFlow(true)
@@ -23,6 +25,10 @@ class HomeViewModel : ViewModel() {
     // Movie sections
     private val _heroMovies = MutableStateFlow<List<MovieItem>>(emptyList())
     val heroMovies: StateFlow<List<MovieItem>> = _heroMovies.asStateFlow()
+
+    // Hero movie descriptions from TMDB (slug -> overview)
+    private val _heroDescriptions = MutableStateFlow<Map<String, String>>(emptyMap())
+    val heroDescriptions: StateFlow<Map<String, String>> = _heroDescriptions.asStateFlow()
 
     private val _phimBoMoi = MutableStateFlow<List<MovieItem>>(emptyList())
     val phimBoMoi: StateFlow<List<MovieItem>> = _phimBoMoi.asStateFlow()
@@ -60,6 +66,30 @@ class HomeViewModel : ViewModel() {
         }
     }
 
+    private fun fetchHeroDescriptions(heroes: List<MovieItem>) {
+        viewModelScope.launch {
+            val descMap = mutableMapOf<String, String>()
+            heroes.forEach { movie ->
+                launch {
+                    try {
+                        val firestoreMovie = firestoreRepo.getMovieBySlug(movie.slug)
+                        val content = firestoreMovie?.content
+                        if (!content.isNullOrBlank()) {
+                            // Strip HTML tags
+                            val cleanContent = content.replace(Regex("<[^>]*>"), "").trim()
+                            if (cleanContent.isNotBlank()) {
+                                descMap[movie.slug] = cleanContent
+                                _heroDescriptions.value = descMap.toMap()
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // Skip if Firestore fails for this movie
+                    }
+                }
+            }
+        }
+    }
+
     fun loadData() {
         viewModelScope.launch {
             _isLoading.value = true
@@ -73,6 +103,9 @@ class HomeViewModel : ViewModel() {
                     emptyList()
                 }
                 _heroMovies.value = latest.take(10)
+
+                // Fetch descriptions from TMDB for hero movies
+                fetchHeroDescriptions(latest.take(10))
 
                 // Collect slugs used so far for dedup
                 val heroSlugs = latest.take(10).map { it.slug }.toSet()

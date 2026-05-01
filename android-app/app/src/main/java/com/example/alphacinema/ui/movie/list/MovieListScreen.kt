@@ -1,4 +1,4 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.movie.list
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -55,6 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.alphacinema.R
+import com.example.alphacinema.ui.search.FilterKind
+import com.example.alphacinema.ui.search.SearchMovieCardSkeleton
+import com.example.alphacinema.ui.search.SearchMovieUi
 
 @Composable
 fun MovieListScreen(

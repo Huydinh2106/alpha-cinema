@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.example.alphacinema.ui.app.AppScreen
 import com.example.alphacinema.ui.theme.AlphaCinemaTheme
 import com.google.firebase.messaging.FirebaseMessaging
 

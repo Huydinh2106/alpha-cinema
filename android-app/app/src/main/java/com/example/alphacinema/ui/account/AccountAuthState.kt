@@ -1,4 +1,4 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.account
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
