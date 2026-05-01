@@ -1,4 +1,4 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.movie.detail
 
 enum class MovieDetailTab(val title: String) {
     EPISODES("Tập phim"),
@@ -22,7 +22,8 @@ data class EpisodeUi(
 
 data class CastUi(
     val name: String,
-    val role: String
+    val role: String,
+    val profileUrl: String? = null
 )
 
 data class RecommendedMovieUi(

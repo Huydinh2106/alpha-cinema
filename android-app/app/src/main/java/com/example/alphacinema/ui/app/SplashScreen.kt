@@ -1,4 +1,4 @@
-package com.example.alphacinema
+package com.example.alphacinema.ui.app
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -33,6 +33,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.alphacinema.R
 
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
