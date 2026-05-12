@@ -58,7 +58,8 @@ import com.example.alphacinema.ui.movie.detail.MovieDetailScreen
 import com.example.alphacinema.ui.movie.detail.MovieDetailViewModel
 import com.example.alphacinema.ui.movie.list.MovieListScreen
 import com.example.alphacinema.ui.player.PlayerScreen
-import com.example.alphacinema.ui.search.FilterKind
+import com.example.alphacinema.ui.player.PlayerViewModel
+import com.example.alphacinema.ui.account.FilterKind
 import com.example.alphacinema.ui.search.SearchScreen
 import com.example.alphacinema.ui.support.SupportScreen
 import com.example.alphacinema.ui.watchparty.WatchPartyLobbySheet
