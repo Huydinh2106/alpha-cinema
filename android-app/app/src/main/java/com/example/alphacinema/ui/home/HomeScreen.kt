@@ -42,7 +42,7 @@ package com.example.alphacinema.ui.home
     import com.example.alphacinema.data.model.MovieItem
     import com.example.alphacinema.ui.app.ScreenType
     import com.example.alphacinema.ui.components.GradientPlayButton
-    import com.example.alphacinema.ui.search.FilterKind
+    import com.example.alphacinema.ui.account.FilterKind
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.draw.blur
