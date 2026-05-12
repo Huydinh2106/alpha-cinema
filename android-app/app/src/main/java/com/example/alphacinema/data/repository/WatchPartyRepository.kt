@@ -240,6 +240,44 @@ class WatchPartyRepository {
         return snapshot.exists()
     }
 
+    // ── Host: Update Episode/Movie ──────────────────────────────────
+
+    suspend fun updateEpisode(
+        roomId: String,
+        episodeId: String,
+        episodeName: String
+    ) {
+        val updates = mapOf<String, Any>(
+            "episodeId" to episodeId,
+            "episodeName" to episodeName,
+            "playbackState" to "paused",
+            "currentTimeSec" to 0.0,
+            "lastUpdated" to ServerValue.TIMESTAMP
+        )
+        rootRef.child(roomId).updateChildren(updates).await()
+    }
+
+    suspend fun updateMovie(
+        roomId: String,
+        movieSlug: String,
+        movieTitle: String,
+        moviePosterUrl: String,
+        episodeId: String?,
+        episodeName: String?
+    ) {
+        val updates = mapOf<String, Any>(
+            "movieSlug" to movieSlug,
+            "movieTitle" to movieTitle,
+            "moviePosterUrl" to moviePosterUrl,
+            "episodeId" to (episodeId ?: ""),
+            "episodeName" to (episodeName ?: ""),
+            "playbackState" to "paused",
+            "currentTimeSec" to 0.0,
+            "lastUpdated" to ServerValue.TIMESTAMP
+        )
+        rootRef.child(roomId).updateChildren(updates).await()
+    }
+
     // ── Helper ──────────────────────────────────────────────────────
 
     private fun snapshotToRoom(snapshot: DataSnapshot): WatchPartyRoom {
