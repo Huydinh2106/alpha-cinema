@@ -79,7 +79,7 @@ import com.example.alphacinema.data.model.WatchPartyMember
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 
 
-// JS Bridge for host to report playback changes
+// JS Bridge for host — only reports state changes (play/pause/seek)
 class WatchPartyJsBridge(
     private val viewModel: WatchPartyViewModel,
     private val getCurrentRoom: () -> com.example.alphacinema.data.model.WatchPartyRoom?
@@ -99,12 +99,6 @@ class WatchPartyJsBridge(
         val state = getCurrentRoom()?.playbackState ?: "paused"
         viewModel.updatePlayback(state, timeSec)
     }
-
-    @JavascriptInterface
-    fun onTimeUpdate(timeSec: Double) {
-        // Periodic update from host
-        viewModel.updatePlayback("playing", timeSec)
-    }
 }
 
 @Composable
@@ -120,12 +114,16 @@ fun WatchPartyScreen(
     val members by viewModel.members.collectAsState()
     val chatMessages by viewModel.chatMessages.collectAsState()
     val roomDismissed by viewModel.roomDismissed.collectAsState()
+    val serverTimeOffset by viewModel.serverTimeOffset.collectAsState()
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
     val isHost = viewModel.isHost
     val currentUid = viewModel.currentUid
+
+    // Track whether the WebView page has finished loading
+    var pageLoaded by remember { mutableStateOf(false) }
 
     // Room dismissed → host left
     LaunchedEffect(roomDismissed) {
@@ -135,7 +133,13 @@ fun WatchPartyScreen(
         }
     }
 
-    // WebView with JS bridge
+    // JS Bridge — created FIRST so it can be added to WebView during init
+    val jsBridge = remember(viewModel) {
+        WatchPartyJsBridge(viewModel) { room }
+    }
+
+    // WebView — addJavascriptInterface during creation (before any HTML loads)
+    @SuppressLint("JavascriptInterface")
     val webView = remember {
         WebView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -150,26 +154,26 @@ fun WatchPartyScreen(
             settings.useWideViewPort = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             webChromeClient = WebChromeClient()
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    pageLoaded = true
+                }
+            }
             setBackgroundColor(android.graphics.Color.BLACK)
+            addJavascriptInterface(jsBridge, "AndroidBridge")
         }
     }
 
-    // JS Bridge for host to report playback changes
-
-    val jsBridge = remember(viewModel) {
-        WatchPartyJsBridge(viewModel) { room }
-    }
-
-    // Add JS interface
-    @SuppressLint("JavascriptInterface")
-    LaunchedEffect(jsBridge) {
-        webView.addJavascriptInterface(jsBridge, "AndroidBridge")
+    // Reset pageLoaded when video URL changes
+    LaunchedEffect(videoUrl) {
+        pageLoaded = false
     }
 
     // Load video
     DisposableEffect(videoUrl) {
         if (videoUrl.isNotBlank() && videoUrl.contains(".m3u8")) {
+            // Host: only event listeners, NO periodic reporting needed
             val hostControls = if (isHost) """
                 video.addEventListener('play', function() {
                     AndroidBridge.onPlay(video.currentTime);
@@ -180,17 +184,97 @@ fun WatchPartyScreen(
                 video.addEventListener('seeked', function() {
                     AndroidBridge.onSeek(video.currentTime);
                 });
-                // Report time every 3 seconds
-                setInterval(function() {
-                    if (!video.paused) {
-                        AndroidBridge.onTimeUpdate(video.currentTime);
+            """ else ""
+
+            // Guest: custom time overlay
+            val guestTimeOverlay = if (!isHost) """
+                <div id="timeOverlay"></div>
+                <style>
+                    #timeOverlay {
+                        position: fixed;
+                        bottom: 8px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        color: rgba(255,255,255,0.85);
+                        font-family: -apple-system, sans-serif;
+                        font-size: 13px;
+                        font-variant-numeric: tabular-nums;
+                        background: rgba(0,0,0,0.55);
+                        padding: 4px 14px;
+                        border-radius: 6px;
+                        pointer-events: none;
+                        z-index: 999;
+                        letter-spacing: 0.5px;
                     }
-                }, 3000);
-            """ else """
-                // Guest: disable controls, only host can control
-                video.removeAttribute('controls');
-                video.style.pointerEvents = 'none';
-            """
+                </style>
+            """ else ""
+
+            // Guest: time display + Server Clock self-sync loop
+            val guestScript = if (!isHost) """
+                // Time display
+                var _ov = document.getElementById('timeOverlay');
+                function _fmt(s) {
+                    var h = Math.floor(s/3600);
+                    var m = Math.floor((s%3600)/60);
+                    var sec = Math.floor(s%60);
+                    if (h > 0) return h+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+                    return m+':'+String(sec).padStart(2,'0');
+                }
+                video.addEventListener('timeupdate', function() {
+                    if (_ov && video.duration) {
+                        _ov.textContent = _fmt(video.currentTime) + ' / ' + _fmt(video.duration);
+                    }
+                });
+
+                // === Server Clock Sync ===
+                var _clockOffset = 0;
+                var _playStartedAt = 0;
+                var _baseTimeSec = 0;
+                var _syncActive = false;
+
+                // Called from Android when room state changes
+                function startServerSync(clockOffset, playStartedAt, baseTimeSec) {
+                    _clockOffset = clockOffset;
+                    _playStartedAt = playStartedAt;
+                    _baseTimeSec = baseTimeSec;
+                    _syncActive = true;
+                    // Immediately seek to correct position, then let loop fine-tune
+                    var serverNow = Date.now() + _clockOffset;
+                    var expectedPos = _baseTimeSec + (serverNow - _playStartedAt) / 1000.0;
+                    video.currentTime = expectedPos;
+                    video.playbackRate = 1.0;
+                    video.play();
+                }
+                function stopSync(pauseAtSec) {
+                    _syncActive = false;
+                    video.currentTime = pauseAtSec;
+                    video.pause();
+                    video.playbackRate = 1.0;
+                }
+
+                // Self-correction loop every 2 seconds
+                setInterval(function() {
+                    if (!_syncActive || _playStartedAt <= 0 || video.paused) return;
+                    var serverNow = Date.now() + _clockOffset;
+                    var expectedPos = _baseTimeSec + (serverNow - _playStartedAt) / 1000.0;
+                    var diff = expectedPos - video.currentTime;
+
+                    if (Math.abs(diff) > 5) {
+                        video.currentTime = expectedPos;
+                        video.playbackRate = 1.0;
+                        return;
+                    }
+                    if (Math.abs(diff) < 0.1) {
+                        video.playbackRate = 1.0;
+                        return;
+                    }
+                    if (diff > 0) {
+                        video.playbackRate = Math.min(1.05, 1.0 + diff * 0.02);
+                    } else {
+                        video.playbackRate = Math.max(0.95, 1.0 + diff * 0.02);
+                    }
+                }, 2000);
+            """ else ""
 
             val html = """
                 <!DOCTYPE html>
@@ -205,6 +289,7 @@ fun WatchPartyScreen(
                 </head>
                 <body>
                     <video id="video" ${if (isHost) "controls" else ""} autoplay playsinline></video>
+                    $guestTimeOverlay
                     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
                     <script>
                         var video = document.getElementById('video');
@@ -219,23 +304,20 @@ fun WatchPartyScreen(
                             hls.loadSource(videoSrc);
                             hls.attachMedia(video);
                             hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                                ${if (isHost) "video.play();" else ""}
+                                video.play();
                             });
                         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                             video.src = videoSrc;
                         }
 
-                        // Expose sync functions for guest
                         function seekTo(sec) {
                             video.currentTime = sec;
+                            video.playbackRate = 1.0;
                         }
-                        function playVideo() {
-                            video.play();
-                        }
-                        function pauseVideo() {
-                            video.pause();
-                        }
+                        function playVideo() { video.play(); }
+                        function pauseVideo() { video.pause(); video.playbackRate = 1.0; }
 
+                        $guestScript
                         $hostControls
                     </script>
                 </body>
@@ -249,16 +331,24 @@ fun WatchPartyScreen(
         }
     }
 
-    // Guest sync: react to room state changes
+    // Guest sync: pass server clock params to JS on state change
     if (!isHost && room != null) {
-        LaunchedEffect(room?.playbackState, room?.currentTimeSec) {
+        LaunchedEffect(room?.playbackState, room?.playStartedAt, pageLoaded) {
             val r = room ?: return@LaunchedEffect
+            if (!pageLoaded) return@LaunchedEffect
+
             when (r.playbackState) {
                 "playing" -> {
-                    webView.evaluateJavascript("seekTo(${r.currentTimeSec}); playVideo();", null)
+                    webView.evaluateJavascript(
+                        "startServerSync($serverTimeOffset, ${r.playStartedAt}, ${r.currentTimeSec});",
+                        null
+                    )
                 }
                 "paused" -> {
-                    webView.evaluateJavascript("seekTo(${r.currentTimeSec}); pauseVideo();", null)
+                    webView.evaluateJavascript(
+                        "stopSync(${r.currentTimeSec});",
+                        null
+                    )
                 }
             }
         }

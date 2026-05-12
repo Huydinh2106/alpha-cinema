@@ -53,6 +53,7 @@ class WatchPartyRepository {
             "episodeName" to (episodeName ?: ""),
             "playbackState" to "paused",
             "currentTimeSec" to 0.0,
+            "playStartedAt" to 0,
             "lastUpdated" to ServerValue.TIMESTAMP,
             "createdAt" to now,
             "maxMembers" to MAX_MEMBERS
@@ -225,11 +226,15 @@ class WatchPartyRepository {
         state: String,
         timeSec: Double
     ) {
-        val updates = mapOf<String, Any>(
+        val updates = mutableMapOf<String, Any>(
             "playbackState" to state,
             "currentTimeSec" to timeSec,
             "lastUpdated" to ServerValue.TIMESTAMP
         )
+        if (state == "playing") {
+            // Server Clock: record the server timestamp when play started
+            updates["playStartedAt"] = ServerValue.TIMESTAMP
+        }
         rootRef.child(roomId).updateChildren(updates).await()
     }
 
@@ -252,6 +257,7 @@ class WatchPartyRepository {
             "episodeName" to episodeName,
             "playbackState" to "paused",
             "currentTimeSec" to 0.0,
+            "playStartedAt" to 0,
             "lastUpdated" to ServerValue.TIMESTAMP
         )
         rootRef.child(roomId).updateChildren(updates).await()
@@ -273,6 +279,7 @@ class WatchPartyRepository {
             "episodeName" to (episodeName ?: ""),
             "playbackState" to "paused",
             "currentTimeSec" to 0.0,
+            "playStartedAt" to 0,
             "lastUpdated" to ServerValue.TIMESTAMP
         )
         rootRef.child(roomId).updateChildren(updates).await()
@@ -292,9 +299,25 @@ class WatchPartyRepository {
             episodeName = snapshot.child("episodeName").getValue(String::class.java)?.takeIf { it.isNotBlank() },
             playbackState = snapshot.child("playbackState").getValue(String::class.java) ?: "paused",
             currentTimeSec = snapshot.child("currentTimeSec").getValue(Double::class.java) ?: 0.0,
+            playStartedAt = snapshot.child("playStartedAt").getValue(Long::class.java) ?: 0,
             lastUpdated = snapshot.child("lastUpdated").getValue(Long::class.java) ?: 0,
             createdAt = snapshot.child("createdAt").getValue(Long::class.java) ?: 0,
             maxMembers = snapshot.child("maxMembers").getValue(Int::class.java) ?: MAX_MEMBERS
         )
+    }
+
+    // ── Server Time Offset ──────────────────────────────────────────
+
+    fun getServerTimeOffset(): Flow<Long> = callbackFlow {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val offset = snapshot.getValue(Long::class.java) ?: 0L
+                trySend(offset)
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        }
+        val ref = db.getReference(".info/serverTimeOffset")
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
     }
 }
