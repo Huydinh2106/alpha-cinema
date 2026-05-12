@@ -39,6 +39,9 @@ class WatchPartyViewModel : ViewModel() {
     private val _roomDismissed = MutableStateFlow(false)
     val roomDismissed: StateFlow<Boolean> = _roomDismissed.asStateFlow()
 
+    private val _serverTimeOffset = MutableStateFlow(0L)
+    val serverTimeOffset: StateFlow<Long> = _serverTimeOffset.asStateFlow()
+
     private var observeJob: Job? = null
 
     val isHost: Boolean
@@ -221,6 +224,11 @@ class WatchPartyViewModel : ViewModel() {
             launch {
                 repository.observeChat(roomId).collect { messages ->
                     _chatMessages.value = messages
+                }
+            }
+            launch {
+                repository.getServerTimeOffset().collect { offset ->
+                    _serverTimeOffset.value = offset
                 }
             }
         }
