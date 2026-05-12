@@ -65,6 +65,8 @@ import com.example.alphacinema.ui.watchparty.WatchPartyLobbySheet
 import com.example.alphacinema.ui.watchparty.WatchPartyScreen
 import com.example.alphacinema.ui.watchparty.WatchPartyViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 // ── Animation Constants ─────────────────────────────────────────────────────
 
@@ -159,9 +161,11 @@ fun MainContent(
     )
 
     val watchPartyViewModel: WatchPartyViewModel = viewModel()
+    val wpRoom by watchPartyViewModel.room.collectAsState()
     val wpError by watchPartyViewModel.error.collectAsState()
     val wpIsCreating by watchPartyViewModel.isCreating.collectAsState()
     val wpIsJoining by watchPartyViewModel.isJoining.collectAsState()
+    var watchPartyLobbyMovie by remember { mutableStateOf<com.example.alphacinema.ui.movie.detail.MovieDetailUi?>(null) }
     var showWatchPartyLobby by remember { mutableStateOf(false) }
 
     fun showToast(message: String) {
@@ -312,6 +316,7 @@ fun MainContent(
                                 )
                             },
                             onWatchTogether = {
+                                watchPartyLobbyMovie = null
                                 showWatchPartyLobby = true
                             }
                         )
@@ -354,7 +359,7 @@ fun MainContent(
                 }
 
                 if (detailLoading || detailMovie == null && detailError == null) {
-                    RouteLoadingState(message = "Đang tải chi tiết phim...")
+                        RouteLoadingState(message = "Đang tải chi tiết phim...")
                 } else if (detailMovie != null) {
                     MovieDetailScreen(
                         movie = detailMovie,
@@ -386,7 +391,24 @@ fun MainContent(
                             )
                         },
                         onWatchTogether = {
-                            showWatchPartyLobby = true
+                            if (wpRoom != null && watchPartyViewModel.isHost) {
+                                // Đang là chủ phòng -> đổi phim cho phòng hiện tại
+                                val activeEp = detailMovie.episodes.firstOrNull()
+                                watchPartyViewModel.changeMovie(
+                                    movieSlug = detailMovie.id,
+                                    movieTitle = detailMovie.title,
+                                    moviePosterUrl = detailMovie.posterUrl,
+                                    episodeId = activeEp?.id,
+                                    episodeName = activeEp?.name
+                                )
+                                showToast("Đã đổi phim phòng xem chung!")
+                                val currentRoomId = wpRoom?.roomId ?: ""
+                                navController.navigate(WatchPartyNavRoute(roomId = currentRoomId))
+                            } else {
+                                // Mở sheet Tạo/Tham gia phòng
+                                watchPartyLobbyMovie = detailMovie
+                                showWatchPartyLobby = true
+                            }
                         },
                         onOpenMovie = ::openMovieDetail
                     )
@@ -513,12 +535,23 @@ fun MainContent(
 
                 LaunchedEffect(wpRoom?.movieSlug) {
                     val slug = wpRoom?.movieSlug
-                    if (slug != null && movieDetail?.id != slug) {
+                    if (!slug.isNullOrBlank() && movieDetail?.id != slug) {
                         movieDetailViewModel.loadMovieDetail(slug)
                     }
                 }
 
-                if (detailLoading || playerMovie == null) {
+                if (wpRoom != null && wpRoom?.movieSlug.isNullOrBlank()) {
+                    WatchPartyScreen(
+                        videoUrl = "",
+                        episodes = emptyList(),
+                        currentEpisodeId = null,
+                        viewModel = watchPartyViewModel,
+                        onChangeMovieClick = {
+                            navController.navigate(WatchPartySearchNavRoute)
+                        },
+                        onBack = { navController.popBackStack() }
+                    )
+                } else if (detailLoading || playerMovie == null) {
                     RouteLoadingState(message = "Đang chuẩn bị phòng xem chung...")
                 } else {
                     val episode = wpRoom?.episodeId?.let { epId ->
@@ -528,9 +561,85 @@ fun MainContent(
 
                     WatchPartyScreen(
                         videoUrl = videoUrl,
+                        episodes = playerMovie.episodes,
+                        currentEpisodeId = episode?.id,
                         viewModel = watchPartyViewModel,
+                        onChangeMovieClick = {
+                            navController.navigate(WatchPartySearchNavRoute)
+                        },
                         onBack = { navController.popBackStack() }
                     )
+                }
+            }
+
+            composable<WatchPartySearchNavRoute>(
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeIn(tween(ANIM_DURATION))
+                },
+                exitTransition = { fadeOut(tween(ANIM_DURATION_FAST)) },
+                popEnterTransition = { fadeIn(tween(ANIM_DURATION)) },
+                popExitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeOut(tween(ANIM_DURATION_FAST))
+                }
+            ) {
+                val coroutineScope = rememberCoroutineScope()
+                var isChangingMovie by remember { mutableStateOf(false) }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    com.example.alphacinema.ui.search.SearchScreen(
+                        showBackButton = true,
+                        onBackClick = { navController.popBackStack() },
+                        onOpenMovieDetail = { slug ->
+                            if (!isChangingMovie) {
+                                isChangingMovie = true
+                                coroutineScope.launch {
+                                    try {
+                                        val api = com.example.alphacinema.data.api.RetrofitClient.instance
+                                        val response = api.getMovieDetail(slug)
+                                        val movie = response.movie
+                                        val firstEp = response.episodes?.firstOrNull()?.server_data?.firstOrNull()
+                                        
+                                        if (movie != null) {
+                                            val posterUrl = movie.thumb_url?.let {
+                                                if (it.startsWith("http")) it else "https://phimimg.com/$it"
+                                            } ?: movie.getFullPosterUrl()
+                                            
+                                            watchPartyViewModel.changeMovie(
+                                                movieSlug = slug,
+                                                movieTitle = movie.name,
+                                                moviePosterUrl = posterUrl,
+                                                episodeId = firstEp?.name?.let { "${slug}-ep-0" } ?: "",
+                                                episodeName = firstEp?.name ?: ""
+                                            )
+                                            showToast("Đã đổi phim phòng xem chung!")
+                                            navController.popBackStack()
+                                        }
+                                    } catch (e: Exception) {
+                                        showToast("Lỗi khi tải thông tin phim")
+                                    } finally {
+                                        isChangingMovie = false
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    
+                    if (isChangingMovie) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.material3.CircularProgressIndicator(color = Color(0xFFF6E29A))
+                        }
+                    }
                 }
             }
         }
@@ -538,29 +647,28 @@ fun MainContent(
         // Bottom bar — chỉ hiển thị khi đang ở MainRoute
         // Watch Party Lobby Sheet
         if (showWatchPartyLobby) {
-            val movie = movieDetail
+            val movie = watchPartyLobbyMovie
             val activeEp = movie?.episodes?.firstOrNull()
             WatchPartyLobbySheet(
-                movieTitle = movie?.title ?: "Xem chung",
+                movieTitle = movie?.title ?: "Phòng xem chung (chưa chọn phim)",
                 isCreating = wpIsCreating,
                 isJoining = wpIsJoining,
                 error = wpError,
+                joinOnly = false,
                 onDismiss = {
                     showWatchPartyLobby = false
                     watchPartyViewModel.clearError()
                 },
                 onCreateRoom = {
-                    if (movie != null) {
-                        watchPartyViewModel.createRoom(
-                            movieSlug = movie.id,
-                            movieTitle = movie.title,
-                            moviePosterUrl = movie.posterUrl,
-                            episodeId = activeEp?.id,
-                            episodeName = activeEp?.name
-                        ) { roomId ->
-                            showWatchPartyLobby = false
-                            openWatchParty(roomId)
-                        }
+                    watchPartyViewModel.createRoom(
+                        movieSlug = movie?.id ?: "",
+                        movieTitle = movie?.title ?: "",
+                        moviePosterUrl = movie?.posterUrl ?: "",
+                        episodeId = activeEp?.id ?: "",
+                        episodeName = activeEp?.name ?: ""
+                    ) { roomId ->
+                        showWatchPartyLobby = false
+                        openWatchParty(roomId)
                     }
                 },
                 onJoinRoom = { roomId ->
