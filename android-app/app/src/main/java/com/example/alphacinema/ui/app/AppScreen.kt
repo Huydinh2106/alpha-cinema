@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
+import com.example.alphacinema.ui.components.LottieLoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,6 +61,9 @@ import com.example.alphacinema.ui.player.PlayerScreen
 import com.example.alphacinema.ui.search.FilterKind
 import com.example.alphacinema.ui.search.SearchScreen
 import com.example.alphacinema.ui.support.SupportScreen
+import com.example.alphacinema.ui.watchparty.WatchPartyLobbySheet
+import com.example.alphacinema.ui.watchparty.WatchPartyScreen
+import com.example.alphacinema.ui.watchparty.WatchPartyViewModel
 import kotlinx.coroutines.delay
 
 // ── Animation Constants ─────────────────────────────────────────────────────
@@ -91,6 +94,7 @@ fun AppScreen(modifier: Modifier = Modifier) {
 
     var splashState by remember { mutableStateOf<SplashState>(SplashState.Showing) }
     var minTimeElapsed by remember { mutableStateOf(false) }
+    var animationFinished by remember { mutableStateOf(false) }
 
     // Thời gian tối thiểu 1.5 giây để splash không chớp tắt quá nhanh khi mạng nhanh
     LaunchedEffect(Unit) {
@@ -98,11 +102,12 @@ fun AppScreen(modifier: Modifier = Modifier) {
         minTimeElapsed = true
     }
 
-    // Tắt Splash khi CẢ HAI điều kiện đều đúng:
+    // Tắt Splash khi CẢ BA điều kiện đều đúng:
     // 1. isLoading = false (dữ liệu HomeScreen đã load xong)
     // 2. Đã qua ít nhất 1.5 giây
-    LaunchedEffect(isLoading, minTimeElapsed) {
-        if (!isLoading && minTimeElapsed) {
+    // 3. Animation logo đã chạy xong
+    LaunchedEffect(isLoading, minTimeElapsed, animationFinished) {
+        if (!isLoading && minTimeElapsed && animationFinished) {
             splashState = SplashState.Done
         }
     }
@@ -115,7 +120,7 @@ fun AppScreen(modifier: Modifier = Modifier) {
     ) { state ->
         when (state) {
             is SplashState.Showing -> {
-                SplashScreen(onFinished = { splashState = SplashState.Done })
+                SplashScreen(onFinished = { animationFinished = true })
             }
             is SplashState.Done -> {
                 MainContent(modifier = modifier)
@@ -152,6 +157,12 @@ fun MainContent(
             }
         }
     )
+
+    val watchPartyViewModel: WatchPartyViewModel = viewModel()
+    val wpError by watchPartyViewModel.error.collectAsState()
+    val wpIsCreating by watchPartyViewModel.isCreating.collectAsState()
+    val wpIsJoining by watchPartyViewModel.isJoining.collectAsState()
+    var showWatchPartyLobby by remember { mutableStateOf(false) }
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
@@ -200,6 +211,10 @@ fun MainContent(
             )
             SupportChatRouteDestination.DETAIL -> openMovieDetail(slug)
         }
+    }
+
+    fun openWatchParty(roomId: String) {
+        navController.navigate(WatchPartyNavRoute(roomId = roomId))
     }
 
     // Theo dõi current route để hiện/ẩn bottom bar
@@ -295,6 +310,9 @@ fun MainContent(
                                         slug = slug
                                     )
                                 )
+                            },
+                            onWatchTogether = {
+                                showWatchPartyLobby = true
                             }
                         )
                     }
@@ -366,6 +384,9 @@ fun MainContent(
                                 slug = route.slug,
                                 episodeId = episode?.id
                             )
+                        },
+                        onWatchTogether = {
+                            showWatchPartyLobby = true
                         },
                         onOpenMovie = ::openMovieDetail
                     )
@@ -468,9 +489,89 @@ fun MainContent(
                     viewModel = adminViewModel
                 )
             }
+
+            // ── Watch Party ──────────────────────────────────────────────
+            composable<WatchPartyNavRoute>(
+                enterTransition = {
+                    slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeIn(tween(ANIM_DURATION))
+                },
+                popExitTransition = {
+                    slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = tween(ANIM_DURATION, easing = FastOutSlowInEasing)
+                    ) + fadeOut(tween(ANIM_DURATION_FAST))
+                }
+            ) { backStackEntry ->
+                val route = backStackEntry.toRoute<WatchPartyNavRoute>()
+                val wpRoom by watchPartyViewModel.room.collectAsState()
+                val playerMovie = wpRoom?.let { room ->
+                    movieDetail?.takeIf { it.id == room.movieSlug }
+                }
+
+                LaunchedEffect(wpRoom?.movieSlug) {
+                    val slug = wpRoom?.movieSlug
+                    if (slug != null && movieDetail?.id != slug) {
+                        movieDetailViewModel.loadMovieDetail(slug)
+                    }
+                }
+
+                if (detailLoading || playerMovie == null) {
+                    RouteLoadingState(message = "Đang chuẩn bị phòng xem chung...")
+                } else {
+                    val episode = wpRoom?.episodeId?.let { epId ->
+                        playerMovie.episodes.firstOrNull { it.id == epId }
+                    } ?: playerMovie.episodes.firstOrNull()
+                    val videoUrl = episode?.let { episodeVideoUrls[it.id] } ?: ""
+
+                    WatchPartyScreen(
+                        videoUrl = videoUrl,
+                        viewModel = watchPartyViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+            }
         }
 
         // Bottom bar — chỉ hiển thị khi đang ở MainRoute
+        // Watch Party Lobby Sheet
+        if (showWatchPartyLobby) {
+            val movie = movieDetail
+            val activeEp = movie?.episodes?.firstOrNull()
+            WatchPartyLobbySheet(
+                movieTitle = movie?.title ?: "Xem chung",
+                isCreating = wpIsCreating,
+                isJoining = wpIsJoining,
+                error = wpError,
+                onDismiss = {
+                    showWatchPartyLobby = false
+                    watchPartyViewModel.clearError()
+                },
+                onCreateRoom = {
+                    if (movie != null) {
+                        watchPartyViewModel.createRoom(
+                            movieSlug = movie.id,
+                            movieTitle = movie.title,
+                            moviePosterUrl = movie.posterUrl,
+                            episodeId = activeEp?.id,
+                            episodeName = activeEp?.name
+                        ) { roomId ->
+                            showWatchPartyLobby = false
+                            openWatchParty(roomId)
+                        }
+                    }
+                },
+                onJoinRoom = { roomId ->
+                    watchPartyViewModel.joinRoom(roomId) {
+                        showWatchPartyLobby = false
+                        openWatchParty(roomId)
+                    }
+                }
+            )
+        }
+
         if (isOnMainRoute) {
             GlassBottomBar(
                 modifier = Modifier.align(Alignment.BottomCenter),
@@ -492,10 +593,7 @@ private fun RouteLoadingState(message: String) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(
-                color = Color(0xFFF6E29A),
-                modifier = Modifier.size(42.dp)
-            )
+            LottieLoadingIndicator(size = 120.dp)
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = message,

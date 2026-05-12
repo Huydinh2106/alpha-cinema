@@ -261,7 +261,7 @@ package com.example.alphacinema.ui.home
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     HeroCarousel(pagerState, movies, onMovieClick = onPlayMovie)
                     if (isLoading && heroItems.isEmpty()) {
-                        CircularProgressIndicator(color = Color(0xFFF6E29A))
+                        com.example.alphacinema.ui.components.LottieLoadingIndicator(size = 100.dp)
                     } else if (error != null && heroItems.isEmpty()) {
                         Text(
                             text = "Lỗi tải phim",
