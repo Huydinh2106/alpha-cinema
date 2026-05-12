@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -38,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.example.alphacinema.R
@@ -77,9 +77,16 @@ fun SplashScreen(onFinished: () -> Unit) {
     )
     val lottieProgress by animateLottieCompositionAsState(
         composition = lottieComposition,
-        iterations = LottieConstants.IterateForever,
+        iterations = 1,
         isPlaying = true
     )
+
+    // Khi animation chạy xong (progress == 1f) thì chuyển sang màn hình chính
+    LaunchedEffect(lottieProgress) {
+        if (lottieProgress == 1f) {
+            onFinished()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Nền tối giống System Splash — hiển thị ngay, không cần đợi
@@ -103,9 +110,10 @@ fun SplashScreen(onFinished: () -> Unit) {
         LottieAnimation(
             composition = lottieComposition,
             progress = { lottieProgress },
+            contentScale = ContentScale.Fit,
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(200.dp)
+                .size(400.dp)
                 .graphicsLayer { this.alpha = alpha }
         )
 
@@ -113,50 +121,19 @@ fun SplashScreen(onFinished: () -> Unit) {
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 72.dp)
+                .padding(bottom = 60.dp)
                 .graphicsLayer { this.alpha = alpha },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Canvas(
-                modifier = Modifier
-                    .size(40.dp)
-                    .rotate(rotation)
-            ) {
-                val strokeWidth = 4.dp.toPx()
-
-                // Vòng nền mờ
-                drawArc(
-                    color = Color.White.copy(alpha = 0.25f),
-                    startAngle = 0f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    style = Stroke(
-                        width = strokeWidth,
-                        cap = StrokeCap.Round
-                    )
-                )
-
-                // Cung xoay chính
-                drawArc(
-                    color = Color.White,
-                    startAngle = -90f,
-                    sweepAngle = 270f,
-                    useCenter = false,
-                    style = Stroke(
-                        width = strokeWidth,
-                        cap = StrokeCap.Round
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
+            com.example.alphacinema.ui.components.LottieLoadingIndicator(size = 140.dp)
 
             Text(
                 text = "Đang tải",
                 color = Color.White,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.offset(y = (-24).dp)
             )
         }
     }
