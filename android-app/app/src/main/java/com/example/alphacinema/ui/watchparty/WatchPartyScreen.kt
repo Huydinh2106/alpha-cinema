@@ -5,11 +5,10 @@ import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
+import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,16 +30,18 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -68,19 +69,51 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.alphacinema.data.model.WatchPartyChatMessage
 import com.example.alphacinema.data.model.WatchPartyMember
-import com.example.alphacinema.ui.player.findActivity
+import com.example.alphacinema.ui.movie.detail.EpisodeUi
+
+
+// JS Bridge for host to report playback changes
+class WatchPartyJsBridge(
+    private val viewModel: WatchPartyViewModel,
+    private val getCurrentRoom: () -> com.example.alphacinema.data.model.WatchPartyRoom?
+) {
+    @JavascriptInterface
+    fun onPlay(timeSec: Double) {
+        viewModel.updatePlayback("playing", timeSec)
+    }
+
+    @JavascriptInterface
+    fun onPause(timeSec: Double) {
+        viewModel.updatePlayback("paused", timeSec)
+    }
+
+    @JavascriptInterface
+    fun onSeek(timeSec: Double) {
+        val state = getCurrentRoom()?.playbackState ?: "paused"
+        viewModel.updatePlayback(state, timeSec)
+    }
+
+    @JavascriptInterface
+    fun onTimeUpdate(timeSec: Double) {
+        // Periodic update from host
+        viewModel.updatePlayback("playing", timeSec)
+    }
+}
 
 @Composable
 fun WatchPartyScreen(
     videoUrl: String,
+    episodes: List<EpisodeUi>,
+    currentEpisodeId: String?,
     viewModel: WatchPartyViewModel,
+    onChangeMovieClick: () -> Unit,
     onBack: () -> Unit
 ) {
     val room by viewModel.room.collectAsState()
@@ -123,34 +156,14 @@ fun WatchPartyScreen(
     }
 
     // JS Bridge for host to report playback changes
-    val jsBridge = remember {
-        object {
-            @JavascriptInterface
-            fun onPlay(timeSec: Double) {
-                viewModel.updatePlayback("playing", timeSec)
-            }
 
-            @JavascriptInterface
-            fun onPause(timeSec: Double) {
-                viewModel.updatePlayback("paused", timeSec)
-            }
-
-            @JavascriptInterface
-            fun onSeek(timeSec: Double) {
-                val state = room?.playbackState ?: "paused"
-                viewModel.updatePlayback(state, timeSec)
-            }
-
-            @JavascriptInterface
-            fun onTimeUpdate(timeSec: Double) {
-                // Periodic update from host
-                viewModel.updatePlayback("playing", timeSec)
-            }
-        }
+    val jsBridge = remember(viewModel) {
+        WatchPartyJsBridge(viewModel) { room }
     }
 
     // Add JS interface
-    LaunchedEffect(Unit) {
+    @SuppressLint("JavascriptInterface")
+    LaunchedEffect(jsBridge) {
         webView.addJavascriptInterface(jsBridge, "AndroidBridge")
     }
 
@@ -351,9 +364,11 @@ fun WatchPartyScreen(
 
         // Room info + share
         if (room != null) {
+            val hasMovie = room!!.movieSlug.isNotBlank()
             RoomInfoBar(
                 roomId = room!!.roomId,
-                movieTitle = room!!.movieTitle,
+                movieTitle = if (hasMovie) room!!.movieTitle else "Chưa chọn phim",
+                hasMovie = hasMovie,
                 isHost = isHost,
                 onCopyId = {
                     clipboardManager.setText(AnnotatedString(room!!.roomId))
@@ -364,18 +379,31 @@ fun WatchPartyScreen(
                         action = Intent.ACTION_SEND
                         putExtra(
                             Intent.EXTRA_TEXT,
-                            "Xem phim \"${room!!.movieTitle}\" cùng tôi trên AlphaCinema! Mã phòng: ${room!!.roomId}"
+                            if (hasMovie) "Xem phim \"${room!!.movieTitle}\" cùng tôi trên AlphaCinema! Mã phòng: ${room!!.roomId}"
+                            else "Xem phim cùng tôi trên AlphaCinema! Mã phòng: ${room!!.roomId}"
                         )
                         type = "text/plain"
                     }
                     context.startActivity(Intent.createChooser(sendIntent, "Mời bạn bè xem chung"))
-                }
+                },
+                onChangeMovie = onChangeMovieClick
             )
         }
 
         // Members
         if (members.isNotEmpty()) {
             MembersList(members = members, hostId = room?.hostId ?: "")
+        }
+
+        // Episode selector (host only, khi có nhiều tập)
+        if (isHost && episodes.size > 1) {
+            EpisodeSelector(
+                episodes = episodes,
+                currentEpisodeId = currentEpisodeId,
+                onSelectEpisode = { ep ->
+                    viewModel.changeEpisode(ep.id, ep.name)
+                }
+            )
         }
 
         // Chat — chiếm hết phần còn lại ở dưới cùng
@@ -392,9 +420,11 @@ fun WatchPartyScreen(
 private fun RoomInfoBar(
     roomId: String,
     movieTitle: String,
+    hasMovie: Boolean = true,
     isHost: Boolean,
     onCopyId: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onChangeMovie: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -447,30 +477,69 @@ private fun RoomInfoBar(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Share button — hàng riêng
+        // Actions
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFFF6E29A).copy(alpha = 0.12f))
-                .clickable { onShare() }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(
-                Icons.Outlined.Share,
-                contentDescription = "Chia sẻ",
-                tint = Color(0xFFF6E29A),
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Mời bạn bè xem chung",
-                color = Color(0xFFF6E29A),
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            // Share button
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFF6E29A).copy(alpha = 0.12f))
+                    .clickable { onShare() }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    Icons.Outlined.Share,
+                    contentDescription = "Chia sẻ",
+                    tint = Color(0xFFF6E29A),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Mời bạn bè",
+                    color = Color(0xFFF6E29A),
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            // Change / Choose Movie button
+            if (isHost) {
+                val btnLabel = if (hasMovie) "Đổi phim" else "Chọn phim"
+                val btnTint = if (hasMovie) Color.White else Color(0xFFF6E29A)
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            if (hasMovie) Color.White.copy(alpha = 0.08f)
+                            else Color(0xFFF6E29A).copy(alpha = 0.15f)
+                        )
+                        .clickable { onChangeMovie() }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.Movie,
+                        contentDescription = btnLabel,
+                        tint = btnTint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = btnLabel,
+                        color = btnTint,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
         }
     }
 }
@@ -529,6 +598,58 @@ private fun MembersList(members: List<WatchPartyMember>, hostId: String) {
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpisodeSelector(
+    episodes: List<EpisodeUi>,
+    currentEpisodeId: String?,
+    onSelectEpisode: (EpisodeUi) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = 12.dp)
+    ) {
+        Text(
+            text = "Chọn tập (${episodes.size} tập)",
+            color = Color.White,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(episodes, key = { it.id }) { ep ->
+                val isActive = ep.id == currentEpisodeId
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (isActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.08f)
+                        )
+                        .border(
+                            1.dp,
+                            if (isActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.1f),
+                            RoundedCornerShape(10.dp)
+                        )
+                        .clickable { if (!isActive) onSelectEpisode(ep) }
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = ep.name,
+                        color = if (isActive) Color.Black else Color.White.copy(alpha = 0.7f),
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1
                     )
                 }
             }

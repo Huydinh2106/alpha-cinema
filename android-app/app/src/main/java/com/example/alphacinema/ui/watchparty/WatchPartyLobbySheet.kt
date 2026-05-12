@@ -57,12 +57,13 @@ fun WatchPartyLobbySheet(
     isCreating: Boolean,
     isJoining: Boolean,
     error: String?,
+    joinOnly: Boolean = false,
     onDismiss: () -> Unit,
     onCreateRoom: () -> Unit,
     onJoinRoom: (String) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var activeTab by remember { mutableStateOf(LobbyTab.CREATE) }
+    var activeTab by remember { mutableStateOf(if (joinOnly) LobbyTab.JOIN else LobbyTab.CREATE) }
     var roomIdInput by remember { mutableStateOf("") }
 
     ModalBottomSheet(
@@ -104,40 +105,50 @@ fun WatchPartyLobbySheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Tab Selector
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                LobbyTab.entries.forEach { tab ->
-                    val selected = tab == activeTab
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (selected) Brush.horizontalGradient(
-                                    listOf(Color(0xFFF6E29A), Color(0xFFD4A843))
-                                ) else Brush.horizontalGradient(
-                                    listOf(Color.Transparent, Color.Transparent)
+            // Tab Selector — ẩn khi chỉ có Join
+            if (!joinOnly) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LobbyTab.entries.forEach { tab ->
+                        val selected = tab == activeTab
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (selected) Brush.horizontalGradient(
+                                        listOf(Color(0xFFF6E29A), Color(0xFFD4A843))
+                                    ) else Brush.horizontalGradient(
+                                        listOf(Color.Transparent, Color.Transparent)
+                                    )
                                 )
+                                .clickable { activeTab = tab }
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (tab == LobbyTab.CREATE) "Tạo phòng" else "Tham gia",
+                                color = if (selected) Color.Black else Color.White.copy(alpha = 0.7f),
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                style = MaterialTheme.typography.bodyMedium
                             )
-                            .clickable { activeTab = tab }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (tab == LobbyTab.CREATE) "Tạo phòng" else "Tham gia",
-                            color = if (selected) Color.Black else Color.White.copy(alpha = 0.7f),
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        }
                     }
                 }
+            } else {
+                Text(
+                    text = "Nhập mã phòng để tham gia xem chung",
+                    color = Color.White.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -157,6 +168,10 @@ fun WatchPartyLobbySheet(
 
             when (activeTab) {
                 LobbyTab.CREATE -> {
+                    val hasMovie = movieTitle.isNotBlank() &&
+                        movieTitle != "Phòng xem chung (chưa chọn phim)" &&
+                        movieTitle != "Xem chung"
+
                     // Movie info card
                     Row(
                         modifier = Modifier
@@ -183,18 +198,32 @@ fun WatchPartyLobbySheet(
                         }
                         Spacer(modifier = Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = movieTitle,
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 2
-                            )
-                            Text(
-                                text = "Tối đa 5 người",
-                                color = Color.White.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.labelMedium
-                            )
+                            if (hasMovie) {
+                                Text(
+                                    text = movieTitle,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 2
+                                )
+                                Text(
+                                    text = "Tối đa 5 người",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            } else {
+                                Text(
+                                    text = "Tạo phòng trống",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Text(
+                                    text = "Chọn phim sau khi vào phòng",
+                                    color = Color(0xFFF6E29A).copy(alpha = 0.8f),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         }
                     }
 
