@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
@@ -60,6 +61,8 @@ data class SearchMovieUi(
 // ── Screen ────────────────────────────────────────────────────────────────────
 @Composable
 fun SearchScreen(
+    showBackButton: Boolean = false,
+    onBackClick: () -> Unit = {},
     onOpenMovieDetail: (String) -> Unit = {},
     viewModel: SearchViewModel = viewModel()
 ) {
@@ -127,6 +130,8 @@ fun SearchScreen(
                         viewModel.resetTempFilters()
                         showFilterSheet = true 
                     },
+                    showBackButton = showBackButton,
+                    onBackClick = onBackClick,
                     applyStatusBarPadding = true
                 )
             }
@@ -381,6 +386,8 @@ fun SearchHeader(
     onSearchSubmit: () -> Unit = {},
     isFiltered: Boolean = false,
     onFilterClick: () -> Unit = {},
+    showBackButton: Boolean = false,
+    onBackClick: () -> Unit = {},
     applyStatusBarPadding: Boolean = false
 ) {
     Row(
@@ -388,6 +395,18 @@ fun SearchHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        if (showBackButton) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1A1F2E))
+                    .clickable { onBackClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Trở lại", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+            }
+        }
         Row(
             modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(26.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF1A1F2E), Color(0xFF1E2438))))
                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(26.dp)).padding(horizontal = 16.dp),

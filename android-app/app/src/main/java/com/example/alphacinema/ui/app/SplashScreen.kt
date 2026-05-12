@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
@@ -27,12 +29,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.example.alphacinema.R
 
 @Composable
@@ -63,6 +71,23 @@ fun SplashScreen(onFinished: () -> Unit) {
         label = "spinner_rotation"
     )
 
+    // Lottie logo animation
+    val lottieComposition by rememberLottieComposition(
+        LottieCompositionSpec.Asset("logo_animation.json")
+    )
+    val lottieProgress by animateLottieCompositionAsState(
+        composition = lottieComposition,
+        iterations = 1,
+        isPlaying = true
+    )
+
+    // Khi animation chạy xong (progress == 1f) thì chuyển sang màn hình chính
+    LaunchedEffect(lottieProgress) {
+        if (lottieProgress == 1f) {
+            onFinished()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // Nền tối giống System Splash — hiển thị ngay, không cần đợi
         Box(
@@ -81,54 +106,34 @@ fun SplashScreen(onFinished: () -> Unit) {
                 .graphicsLayer { this.alpha = alpha }
         )
 
+        // ── Logo Lottie animation ở giữa màn hình ──
+        LottieAnimation(
+            composition = lottieComposition,
+            progress = { lottieProgress },
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(400.dp)
+                .graphicsLayer { this.alpha = alpha }
+        )
+
         // Spinner + text "Đang tải" ở phía dưới, cũng fade in cùng lúc
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 72.dp)
+                .padding(bottom = 60.dp)
                 .graphicsLayer { this.alpha = alpha },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            androidx.compose.foundation.Canvas(
-                modifier = Modifier
-                    .size(40.dp)
-                    .rotate(rotation)
-            ) {
-                val strokeWidth = 4.dp.toPx()
-
-                // Vòng nền mờ
-                drawArc(
-                    color = Color.White.copy(alpha = 0.25f),
-                    startAngle = 0f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = strokeWidth,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                )
-
-                // Cung xoay chính
-                drawArc(
-                    color = Color.White,
-                    startAngle = -90f,
-                    sweepAngle = 270f,
-                    useCenter = false,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = strokeWidth,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
+            com.example.alphacinema.ui.components.LottieLoadingIndicator(size = 140.dp)
 
             Text(
                 text = "Đang tải",
                 color = Color.White,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.offset(y = (-24).dp)
             )
         }
     }
