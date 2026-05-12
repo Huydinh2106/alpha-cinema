@@ -141,6 +141,41 @@ class WatchPartyViewModel : ViewModel() {
         }
     }
 
+    // ── Change Episode (Host only) ──────────────────────────────────
+
+    fun changeEpisode(episodeId: String, episodeName: String) {
+        if (!isHost) return
+        val roomId = _room.value?.roomId ?: return
+        viewModelScope.launch {
+            try {
+                repository.updateEpisode(roomId, episodeId, episodeName)
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun changeMovie(
+        movieSlug: String,
+        movieTitle: String,
+        moviePosterUrl: String,
+        episodeId: String?,
+        episodeName: String?
+    ) {
+        if (!isHost) return
+        val roomId = _room.value?.roomId ?: return
+        viewModelScope.launch {
+            try {
+                repository.updateMovie(
+                    roomId = roomId,
+                    movieSlug = movieSlug,
+                    movieTitle = movieTitle,
+                    moviePosterUrl = moviePosterUrl,
+                    episodeId = episodeId,
+                    episodeName = episodeName
+                )
+            } catch (_: Exception) { }
+        }
+    }
+
     // ── Chat ────────────────────────────────────────────────────────
 
     fun sendMessage(text: String) {

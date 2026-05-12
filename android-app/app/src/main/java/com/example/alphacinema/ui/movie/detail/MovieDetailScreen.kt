@@ -278,7 +278,7 @@ private fun DetailTopBanner(
         IconButton(
             onClick = onBack,
             modifier = Modifier
-                .padding(start = 12.dp, top = 18.dp)
+                .padding(start = 12.dp, top = 40.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.45f))
                 .align(Alignment.TopStart)
