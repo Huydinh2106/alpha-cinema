@@ -32,7 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.CircularProgressIndicator
+import com.example.alphacinema.ui.components.LottieLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -183,10 +183,7 @@ fun MovieListScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFFF6E29A),
-                            modifier = Modifier.size(36.dp)
-                        )
+                        LottieLoadingIndicator(size = 120.dp)
                     }
                 }
             }

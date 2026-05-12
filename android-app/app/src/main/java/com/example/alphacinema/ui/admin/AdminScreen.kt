@@ -52,7 +52,8 @@ fun AdminScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF070B16),
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
@@ -104,7 +105,7 @@ fun AdminScreen(
                 }
                 is AdminUiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color(0xFFF6E29A))
+                        com.example.alphacinema.ui.components.LottieLoadingIndicator(size = 120.dp)
                     }
                 }
                 is AdminUiState.Success -> {

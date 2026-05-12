@@ -11,7 +11,8 @@ enum class MovieDetailTab(val title: String) {
 enum class MovieDetailAction(val label: String) {
     FAVORITE("Yêu thích"),
     ADD_TO_LIST("Thêm vào"),
-    SHARE("Chia sẻ")
+    SHARE("Chia sẻ"),
+    WATCH_TOGETHER("Xem chung")
 }
 
 data class EpisodeUi(

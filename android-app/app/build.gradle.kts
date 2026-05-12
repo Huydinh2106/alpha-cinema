@@ -59,6 +59,9 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-svg:2.7.0")
 
+    // Lottie Animation
+    implementation("com.airbnb.android:lottie-compose:6.6.2")
+
     // Navigation Compose
     implementation(libs.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
@@ -72,6 +75,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 

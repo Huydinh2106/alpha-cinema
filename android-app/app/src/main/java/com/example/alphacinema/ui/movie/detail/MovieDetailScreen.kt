@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Star
@@ -94,7 +95,8 @@ fun MovieDetailScreen(
     onSubmitRating: (Int) -> Unit,
     onBack: () -> Unit,
     onPlayMovie: (MovieDetailUi, EpisodeUi?) -> Unit,
-    onOpenMovie: (String) -> Unit
+    onOpenMovie: (String) -> Unit,
+    onWatchTogether: () -> Unit = {}
 ) {
     var selectedTabName by rememberSaveable(movie.id) {
         mutableStateOf(if (movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty()) MovieDetailTab.EPISODES.name else MovieDetailTab.CAST.name)
@@ -176,6 +178,7 @@ fun MovieDetailScreen(
                     onActionClick = { action ->
                         when(action) {
                             MovieDetailAction.FAVORITE -> onToggleFavorite(movie)
+                            MovieDetailAction.WATCH_TOGETHER -> onWatchTogether()
                             else -> {}
                         }
                     }
@@ -275,7 +278,7 @@ private fun DetailTopBanner(
         IconButton(
             onClick = onBack,
             modifier = Modifier
-                .padding(start = 12.dp, top = 18.dp)
+                .padding(start = 12.dp, top = 40.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.45f))
                 .align(Alignment.TopStart)
@@ -783,16 +786,17 @@ private fun EpisodeTabModern(
 @Composable
 private fun CastTab(cast: List<CastUi>) {
     val columns = 3
+    val spacing = 12.dp
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(spacing),
+        verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
         cast.chunked(columns).forEach { rowItems ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(spacing)
             ) {
                 rowItems.forEach { castItem ->
                     Column(
@@ -950,6 +954,7 @@ private fun actionIcon(action: MovieDetailAction) = when (action) {
     MovieDetailAction.FAVORITE -> Icons.Outlined.FavoriteBorder
     MovieDetailAction.ADD_TO_LIST -> Icons.Outlined.Add
     MovieDetailAction.SHARE -> Icons.Outlined.Share
+    MovieDetailAction.WATCH_TOGETHER -> Icons.Outlined.Groups
 }
 
 @Composable

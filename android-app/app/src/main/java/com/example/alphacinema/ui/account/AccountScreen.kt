@@ -41,10 +41,11 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import com.example.alphacinema.ui.components.LottieLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -113,7 +114,8 @@ private enum class AccountMenuAction {
     FAVORITES,
     POLICY,
     FEEDBACK,
-    ADMIN
+    ADMIN,
+    WATCH_TOGETHER
 }
 
 private enum class AccountPanelType {
@@ -128,7 +130,8 @@ private enum class AccountPanelType {
 fun AccountScreen(
     onOpenAdminPanel: () -> Unit = {},
     onOpenMovieDetail: (String) -> Unit = {},
-    onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> }
+    onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> },
+    onWatchTogether: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -247,6 +250,9 @@ fun AccountScreen(
         if (isAdminUser) {
             add(0, AccountMenuItemUi("Quản trị phim", { Icon(Icons.Filled.Settings, contentDescription = null, tint = Color(0xFFF6E29A)) }))
         }
+        // Thêm mục Xem chung sau Yêu thích
+        val favIndex = indexOfFirst { it.title == "Yêu thích" }
+        add(favIndex + 1, AccountMenuItemUi("Xem chung", { Icon(Icons.Outlined.Groups, contentDescription = null) }))
     }
     
     // Debug log (can be seen in Logcat)
@@ -265,6 +271,7 @@ fun AccountScreen(
             "Đang xem" -> AccountMenuAction.WATCHING
             "Danh sách phim" -> AccountMenuAction.MOVIE_LIBRARY
             "Yêu thích" -> AccountMenuAction.FAVORITES
+            "Xem chung" -> AccountMenuAction.WATCH_TOGETHER
             "Chính sách" -> AccountMenuAction.POLICY
             "Góp ý" -> AccountMenuAction.FEEDBACK
             "Quản trị phim" -> AccountMenuAction.ADMIN
@@ -508,7 +515,7 @@ fun AccountScreen(
             // Loading indicator
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFFF6E29A), modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                    LottieLoadingIndicator(size = 80.dp)
                 }
             }
 
@@ -559,6 +566,7 @@ fun AccountScreen(
                                 AccountMenuAction.POLICY -> openPanel(AccountPanelType.POLICY)
                                 AccountMenuAction.FEEDBACK -> openPanel(AccountPanelType.FEEDBACK)
                                 AccountMenuAction.ADMIN -> onOpenAdminPanel()
+                                AccountMenuAction.WATCH_TOGETHER -> onWatchTogether()
                             }
                         }
                         .padding(horizontal = 14.dp, vertical = 14.dp),
