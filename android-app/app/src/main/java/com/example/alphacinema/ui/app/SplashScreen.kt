@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -27,12 +28,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.example.alphacinema.R
 
 @Composable
@@ -63,6 +71,16 @@ fun SplashScreen(onFinished: () -> Unit) {
         label = "spinner_rotation"
     )
 
+    // Lottie logo animation
+    val lottieComposition by rememberLottieComposition(
+        LottieCompositionSpec.Asset("logo_animation.json")
+    )
+    val lottieProgress by animateLottieCompositionAsState(
+        composition = lottieComposition,
+        iterations = LottieConstants.IterateForever,
+        isPlaying = true
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         // Nền tối giống System Splash — hiển thị ngay, không cần đợi
         Box(
@@ -81,6 +99,16 @@ fun SplashScreen(onFinished: () -> Unit) {
                 .graphicsLayer { this.alpha = alpha }
         )
 
+        // ── Logo Lottie animation ở giữa màn hình ──
+        LottieAnimation(
+            composition = lottieComposition,
+            progress = { lottieProgress },
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(200.dp)
+                .graphicsLayer { this.alpha = alpha }
+        )
+
         // Spinner + text "Đang tải" ở phía dưới, cũng fade in cùng lúc
         Column(
             modifier = Modifier
@@ -89,7 +117,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                 .graphicsLayer { this.alpha = alpha },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            androidx.compose.foundation.Canvas(
+            Canvas(
                 modifier = Modifier
                     .size(40.dp)
                     .rotate(rotation)
@@ -102,9 +130,9 @@ fun SplashScreen(onFinished: () -> Unit) {
                     startAngle = 0f,
                     sweepAngle = 360f,
                     useCenter = false,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    style = Stroke(
                         width = strokeWidth,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        cap = StrokeCap.Round
                     )
                 )
 
@@ -114,9 +142,9 @@ fun SplashScreen(onFinished: () -> Unit) {
                     startAngle = -90f,
                     sweepAngle = 270f,
                     useCenter = false,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    style = Stroke(
                         width = strokeWidth,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                        cap = StrokeCap.Round
                     )
                 )
             }

@@ -59,6 +59,9 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-svg:2.7.0")
 
+    // Lottie Animation
+    implementation("com.airbnb.android:lottie-compose:6.6.2")
+
     // Navigation Compose
     implementation(libs.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
