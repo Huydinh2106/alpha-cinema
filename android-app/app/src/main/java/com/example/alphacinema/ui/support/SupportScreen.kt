@@ -1,8 +1,8 @@
 package com.example.alphacinema.ui.support
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -24,18 +24,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.HeadsetMic
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -69,8 +77,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 
-private val SupportScreenShape = RoundedCornerShape(28.dp)
-private val SupportInputShape = RoundedCornerShape(24.dp)
 private val UserBubbleShape = RoundedCornerShape(
     topStart = 22.dp,
     topEnd = 22.dp,
@@ -89,13 +95,16 @@ fun SupportScreen(
     supportViewModel: SupportViewModel = viewModel(),
     onMovieAction: (SupportChatAction) -> Unit = {}
 ) {
-    var input by remember { mutableStateOf("") }
+    var inputText by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
     val messages by supportViewModel.messages.collectAsState()
     val listState = rememberLazyListState()
+    val hasStartedChat = messages.isNotEmpty()
+    val isLoading = messages.any { it.sender == SupportMessageSender.LOADING }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size)
+            listState.animateScrollToItem(messages.lastIndex)
         }
     }
 
@@ -132,42 +141,49 @@ fun SupportScreen(
                 .fillMaxSize()
                 // Reserve room above the floating GlassBottomBar from AppScreen.
                 // Use dynamic WindowInsets so it works on all screen ratios.
-                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 104.dp)
+                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)
         ) {
-            SupportTopBar()
+            ChatHeader(
+                hasStartedChat = hasStartedChat,
+                onNewConversation = {
+                    inputText = ""
+                    error = null
+                    supportViewModel.startNewConversation()
+                }
+            )
 
-            LazyColumn(
-                state = listState,
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    top = 18.dp,
-                    end = 16.dp,
-                    bottom = 20.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .fillMaxWidth()
             ) {
-                item {
-                    SupportIntroCard()
-                }
-
-                items(messages, key = { it.id }) { message ->
-                    MessageBubble(
-                        message = message,
+                if (hasStartedChat) {
+                    ChatMessageList(
+                        messages = messages,
+                        listState = listState,
                         onMovieAction = onMovieAction
+                    )
+                } else {
+                    ChatWelcome(
+                        onSuggestionClick = { suggestion ->
+                            inputText = ""
+                            error = null
+                            supportViewModel.sendMessage(suggestion)
+                        }
                     )
                 }
             }
 
-            SupportInputBar(
-                value = input,
-                onValueChange = { input = it },
+            ChatInputBar(
+                value = inputText,
+                onValueChange = { inputText = it },
+                isLoading = isLoading,
+                error = error,
                 onSend = {
-                    val content = input.trim()
+                    val content = inputText.trim()
                     if (content.isNotEmpty()) {
-                        input = ""
+                        inputText = ""
+                        error = null
                         supportViewModel.sendMessage(content)
                     }
                 }
@@ -177,52 +193,186 @@ fun SupportScreen(
 }
 
 @Composable
-private fun SupportTopBar() {
-    Column(
+private fun ChatHeader(
+    hasStartedChat: Boolean,
+    onNewConversation: () -> Unit
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = "H\u1ed7 tr\u1ee3",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold
+        HeaderIconButton(
+            icon = Icons.Outlined.Menu,
+            contentDescription = "Mở menu",
+            onClick = {}
         )
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            Text(
-                text = "Tr\u1ee3 l\u00fd AlphaCinema lu\u00f4n s\u1eb5n s\u00e0ng gi\u1ea3i \u0111\u00e1p",
-                color = Color.White.copy(alpha = 0.72f),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Surface(
-                color = Color(0x22F6E29A),
-                shape = RoundedCornerShape(999.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Icon(
+                    imageVector = Icons.Outlined.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color(0xFFF6E29A),
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Alpha AI",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            if (hasStartedChat) {
+                TextButton(
+                    onClick = onNewConversation,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                    modifier = Modifier.height(26.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.AutoAwesome,
-                        contentDescription = null,
-                        tint = Color(0xFFF6E29A),
-                        modifier = Modifier.size(14.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Add,
+                            contentDescription = null,
+                            tint = Color(0xFFF6E29A),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Cuộc trò chuyện mới",
+                            color = Color(0xFFF6E29A),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            } else {
+                Surface(
+                    color = Color(0x18F6E29A),
+                    shape = RoundedCornerShape(999.dp)
+                ) {
                     Text(
                         text = "AI Chat",
                         color = Color(0xFFF6E29A),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                     )
+                }
+            }
+        }
+
+        UserAvatar(modifier = Modifier.size(38.dp))
+    }
+}
+
+@Composable
+private fun HeaderIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.06f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White.copy(alpha = 0.84f),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun ChatWelcome(
+    onSuggestionClick: (String) -> Unit
+) {
+    val suggestions = listOf(
+        ChatSuggestionUi("Gợi ý phim cho tôi", Icons.Outlined.Movie),
+        ChatSuggestionUi("Tìm phim theo tâm trạng", Icons.Outlined.AutoAwesome),
+        ChatSuggestionUi("Gói Premium có gì?", Icons.Outlined.WorkspacePremium),
+        ChatSuggestionUi("Cách tạo phòng xem chung?", Icons.Outlined.Groups),
+        ChatSuggestionUi("Tôi cần hỗ trợ tài khoản", Icons.Outlined.PersonOutline),
+        ChatSuggestionUi("Phim đang hot hôm nay", Icons.Outlined.Movie)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp, vertical = 26.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(top = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Xin chào Khoa!",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                lineHeight = 36.sp
+            )
+            Text(
+                text = "Bạn muốn xem gì hôm nay?",
+                color = Color.White.copy(alpha = 0.74f),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 30.sp
+            )
+            Text(
+                text = "Hỏi Alpha AI về phim, tài khoản, xem chung hoặc gói thành viên.",
+                color = Color.White.copy(alpha = 0.54f),
+                style = MaterialTheme.typography.bodyMedium,
+                lineHeight = 21.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
+        SuggestionList(
+            suggestions = suggestions,
+            onSuggestionClick = { onSuggestionClick(it.text) }
+        )
+    }
+}
+
+@Composable
+private fun SuggestionList(
+    suggestions: List<ChatSuggestionUi>,
+    onSuggestionClick: (ChatSuggestionUi) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        suggestions.chunked(2).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                rowItems.forEach { suggestion ->
+                    SuggestionChip(
+                        suggestion = suggestion,
+                        onClick = { onSuggestionClick(suggestion) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowItems.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -230,35 +380,108 @@ private fun SupportTopBar() {
 }
 
 @Composable
-private fun SupportIntroCard() {
+private fun SuggestionChip(
+    suggestion: ChatSuggestionUi,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
-        color = Color(0xFF101C31).copy(alpha = 0.88f),
-        shape = SupportScreenShape,
-        tonalElevation = 2.dp,
-        shadowElevation = 10.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.08f),
-                shape = SupportScreenShape
-            )
+        color = Color.White.copy(alpha = 0.055f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier
+            .clickable(onClick = onClick)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "H\u1ecfi nhanh, tr\u1ea3 l\u1eddi r\u00f5",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+            Icon(
+                imageVector = suggestion.icon,
+                contentDescription = null,
+                tint = Color(0xFFF6E29A),
+                modifier = Modifier.size(17.dp)
             )
             Text(
-                text = "B\u1ea1n c\u00f3 th\u1ec3 h\u1ecfi v\u1ec1 phim, th\u00f4ng tin \u1ee9ng d\u1ee5ng ho\u1eb7c c\u00e1ch s\u1eed d\u1ee5ng AlphaCinema. C\u00e1c c\u00e2u tr\u1ea3 l\u1eddi s\u1ebd \u0111\u01b0\u1ee3c l\u1ea5y t\u1eeb chatbot API th\u1eadt.",
-                color = Color.White.copy(alpha = 0.74f),
-                style = MaterialTheme.typography.bodyMedium,
-                lineHeight = 21.sp
+                text = suggestion.text,
+                color = Color.White.copy(alpha = 0.86f),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 17.sp
+            )
+        }
+    }
+}
+
+private data class ChatSuggestionUi(
+    val text: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+@Composable
+private fun BotAvatar(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(Color(0xFFF6E29A).copy(alpha = 0.14f))
+            .border(1.dp, Color(0x33F6E29A), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.AutoAwesome,
+            contentDescription = null,
+            tint = Color(0xFFF6E29A),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun UserAvatar(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFFF6E29A),
+                        Color(0xFF9EE8FF)
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "K",
+            color = Color(0xFF070B16),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
+}
+
+@Composable
+private fun ChatMessageList(
+    messages: List<SupportChatMessage>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onMovieAction: (SupportChatAction) -> Unit
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = 18.dp,
+            end = 16.dp,
+            bottom = 22.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        items(messages, key = { it.id }) { message ->
+            ChatBubble(
+                message = message,
+                onMovieAction = onMovieAction
             )
         }
     }
@@ -269,12 +492,23 @@ internal fun MessageBubble(
     message: SupportChatMessage,
     onMovieAction: (SupportChatAction) -> Unit = {}
 ) {
+    ChatBubble(
+        message = message,
+        onMovieAction = onMovieAction
+    )
+}
+
+@Composable
+private fun ChatBubble(
+    message: SupportChatMessage,
+    onMovieAction: (SupportChatAction) -> Unit = {}
+) {
     val fromUser = message.sender == SupportMessageSender.USER
     val isLoading = message.sender == SupportMessageSender.LOADING
     val movieItems = message.metadata?.movieItems.orEmpty()
     val bubbleColor = when (message.sender) {
         SupportMessageSender.USER -> Color(0xFFF6E29A)
-        SupportMessageSender.BOT -> Color(0xFF17233A)
+        SupportMessageSender.BOT -> Color(0xFF151F35)
         SupportMessageSender.LOADING -> Color(0xFF111B2E)
     }
     val textColor = if (fromUser) Color(0xFF111111) else Color.White
@@ -282,24 +516,21 @@ internal fun MessageBubble(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (fromUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
     ) {
+        if (!fromUser) {
+            BotAvatar(modifier = Modifier.size(30.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+
         Column(
             horizontalAlignment = if (fromUser) Alignment.End else Alignment.Start,
             modifier = Modifier.widthIn(max = 320.dp)
         ) {
-            AnimatedVisibility(visible = !fromUser) {
-                Text(
-                    text = if (isLoading) "AlphaCinema \u0111ang so\u1ea1n" else "Tr\u1ee3 l\u00fd AlphaCinema",
-                    color = Color.White.copy(alpha = 0.42f),
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 5.dp)
-                )
-            }
-
             Surface(
                 color = bubbleColor,
-                shadowElevation = if (fromUser) 4.dp else 8.dp,
+                shadowElevation = if (fromUser) 3.dp else 5.dp,
                 shape = bubbleShape,
                 modifier = Modifier
                     .clip(bubbleShape)
@@ -310,18 +541,7 @@ internal fun MessageBubble(
                     )
             ) {
                 if (isLoading) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        LottieLoadingIndicator(size = 36.dp)
-                        Text(
-                            text = message.text,
-                            color = Color.White.copy(alpha = 0.84f),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
+                    TypingIndicator()
                 } else {
                     Column(
                         modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
@@ -357,6 +577,28 @@ internal fun MessageBubble(
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
+
+        if (fromUser) {
+            Spacer(modifier = Modifier.width(8.dp))
+            UserAvatar(modifier = Modifier.size(30.dp))
+        }
+    }
+}
+
+@Composable
+private fun TypingIndicator() {
+    Row(
+        modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        LottieLoadingIndicator(size = 30.dp)
+        Text(
+            text = "Alpha AI đang trả lời...",
+            color = Color.White.copy(alpha = 0.84f),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -467,68 +709,142 @@ private fun SupportMovieActionButton(
 }
 
 @Composable
-private fun SupportInputBar(
+private fun ChatInputBar(
     value: String,
     onValueChange: (String) -> Unit,
+    isLoading: Boolean,
+    error: String?,
     onSend: () -> Unit
 ) {
-    Surface(
-        color = Color(0xE0131D31),
-        shadowElevation = 18.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        modifier = Modifier.fillMaxWidth()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(
+        if (error != null) {
+            Text(
+                text = error,
+                color = Color(0xFFFFB4AB),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+        }
+
+        Surface(
+            color = Color(0xF0141E32),
+            shadowElevation = 12.dp,
+            shape = RoundedCornerShape(28.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-                .navigationBarsPadding()
-                .imePadding(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.09f),
+                    shape = RoundedCornerShape(28.dp)
+                )
         ) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text(
-                        text = "H\u1ecfi v\u1ec1 phim, t\u00e0i kho\u1ea3n, g\u00f3i th\u00e0nh vi\u00ean...",
-                        color = Color.White.copy(alpha = 0.42f)
-                    )
-                },
-                minLines = 1,
-                maxLines = 4,
-                shape = SupportInputShape,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF16233B),
-                    unfocusedContainerColor = Color(0xFF10192D),
-                    focusedBorderColor = Color(0xFFF6E29A),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
-                    cursorColor = Color(0xFFF6E29A)
-                )
-            )
-
-            Button(
-                onClick = onSend,
-                enabled = value.isNotBlank(),
-                shape = CircleShape,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFF6E29A),
-                    contentColor = Color.Black,
-                    disabledContainerColor = Color.White.copy(alpha = 0.10f),
-                    disabledContentColor = Color.White.copy(alpha = 0.28f)
-                ),
-                modifier = Modifier.size(52.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.Send,
-                    contentDescription = "G\u1eedi"
+                InputActionButton(
+                    icon = Icons.Outlined.Add,
+                    contentDescription = "Thêm lựa chọn",
+                    enabled = !isLoading,
+                    onClick = {}
                 )
+
+                BasicTextField(
+                    value = value,
+                    onValueChange = {
+                        if (!isLoading) {
+                            onValueChange(it)
+                        }
+                    },
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 42.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color.White,
+                        lineHeight = 20.sp
+                    ),
+                    cursorBrush = SolidColor(Color(0xFFF6E29A)),
+                    maxLines = 4,
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (value.isBlank()) {
+                                Text(
+                                    text = "Hỏi Alpha AI...",
+                                    color = Color.White.copy(alpha = 0.42f),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                )
+
+                InputActionButton(
+                    icon = Icons.Outlined.HeadsetMic,
+                    contentDescription = "Nhập bằng giọng nói",
+                    enabled = !isLoading,
+                    onClick = {}
+                )
+
+                Button(
+                    onClick = onSend,
+                    enabled = value.isNotBlank() && !isLoading,
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF6E29A),
+                        contentColor = Color.Black,
+                        disabledContainerColor = Color.White.copy(alpha = 0.10f),
+                        disabledContentColor = Color.White.copy(alpha = 0.30f)
+                    ),
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.Send,
+                        contentDescription = "Gửi",
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun InputActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = if (enabled) 0.07f else 0.035f))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White.copy(alpha = if (enabled) 0.72f else 0.28f),
+            modifier = Modifier.size(19.dp)
+        )
     }
 }

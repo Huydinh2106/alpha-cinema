@@ -38,8 +38,7 @@ class SupportViewModel(
 
     private val _messages = MutableStateFlow(
         settingsManager.getSupportChatMessages()
-            .filterNot { it.sender == SupportMessageSender.LOADING }
-            .ifEmpty { defaultMessages() }
+            .filterNot { it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID }
     )
     val messages: StateFlow<List<SupportChatMessage>> = _messages.asStateFlow()
 
@@ -109,7 +108,7 @@ class SupportViewModel(
     fun startNewConversation() {
         currentSessionId = UUID.randomUUID().toString()
         memorySnapshot = SupportChatMemoryContext()
-        _messages.value = defaultMessages()
+        _messages.value = emptyList()
         persistConversation()
     }
 
@@ -223,7 +222,7 @@ class SupportViewModel(
     private fun persistConversation() {
         settingsManager.saveSupportChatConversation(
             sessionId = currentSessionId,
-            messages = _messages.value.filterNot { it.sender == SupportMessageSender.LOADING }
+            messages = _messages.value.filterNot { it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID }
         )
     }
 
@@ -256,17 +255,6 @@ class SupportViewModel(
             "hai" to "Hai huoc",
             "anime" to "Anime"
         )
-
-        private fun defaultMessages(): List<SupportChatMessage> {
-            return listOf(
-                SupportChatMessage(
-                    id = WELCOME_MESSAGE_ID,
-                    text = "Xin ch\u00e0o, t\u00f4i l\u00e0 tr\u1ee3 l\u00fd AlphaCinema. B\u1ea1n c\u00f3 th\u1ec3 h\u1ecfi v\u1ec1 phim, t\u00e0i kho\u1ea3n ho\u1eb7c c\u00e1ch s\u1eed d\u1ee5ng \u1ee9ng d\u1ee5ng.",
-                    sender = SupportMessageSender.BOT,
-                    timestamp = currentTimeLabel()
-                )
-            )
-        }
 
         private fun currentTimeLabel(): String {
             return SimpleDateFormat("HH:mm", Locale.forLanguageTag("vi-VN")).format(Date())
