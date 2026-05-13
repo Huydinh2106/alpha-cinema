@@ -18,6 +18,9 @@ data class MovieListNavRoute(val title: String, val filterKindName: String, val 
 data object AdminNavRoute
 
 @Serializable
+data object PaymentNavRoute
+
+@Serializable
 data class WatchPartyNavRoute(val roomId: String)
 
 @Serializable

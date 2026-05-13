@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,6 +58,7 @@ import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailScreen
 import com.example.alphacinema.ui.movie.detail.MovieDetailViewModel
 import com.example.alphacinema.ui.movie.list.MovieListScreen
+import com.example.alphacinema.ui.payment.PaymentScreen
 import com.example.alphacinema.ui.player.PlayerScreen
 import com.example.alphacinema.ui.player.PlayerViewModel
 import com.example.alphacinema.ui.account.FilterKind
@@ -168,6 +170,8 @@ fun MainContent(
     val wpIsJoining by watchPartyViewModel.isJoining.collectAsState()
     var watchPartyLobbyMovie by remember { mutableStateOf<com.example.alphacinema.ui.movie.detail.MovieDetailUi?>(null) }
     var showWatchPartyLobby by remember { mutableStateOf(false) }
+    var demoCurrentPlan by rememberSaveable { mutableStateOf<String?>(null) }
+    var demoMembershipExpiredDate by rememberSaveable { mutableStateOf<String?>(null) }
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
@@ -220,6 +224,24 @@ fun MainContent(
 
     fun openWatchParty(roomId: String) {
         navController.navigate(WatchPartyNavRoute(roomId = roomId))
+    }
+
+    // Handle deep link: alphacinema://watchparty/{roomId}
+    val deepLinkHandled = remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!deepLinkHandled.value) {
+            val activity = (context as? android.app.Activity)
+            val data = activity?.intent?.data
+            if (data != null && data.scheme == "alphacinema" && data.host == "watchparty") {
+                val roomId = data.pathSegments?.firstOrNull()
+                if (!roomId.isNullOrBlank()) {
+                    deepLinkHandled.value = true
+                    watchPartyViewModel.joinRoom(roomId) {
+                        openWatchParty(roomId)
+                    }
+                }
+            }
+        }
     }
 
     // Theo dõi current route để hiện/ẩn bottom bar
@@ -319,7 +341,16 @@ fun MainContent(
                             onWatchTogether = {
                                 watchPartyLobbyMovie = null
                                 showWatchPartyLobby = true
-                            }
+                            },
+                            onOpenPayment = {
+                                navController.navigate(PaymentNavRoute)
+                            },
+                            onLogout = {
+                                demoCurrentPlan = null
+                                demoMembershipExpiredDate = null
+                            },
+                            currentPlan = demoCurrentPlan,
+                            membershipExpiredDate = demoMembershipExpiredDate
                         )
                     }
                 }
@@ -510,6 +541,17 @@ fun MainContent(
                 AdminScreen(
                     onBack = { navController.popBackStack() },
                     viewModel = adminViewModel
+                )
+            }
+
+            composable<PaymentNavRoute> {
+                PaymentScreen(
+                    onBack = { navController.popBackStack() },
+                    onContinuePayment = { planName, paymentMethod ->
+                        demoCurrentPlan = planName.lowercase()
+                        demoMembershipExpiredDate = "30/06/2026"
+                        showToast("Đã nâng cấp gói $planName qua $paymentMethod")
+                    }
                 )
             }
 

@@ -85,6 +85,7 @@ class MovieListViewModel : ViewModel() {
         val baseMovies = when (currentKind) {
             FilterKind.MOVIE_TYPE -> firestoreRepository.getMovies(isKidsMode, limit).filter { it.type == currentSlug }
             FilterKind.GENRE      -> firestoreRepository.getMoviesByCategory(currentSlug, isKidsMode, limit)
+            FilterKind.CUSTOM_CATEGORY -> firestoreRepository.getCategoryMovies(currentSlug, isKidsMode, limit)
             FilterKind.ALL        -> firestoreRepository.getMovies(isKidsMode, limit)
         }
         

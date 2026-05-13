@@ -25,6 +25,16 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Deep link for Watch Party -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="alphacinema"
+                    android:host="watchparty" />
+            </intent-filter>
         </activity>
 
         <!-- Firebase Cloud Messaging Service -->
