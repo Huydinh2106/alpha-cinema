@@ -91,6 +91,16 @@ class FirestoreRepository {
         }
     }
 
+    suspend fun updateUserSubscription(uid: String, plan: String) {
+        if (uid.isBlank()) return
+        try {
+            db.collection("users").document(uid)
+                .update("subscriptionPlan", plan).await()
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "updateUserSubscription failed", e)
+        }
+    }
+
     suspend fun updateWatchProgress(
         userId: String,
         movieSlug: String,

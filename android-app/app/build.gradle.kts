@@ -89,6 +89,9 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.media3.hls)
 
+    // Agora Voice SDK
+    implementation("io.agora.rtc:voice-rtc-basic:4.6.3")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

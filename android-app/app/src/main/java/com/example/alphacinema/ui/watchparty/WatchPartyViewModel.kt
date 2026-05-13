@@ -12,6 +12,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import android.content.Context
+import io.agora.rtc2.ChannelMediaOptions
+import io.agora.rtc2.Constants
+import io.agora.rtc2.IRtcEngineEventHandler
+import io.agora.rtc2.RtcEngine
+import io.agora.rtc2.RtcEngineConfig
 
 class WatchPartyViewModel : ViewModel() {
 
@@ -41,6 +47,36 @@ class WatchPartyViewModel : ViewModel() {
 
     private val _serverTimeOffset = MutableStateFlow(0L)
     val serverTimeOffset: StateFlow<Long> = _serverTimeOffset.asStateFlow()
+
+    // --- Agora Voice Chat State ---
+    private var rtcEngine: RtcEngine? = null
+    private var localAgoraUid: Int = 0
+
+    private val _isMicMuted = MutableStateFlow(false)
+    val isMicMuted: StateFlow<Boolean> = _isMicMuted.asStateFlow()
+
+    // Map of integer UID (Firebase UID hashCode) to volume level (0-255)
+    private val _speakingUsers = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    val speakingUsers: StateFlow<Map<Int, Int>> = _speakingUsers.asStateFlow()
+
+    // TODO: BẠN CẦN THAY THẾ APP ID CỦA BẠN TẠI ĐÂY
+    private val AGORA_APP_ID = "8d5392fa3903473d9ce043ec36666424" 
+
+    private val rtcEventHandler = object : IRtcEngineEventHandler() {
+        override fun onAudioVolumeIndication(speakers: Array<out AudioVolumeInfo>?, totalVolume: Int) {
+            speakers?.let {
+                val newMap = mutableMapOf<Int, Int>()
+                it.forEach { speaker ->
+                    val uid = if (speaker.uid == 0) localAgoraUid else speaker.uid
+                    if (speaker.volume > 5) { // Lọc bớt tạp âm nhỏ
+                        newMap[uid] = speaker.volume
+                    }
+                }
+                _speakingUsers.value = newMap
+            }
+        }
+    }
+    // -----------------------------
 
     private var observeJob: Job? = null
 
@@ -116,8 +152,6 @@ class WatchPartyViewModel : ViewModel() {
         }
     }
 
-    // ── Leave Room ──────────────────────────────────────────────────
-
     fun leaveRoom() {
         val roomId = _room.value?.roomId ?: return
         val uid = auth.currentUser?.uid ?: return
@@ -126,10 +160,63 @@ class WatchPartyViewModel : ViewModel() {
                 repository.leaveRoom(roomId, uid)
             } catch (_: Exception) { }
             stopObserving()
+            
+            // Giải phóng Agora
+            rtcEngine?.leaveChannel()
+            RtcEngine.destroy()
+            rtcEngine = null
+            _speakingUsers.value = emptyMap()
+            
             _room.value = null
             _members.value = emptyList()
             _chatMessages.value = emptyList()
         }
+    }
+
+    // ── Voice Chat Control ──────────────────────────────────────────
+
+    fun initAgora(context: Context, roomId: String) {
+        if (rtcEngine != null) return
+        try {
+            val config = RtcEngineConfig()
+            config.mContext = context.applicationContext
+            config.mAppId = AGORA_APP_ID
+            config.mEventHandler = rtcEventHandler
+            rtcEngine = RtcEngine.create(config)
+            
+            // Bật module Audio
+            rtcEngine?.enableAudio()
+            rtcEngine?.enableAudioVolumeIndication(200, 3, true)
+            
+            val uidStr = auth.currentUser?.uid ?: return
+            localAgoraUid = uidStr.hashCode() and 0x7FFFFFFF
+
+            val options = ChannelMediaOptions()
+            options.clientRoleType = Constants.CLIENT_ROLE_BROADCASTER
+            options.channelProfile = Constants.CHANNEL_PROFILE_COMMUNICATION
+            options.publishMicrophoneTrack = true
+            options.autoSubscribeAudio = true
+            
+            val result = rtcEngine?.joinChannel("", roomId, localAgoraUid, options)
+            println("Agora joinChannel result: $result (0 means success)")
+            
+            // Bật mic mặc định
+            _isMicMuted.value = false
+            rtcEngine?.muteLocalAudioStream(false)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun toggleMic() {
+        val muted = !_isMicMuted.value
+        _isMicMuted.value = muted
+        rtcEngine?.muteLocalAudioStream(muted)
+    }
+
+    fun adjustUserVolume(firebaseUid: String, volume: Int) {
+        // volume range: 0 - 100
+        rtcEngine?.adjustUserPlaybackSignalVolume(firebaseUid.hashCode(), volume)
     }
 
     // ── Playback Control (Host only) ────────────────────────────────

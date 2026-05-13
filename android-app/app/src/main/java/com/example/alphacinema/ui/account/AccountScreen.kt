@@ -271,8 +271,8 @@ fun AccountScreen(
     var showCancelRenewDialog by remember { mutableStateOf(false) }
     var showLoginRequiredDialog by remember { mutableStateOf(false) }
     val isLoggedIn = currentUser != null
-    val demoMembershipPlan = remember(isLoggedIn, currentPlan, membershipExpiredDate) {
-        if (isLoggedIn) buildDemoMembershipPlan(currentPlan, membershipExpiredDate) else null
+    val demoMembershipPlan = remember(isLoggedIn, currentPlan, userProfile?.subscriptionPlan, membershipExpiredDate) {
+        if (isLoggedIn) buildDemoMembershipPlan(userProfile?.subscriptionPlan ?: currentPlan, membershipExpiredDate) else null
     }
     val demoUser = remember(currentUser, demoMembershipPlan, isLoggedIn) {
         if (isLoggedIn && demoMembershipPlan != null) {
@@ -391,11 +391,13 @@ fun AccountScreen(
                         }
                     }
                 )
-                MembershipUpgradeCard(
-                    plan = demoMembershipPlan,
-                    onUpgradeClick = onOpenPayment,
-                    onManageClick = { showPlanManagement = true }
-                )
+                if (demoMembershipPlan.key == DemoMembershipPlanKey.FREE) {
+                    MembershipUpgradeCard(
+                        plan = demoMembershipPlan,
+                        onUpgradeClick = onOpenPayment,
+                        onManageClick = { showPlanManagement = true }
+                    )
+                }
             } else {
                 GuestProfileCard(
                     onLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
