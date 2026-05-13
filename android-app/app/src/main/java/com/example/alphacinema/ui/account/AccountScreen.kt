@@ -11,7 +11,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,18 +30,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.WatchLater
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
@@ -73,7 +75,6 @@ import com.example.alphacinema.data.local.SettingsManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -82,8 +83,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import coil.compose.AsyncImage
@@ -125,12 +128,39 @@ private enum class AccountPanelType {
     FEEDBACK
 }
 
+private enum class DemoMembershipPlanKey {
+    FREE,
+    BASIC,
+    COUPLE,
+    PREMIUM
+}
+
+private data class DemoMembershipPlanUi(
+    val key: DemoMembershipPlanKey,
+    val badge: String,
+    val title: String,
+    val price: String,
+    val description: String,
+    val benefits: List<String>,
+    val expiredDate: String = ""
+)
+
+private data class DemoUserProfileUi(
+    val name: String,
+    val avatarUrl: String,
+    val currentPlan: DemoMembershipPlanUi
+)
+
 @Composable
 fun AccountScreen(
     onOpenAdminPanel: () -> Unit = {},
     onOpenMovieDetail: (String) -> Unit = {},
     onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> },
-    onWatchTogether: () -> Unit = {}
+    onWatchTogether: () -> Unit = {},
+    onOpenPayment: () -> Unit = {},
+    onLogout: () -> Unit = {},
+    currentPlan: String? = null,
+    membershipExpiredDate: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -237,6 +267,24 @@ fun AccountScreen(
     var pinError by remember { mutableStateOf<String?>(null) }
     var activePanel by remember { mutableStateOf<AccountPanelType?>(null) }
     var feedbackInput by remember { mutableStateOf("") }
+    var showPlanManagement by remember { mutableStateOf(false) }
+    var showCancelRenewDialog by remember { mutableStateOf(false) }
+    var showLoginRequiredDialog by remember { mutableStateOf(false) }
+    val isLoggedIn = currentUser != null
+    val demoMembershipPlan = remember(isLoggedIn, currentPlan, membershipExpiredDate) {
+        if (isLoggedIn) buildDemoMembershipPlan(currentPlan, membershipExpiredDate) else null
+    }
+    val demoUser = remember(currentUser, demoMembershipPlan, isLoggedIn) {
+        if (isLoggedIn && demoMembershipPlan != null) {
+            DemoUserProfileUi(
+                name = currentUser?.displayName ?: "khoa",
+                avatarUrl = currentUser?.photoUrl?.toString().orEmpty(),
+                currentPlan = demoMembershipPlan
+            )
+        } else {
+            null
+        }
+    }
 
     val menuItems = mutableListOf(
         AccountMenuItemUi("Đang xem", { Icon(Icons.Outlined.WatchLater, contentDescription = null) }),
@@ -259,10 +307,26 @@ fun AccountScreen(
 
     fun openPanel(panel: AccountPanelType, requiresLogin: Boolean = false) {
         if (requiresLogin && currentUser == null) {
-            authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+            showLoginRequiredDialog = true
             return
         }
         activePanel = panel
+    }
+
+    fun handleMenuAction(action: AccountMenuAction) {
+        when (action) {
+            AccountMenuAction.WATCHING -> openPanel(AccountPanelType.WATCHING, requiresLogin = true)
+            AccountMenuAction.MOVIE_LIBRARY -> {
+                if (isLoggedIn) openPanel(AccountPanelType.MOVIE_LIBRARY) else showLoginRequiredDialog = true
+            }
+            AccountMenuAction.FAVORITES -> openPanel(AccountPanelType.FAVORITES, requiresLogin = true)
+            AccountMenuAction.POLICY -> openPanel(AccountPanelType.POLICY)
+            AccountMenuAction.FEEDBACK -> openPanel(AccountPanelType.FEEDBACK)
+            AccountMenuAction.ADMIN -> onOpenAdminPanel()
+            AccountMenuAction.WATCH_TOGETHER -> {
+                if (isLoggedIn) onWatchTogether() else showLoginRequiredDialog = true
+            }
+        }
     }
 
     fun resolveMenuAction(item: AccountMenuItemUi): AccountMenuAction {
@@ -316,188 +380,27 @@ fun AccountScreen(
                 fontWeight = FontWeight.ExtraBold
             )
 
-            // === User Info / Auth Buttons ===
-            if (currentUser != null) {
-                // LOGGED IN: show avatar, name, email
-                val photoUrl = currentUser?.photoUrl?.toString()
-                var showLogoutMenu by remember { mutableStateOf(false) }
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, Color.White.copy(alpha = if (showLogoutMenu) 0.18f else 0.10f), RoundedCornerShape(18.dp))
-                        .clickable { showLogoutMenu = !showLogoutMenu }
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Avatar
-                        if (photoUrl != null) {
-                            AsyncImage(
-                                model = photoUrl,
-                                contentDescription = "Avatar",
-                                modifier = Modifier
-                                    .size(60.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
+            if (isLoggedIn && demoUser != null && demoMembershipPlan != null) {
+                LoggedInProfileCard(
+                    demoUser = demoUser,
+                    onClick = {
+                        if (demoMembershipPlan.key == DemoMembershipPlanKey.FREE) {
+                            onOpenPayment()
                         } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(60.dp)
-                                    .background(
-                                        Brush.linearGradient(listOf(Color(0xFFF6E29A), Color(0xFFD4A843))),
-                                        CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = (currentUser?.displayName?.firstOrNull() ?: currentUser?.email?.firstOrNull() ?: 'A').uppercase(),
-                                    color = Color(0xFF070B16),
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 14.dp)
-                        ) {
-                            Text(
-                                text = currentUser?.displayName ?: "Người dùng",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = currentUser?.email ?: "",
-                                color = Color.White.copy(alpha = 0.55f),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
-                        // Chevron indicator
-                        val chevronRotation by androidx.compose.animation.core.animateFloatAsState(
-                            targetValue = if (showLogoutMenu) 180f else 0f,
-                            animationSpec = tween(250),
-                            label = "chevron"
-                        )
-                        Icon(
-                            imageVector = Icons.Outlined.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.45f),
-                            modifier = Modifier
-                                .size(20.dp)
-                                .rotate(chevronRotation)
-                        )
-                    }
-
-                    // --- Expandable logout section ---
-                    AnimatedVisibility(
-                        visible = showLogoutMenu,
-                        enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(200)),
-                        exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(150))
-                    ) {
-                        Column {
-                            // Divider
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 14.dp, bottom = 10.dp)
-                                    .height(1.dp)
-                                    .background(Color.White.copy(alpha = 0.10f))
-                            )
-
-                            // Logout row
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable(
-                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        auth.signOut()
-                                        currentUser = null
-                                        showLogoutMenu = false
-                                    }
-                                    .padding(vertical = 6.dp, horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .background(Color(0x22FF6B6B), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.ExitToApp,
-                                        contentDescription = null,
-                                        tint = Color(0xFFFF6B6B),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "Đăng xuất",
-                                    color = Color(0xFFFF6B6B),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            showPlanManagement = true
                         }
                     }
-                }
+                )
+                MembershipUpgradeCard(
+                    plan = demoMembershipPlan,
+                    onUpgradeClick = onOpenPayment,
+                    onManageClick = { showPlanManagement = true }
+                )
             } else {
-                // NOT LOGGED IN: show default avatar + login/register buttons
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "A",
-                        color = Color(0xFFF6E29A),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFF6E29A),
-                            contentColor = Color.Black
-                        )
-                    ) {
-                        Text("Đăng nhập", fontWeight = FontWeight.Bold)
-                    }
-
-                    OutlinedButton(
-                        onClick = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.REGISTER)) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                    ) {
-                        Text("Đăng ký", fontWeight = FontWeight.SemiBold)
-                    }
-                }
+                GuestProfileCard(
+                    onLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
+                    onRegister = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.REGISTER)) }
+                )
             }
 
             // Error message
@@ -547,59 +450,21 @@ fun AccountScreen(
                 }
             )
 
-            menuItems.forEach { item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
-                        .border(
-                            1.dp,
-                            Color.White.copy(alpha = 0.12f),
-                            RoundedCornerShape(14.dp)
-                        )
-                        .clickable {
-                            when (resolveMenuAction(item)) {
-                                AccountMenuAction.WATCHING -> openPanel(AccountPanelType.WATCHING, requiresLogin = true)
-                                AccountMenuAction.MOVIE_LIBRARY -> openPanel(AccountPanelType.MOVIE_LIBRARY)
-                                AccountMenuAction.FAVORITES -> openPanel(AccountPanelType.FAVORITES, requiresLogin = true)
-                                AccountMenuAction.POLICY -> openPanel(AccountPanelType.POLICY)
-                                AccountMenuAction.FEEDBACK -> openPanel(AccountPanelType.FEEDBACK)
-                                AccountMenuAction.ADMIN -> onOpenAdminPanel()
-                                AccountMenuAction.WATCH_TOGETHER -> onWatchTogether()
-                            }
-                        }
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .background(Color(0xFF1A2237), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        androidx.compose.runtime.CompositionLocalProvider(
-                            androidx.compose.material3.LocalContentColor provides Color(0xFFF6E29A)
-                        ) {
-                            item.icon()
-                        }
+            AccountMenuList(
+                items = menuItems,
+                onItemClick = { item -> handleMenuAction(resolveMenuAction(item)) }
+            )
+
+            if (isLoggedIn) {
+                LogoutButton(
+                    onLogout = {
+                        auth.signOut()
+                        currentUser = null
+                        activePanel = null
+                        showPlanManagement = false
+                        onLogout()
                     }
-
-                    Text(
-                        text = item.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier
-                            .padding(start = 12.dp)
-                            .weight(1f)
-                    )
-
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
+                )
             }
 
 
@@ -696,6 +561,62 @@ fun AccountScreen(
             )
         }
 
+        if (showPlanManagement && demoMembershipPlan != null) {
+            PlanManagementSheet(
+                plan = demoMembershipPlan,
+                onDismiss = { showPlanManagement = false },
+                onChangePlan = {
+                    showPlanManagement = false
+                    onOpenPayment()
+                },
+                onCancelRenew = { showCancelRenewDialog = true }
+            )
+        }
+
+        if (showCancelRenewDialog) {
+            AlertDialog(
+                onDismissRequest = { showCancelRenewDialog = false },
+                containerColor = Color(0xFF10192E),
+                titleContentColor = Color.White,
+                textContentColor = Color.White.copy(alpha = 0.78f),
+                title = { Text("Hủy gia hạn") },
+                text = {
+                    Text("Bạn đã hủy gia hạn tự động. Gói hiện tại vẫn còn hiệu lực đến ngày hết hạn.")
+                },
+                confirmButton = {
+                    TextButton(onClick = { showCancelRenewDialog = false }) {
+                        Text("Đã hiểu", color = Color(0xFFF6E29A), fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+
+        if (showLoginRequiredDialog) {
+            AlertDialog(
+                onDismissRequest = { showLoginRequiredDialog = false },
+                containerColor = Color(0xFF10192E),
+                titleContentColor = Color.White,
+                textContentColor = Color.White.copy(alpha = 0.78f),
+                title = { Text("Cần đăng nhập") },
+                text = { Text("Vui lòng đăng nhập để sử dụng tính năng này.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLoginRequiredDialog = false
+                            authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+                        }
+                    ) {
+                        Text("Đăng nhập", color = Color(0xFFF6E29A), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLoginRequiredDialog = false }) {
+                        Text("Để sau", color = Color.White.copy(alpha = 0.7f))
+                    }
+                }
+            )
+        }
+
         if (state.showDialog) {
             AuthBottomSheet(
                 state = state,
@@ -729,7 +650,7 @@ private fun KidsModeCard(
             )
             Text(
                 text = if (currentUser == null) {
-                    "Đăng nhập để bật bộ lọc nội dung an toàn"
+                    "Đăng nhập để lưu cài đặt an toàn"
                 } else {
                     "Lọc nội dung an toàn cho trẻ"
                 },
@@ -755,6 +676,771 @@ private fun KidsModeCard(
                 uncheckedTrackColor = Color(0xFF2A344A)
             )
         )
+    }
+}
+
+private fun buildDemoMembershipPlan(
+    currentPlan: String?,
+    expiredDate: String?
+): DemoMembershipPlanUi {
+    val key = when (currentPlan?.lowercase()) {
+        "basic" -> DemoMembershipPlanKey.BASIC
+        "couple" -> DemoMembershipPlanKey.COUPLE
+        "premium" -> DemoMembershipPlanKey.PREMIUM
+        else -> DemoMembershipPlanKey.FREE
+    }
+    val paidExpiredDate = expiredDate.orEmpty().ifBlank { "30/06/2026" }
+
+    return when (key) {
+        DemoMembershipPlanKey.FREE -> DemoMembershipPlanUi(
+            key = key,
+            badge = "Free",
+            title = "Gói Free",
+            price = "0đ / tháng",
+            description = "Bạn đang sử dụng gói miễn phí.",
+            benefits = emptyList()
+        )
+        DemoMembershipPlanKey.BASIC -> DemoMembershipPlanUi(
+            key = key,
+            badge = "Basic",
+            title = "Gói Basic",
+            price = "29.000đ / tháng",
+            description = "Bạn đang sử dụng gói Basic.",
+            benefits = listOf(
+                "Xem phim không giới hạn",
+                "Lưu danh sách yêu thích",
+                "Chất lượng HD"
+            ),
+            expiredDate = paidExpiredDate
+        )
+        DemoMembershipPlanKey.COUPLE -> DemoMembershipPlanUi(
+            key = key,
+            badge = "Couple",
+            title = "Gói Couple",
+            price = "59.000đ / tháng",
+            description = "Bạn đang sử dụng gói Couple.",
+            benefits = listOf(
+                "Tạo phòng xem chung",
+                "Đồng bộ thời gian xem phim",
+                "Chat trong phòng xem"
+            ),
+            expiredDate = paidExpiredDate
+        )
+        DemoMembershipPlanKey.PREMIUM -> DemoMembershipPlanUi(
+            key = key,
+            badge = "Premium",
+            title = "Gói Premium",
+            price = "99.000đ / tháng",
+            description = "Bạn đang tận hưởng đầy đủ tính năng cao cấp.",
+            benefits = listOf(
+                "Không quảng cáo",
+                "Chất lượng Full HD / 4K",
+                "Tạo nhiều phòng xem chung",
+                "Mời bạn bè bằng link",
+                "Ưu tiên trải nghiệm xem phim"
+            ),
+            expiredDate = paidExpiredDate
+        )
+    }
+}
+
+@Composable
+private fun LoggedInProfileCard(
+    demoUser: DemoUserProfileUi,
+    onClick: () -> Unit
+) {
+    val plan = demoUser.currentPlan
+    val isPaid = plan.key != DemoMembershipPlanKey.FREE
+    val shape = RoundedCornerShape(24.dp)
+    val background = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Brush.linearGradient(listOf(Color(0xFF10192E), Color(0xFF0C1424)))
+        DemoMembershipPlanKey.BASIC -> Brush.linearGradient(listOf(Color(0xFF0E2033), Color(0xFF0C1424)))
+        DemoMembershipPlanKey.COUPLE -> Brush.linearGradient(listOf(Color(0xFF1B1832), Color(0xFF2A1A34), Color(0xFF0C1424)))
+        DemoMembershipPlanKey.PREMIUM -> Brush.linearGradient(listOf(Color(0xFF121B30), Color(0xFF211934), Color(0xFF0C1425)))
+    }
+    val border = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Brush.linearGradient(listOf(Color(0xFF8A93A7).copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f)))
+        DemoMembershipPlanKey.BASIC -> Brush.linearGradient(listOf(Color(0xFF66D9FF).copy(alpha = 0.46f), Color.White.copy(alpha = 0.08f)))
+        DemoMembershipPlanKey.COUPLE -> Brush.linearGradient(listOf(Color(0xFFE8A0FF).copy(alpha = 0.42f), Color(0xFFFF8AB8).copy(alpha = 0.30f), Color.White.copy(alpha = 0.08f)))
+        DemoMembershipPlanKey.PREMIUM -> Brush.linearGradient(listOf(Color(0xFFF6E29A).copy(alpha = 0.62f), Color(0xFF8A7CFF).copy(alpha = 0.18f), Color.White.copy(alpha = 0.08f)))
+    }
+    val glowColor = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Color.Transparent
+        DemoMembershipPlanKey.BASIC -> Color(0xFF66D9FF).copy(alpha = 0.08f)
+        DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8).copy(alpha = 0.09f)
+        DemoMembershipPlanKey.PREMIUM -> Color(0xFFF6E29A).copy(alpha = 0.11f)
+    }
+    val planStatus = if (isPaid) {
+        "Gói ${plan.badge} • Đang hoạt động đến ${plan.expiredDate}"
+    } else {
+        "Gói Free"
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(background)
+            .border(1.dp, border, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 15.dp)
+    ) {
+        if (glowColor != Color.Transparent) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(glowColor, Color.Transparent),
+                            radius = 520f
+                        )
+                    )
+            )
+        }
+
+        MembershipBadge(
+            plan = plan,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 18.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ProfileAvatar(demoUser = demoUser)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 14.dp, end = 12.dp)
+                ) {
+                    Text(
+                        text = demoUser.name,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.46f),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                ProfilePlanIcon(plan = plan)
+                Text(
+                    text = planStatus,
+                    color = if (plan.key == DemoMembershipPlanKey.PREMIUM) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (plan.key == DemoMembershipPlanKey.PREMIUM) FontWeight.Bold else FontWeight.Medium,
+                    lineHeight = 18.sp,
+                    maxLines = 2,
+                    modifier = Modifier.padding(start = 7.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuestProfileCard(
+    onLogin: () -> Unit,
+    onRegister: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF10192E), Color(0xFF0C1424))))
+            .border(1.dp, Color(0xFF8A93A7).copy(alpha = 0.20f), RoundedCornerShape(24.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.PersonOutline,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.72f),
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Bạn chưa đăng nhập",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = "Đăng nhập để đồng bộ dữ liệu và sử dụng đầy đủ tính năng",
+                    color = Color.White.copy(alpha = 0.62f),
+                    style = MaterialTheme.typography.bodySmall,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = onLogin,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(46.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE6EDF7),
+                    contentColor = Color(0xFF070B16)
+                )
+            ) {
+                Text("Đăng nhập", fontWeight = FontWeight.Bold)
+            }
+
+            OutlinedButton(
+                onClick = onRegister,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(46.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+            ) {
+                Text("Đăng ký", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MembershipUpgradeCard(
+    plan: DemoMembershipPlanUi,
+    onUpgradeClick: () -> Unit,
+    onManageClick: () -> Unit
+) {
+    val isPremium = plan.key == DemoMembershipPlanKey.PREMIUM
+    val title = if (isPremium) "Gói Premium đang hoạt động" else "Nâng cấp trải nghiệm"
+    val description = if (isPremium) {
+        "Quản lý quyền lợi và thời hạn gói của bạn"
+    } else {
+        "Mở khóa xem chung, tạo phòng, chất lượng cao hơn và nhiều quyền lợi khác"
+    }
+    val buttonText = if (isPremium) "Quản lý gói" else "Nâng cấp gói"
+    val onClick = if (isPremium) onManageClick else onUpgradeClick
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFF121B30),
+                        if (isPremium) Color(0xFF221D34) else Color(0xFF10243A),
+                        Color(0xFF0C1424)
+                    )
+                )
+            )
+            .border(
+                1.dp,
+                if (isPremium) Color(0xFFF6E29A).copy(alpha = 0.22f) else Color(0xFF66D9FF).copy(alpha = 0.18f),
+                RoundedCornerShape(18.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(
+                    if (isPremium) Color(0xFFF6E29A).copy(alpha = 0.13f) else Color(0xFF66D9FF).copy(alpha = 0.12f)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isPremium) Icons.Outlined.WorkspacePremium else Icons.Outlined.PlayArrow,
+                contentDescription = null,
+                tint = if (isPremium) Color(0xFFF6E29A) else Color(0xFF66D9FF),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = description,
+                color = Color.White.copy(alpha = 0.62f),
+                style = MaterialTheme.typography.bodySmall,
+                lineHeight = 18.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+
+        Button(
+            onClick = onClick,
+            modifier = Modifier.height(40.dp),
+            shape = RoundedCornerShape(13.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isPremium) Color(0xFFF6E29A) else Color(0xFFE6EDF7),
+                contentColor = Color(0xFF070B16)
+            )
+        ) {
+            Text(
+                text = buttonText,
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccountMenuList(
+    items: List<AccountMenuItemUi>,
+    onItemClick: (AccountMenuItemUi) -> Unit
+) {
+    items.forEach { item ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
+                .border(
+                    1.dp,
+                    Color.White.copy(alpha = 0.12f),
+                    RoundedCornerShape(14.dp)
+                )
+                .clickable { onItemClick(item) }
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(Color(0xFF1A2237), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalContentColor provides Color(0xFFF6E29A)
+                ) {
+                    item.icon()
+                }
+            }
+
+            Text(
+                text = item.title,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .weight(1f)
+            )
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun LogoutButton(onLogout: () -> Unit) {
+    OutlinedButton(
+        onClick = onLogout,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        shape = RoundedCornerShape(15.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF7A7A).copy(alpha = 0.24f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = Color(0xFFFFA0A0),
+            containerColor = Color(0xFFFF6B6B).copy(alpha = 0.05f)
+        )
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
+            contentDescription = null,
+            tint = Color(0xFFFFA0A0),
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.size(8.dp))
+        Text("Đăng xuất", fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun ProfileAvatar(demoUser: DemoUserProfileUi) {
+    if (demoUser.avatarUrl.isNotBlank()) {
+        AsyncImage(
+            model = demoUser.avatarUrl,
+            contentDescription = "Avatar",
+            modifier = Modifier
+                .size(62.dp)
+                .clip(CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(62.dp)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(listOf(Color(0xFFF6E29A), Color(0xFFD4A843))))
+                .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = (demoUser.name.firstOrNull() ?: 'A').uppercase(),
+                color = Color(0xFF070B16),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun MembershipBadge(
+    plan: DemoMembershipPlanUi,
+    modifier: Modifier = Modifier
+) {
+    val textColor = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Color(0xFFD8DEE9)
+        DemoMembershipPlanKey.BASIC -> Color(0xFF8BE7FF)
+        DemoMembershipPlanKey.COUPLE -> Color(0xFFFFB2D2)
+        DemoMembershipPlanKey.PREMIUM -> Color(0xFF070B16)
+    }
+    val badgeBrush = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.05f)))
+        DemoMembershipPlanKey.BASIC -> Brush.horizontalGradient(listOf(Color(0xFF66D9FF).copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f)))
+        DemoMembershipPlanKey.COUPLE -> Brush.horizontalGradient(listOf(Color(0xFFE8A0FF).copy(alpha = 0.18f), Color(0xFFFF8AB8).copy(alpha = 0.12f)))
+        DemoMembershipPlanKey.PREMIUM -> Brush.horizontalGradient(listOf(Color(0xFFF6E29A), Color(0xFFFFD8A8)))
+    }
+    val borderColor = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Color(0xFF8A93A7).copy(alpha = 0.28f)
+        DemoMembershipPlanKey.BASIC -> Color(0xFF66D9FF).copy(alpha = 0.34f)
+        DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8).copy(alpha = 0.32f)
+        DemoMembershipPlanKey.PREMIUM -> Color.Transparent
+    }
+
+    Text(
+        text = plan.badge,
+        color = textColor,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.ExtraBold,
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(badgeBrush)
+            .border(
+                1.dp,
+                borderColor,
+                RoundedCornerShape(999.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    )
+}
+
+@Composable
+private fun ProfilePlanIcon(plan: DemoMembershipPlanUi) {
+    val icon = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Icons.Outlined.PersonOutline
+        DemoMembershipPlanKey.BASIC -> Icons.Outlined.PlayArrow
+        DemoMembershipPlanKey.COUPLE -> Icons.Outlined.Groups
+        DemoMembershipPlanKey.PREMIUM -> Icons.Outlined.WorkspacePremium
+    }
+    val tint = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Color.White.copy(alpha = 0.72f)
+        DemoMembershipPlanKey.BASIC -> Color(0xFF66D9FF)
+        DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8)
+        DemoMembershipPlanKey.PREMIUM -> Color(0xFFF6E29A)
+    }
+
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .clip(CircleShape)
+            .background(tint.copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(12.dp)
+        )
+    }
+}
+
+@Composable
+private fun MembershipBenefitRow(text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF63E6D8).copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF63E6D8),
+                modifier = Modifier.size(15.dp)
+            )
+        }
+        Text(
+            text = text,
+            color = Color.White.copy(alpha = 0.78f),
+            style = MaterialTheme.typography.bodyMedium,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+@Composable
+private fun PlanManagementSheet(
+    plan: DemoMembershipPlanUi,
+    onDismiss: () -> Unit,
+    onChangePlan: () -> Unit,
+    onCancelRenew: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color(0xFF0B1222),
+        scrimColor = Color.Black.copy(alpha = 0.62f),
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        dragHandle = null
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 2.dp, bottom = 4.dp)
+                    .size(width = 42.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color.White.copy(alpha = 0.24f))
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Quản lý gói",
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "Thông tin gói thành viên hiện tại",
+                        color = Color.White.copy(alpha = 0.68f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.06f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color.White.copy(alpha = 0.075f), Color.White.copy(alpha = 0.035f))
+                        )
+                    )
+                    .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(24.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                PlanInfoRow(
+                    icon = Icons.Outlined.WorkspacePremium,
+                    label = "Gói hiện tại",
+                    value = plan.badge
+                )
+                PlanInfoRow(
+                    icon = Icons.Outlined.Info,
+                    label = "Giá gói",
+                    value = plan.price
+                )
+                PlanInfoRow(
+                    icon = Icons.Outlined.WatchLater,
+                    label = "Ngày hết hạn",
+                    value = plan.expiredDate.ifBlank { "Không áp dụng" }
+                )
+                PlanInfoRow(
+                    icon = Icons.Outlined.CheckCircle,
+                    label = "Trạng thái",
+                    value = if (plan.key == DemoMembershipPlanKey.FREE) "Miễn phí" else "Đang hoạt động"
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White.copy(alpha = 0.045f))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Quyền lợi",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                plan.benefits.ifEmpty { listOf("Các tính năng xem phim cơ bản") }.forEach { benefit ->
+                    MembershipBenefitRow(text = benefit)
+                }
+            }
+
+            Button(
+                onClick = onChangePlan,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF6E29A),
+                    contentColor = Color(0xFF070B16)
+                )
+            ) {
+                Text("Đổi gói", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
+            }
+
+            OutlinedButton(
+                onClick = onCancelRenew,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White.copy(alpha = 0.78f),
+                    containerColor = Color.White.copy(alpha = 0.035f)
+                )
+            ) {
+                Text("Hủy gia hạn", fontWeight = FontWeight.SemiBold)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun PlanInfoRow(
+    icon: ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFF6E29A).copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFFF6E29A),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
+        ) {
+            Text(
+                text = label,
+                color = Color.White.copy(alpha = 0.52f),
+                style = MaterialTheme.typography.labelMedium
+            )
+            Text(
+                text = value,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.dp)
+            )
+        }
     }
 }
 

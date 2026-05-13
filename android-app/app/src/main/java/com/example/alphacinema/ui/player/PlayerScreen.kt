@@ -8,17 +8,28 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +44,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -73,7 +86,10 @@ fun PlayerScreen(
     val currentMovie by rememberUpdatedState(movie)
 
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
+        ExoPlayer.Builder(context)
+            .setSeekBackIncrementMs(10_000)
+            .setSeekForwardIncrementMs(10_000)
+            .build().apply {
             playWhenReady = true
         }
     }
@@ -173,6 +189,8 @@ fun PlayerScreen(
         }
     }
 
+    var showEpisodeDialog by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -180,18 +198,27 @@ fun PlayerScreen(
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                val inflatedView = android.view.LayoutInflater.from(ctx).inflate(com.example.alphacinema.R.layout.custom_player_view, null) as androidx.media3.ui.PlayerView
+                inflatedView.apply {
                     player = exoPlayer
                     useController = true
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setBackgroundColor(android.graphics.Color.BLACK)
                     showController()
 
                     playerView = this
 
+                    // Force custom 10s icons (Media3 overrides them by default)
+                    val applyCustomIcons = {
+                        findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_rew)
+                            ?.setImageResource(com.example.alphacinema.R.drawable.ic_replay_10)
+                        findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_ffwd)
+                            ?.setImageResource(com.example.alphacinema.R.drawable.ic_forward_10)
+                    }
+                    applyCustomIcons()
+
                     setControllerVisibilityListener(
-                        PlayerView.ControllerVisibilityListener { visibility ->
-                            if (visibility == View.GONE) {
+                        androidx.media3.ui.PlayerView.ControllerVisibilityListener { visibility ->
+                            applyCustomIcons()
+                            if (visibility == android.view.View.GONE) {
                                 post {
                                     post {
                                         hideSystemBars(activity)
@@ -201,11 +228,14 @@ fun PlayerScreen(
                         }
                     )
 
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
+                    // Episode selector button
+                    val epBtn = findViewById<android.widget.ImageButton>(com.example.alphacinema.R.id.btn_episode_selector)
+                    if (movie.episodes.size > 1) {
+                        epBtn?.visibility = android.view.View.VISIBLE
+                        epBtn?.setOnClickListener { showEpisodeDialog = true }
+                    }
                 }
+                inflatedView
             },
             update = { view ->
                 view.player = exoPlayer
@@ -243,6 +273,66 @@ fun PlayerScreen(
                 contentDescription = "Quay lại",
                 tint = Color.White
             )
+        }
+
+        // Episode picker dialog overlay
+        if (showEpisodeDialog) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.15f))
+                    .clickable { showEpisodeDialog = false },
+                contentAlignment = Alignment.BottomEnd
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(end = 48.dp, bottom = 56.dp)
+                        .widthIn(max = 280.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1A2237).copy(alpha = 0.75f))
+                        .padding(16.dp)
+                        .clickable(enabled = false) {}
+                ) {
+                    Text(
+                        "Chọn tập (${movie.episodes.size} tập)",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.heightIn(max = 200.dp)
+                    ) {
+                        items(movie.episodes.size) { idx ->
+                            val ep = movie.episodes[idx]
+                            val isSelected = ep.id == episode?.id
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(
+                                        if (isSelected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.1f)
+                                    )
+                                    .clickable {
+                                        onSelectEpisode(ep)
+                                        showEpisodeDialog = false
+                                    }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    ep.name.replace("Tập ", "").replace("tập ", "").ifBlank { "${idx + 1}" },
+                                    color = if (isSelected) Color.Black else Color.White,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

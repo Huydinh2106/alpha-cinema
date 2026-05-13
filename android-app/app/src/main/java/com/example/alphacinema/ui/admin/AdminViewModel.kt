@@ -126,4 +126,112 @@ class AdminViewModel(
         addWords(originName)
         return keywords.toList()
     }
+
+    // --- CATEGORY MANAGEMENT ---
+    
+    private val _categories = MutableStateFlow<List<com.example.alphacinema.data.model.HomeCategory>>(emptyList())
+    val categories: StateFlow<List<com.example.alphacinema.data.model.HomeCategory>> = _categories
+
+    private val _categoryStatus = MutableStateFlow<String?>(null)
+    val categoryStatus: StateFlow<String?> = _categoryStatus
+
+    private val _categorySearchState = MutableStateFlow<AdminUiState>(AdminUiState.Idle)
+    val categorySearchState: StateFlow<AdminUiState> = _categorySearchState
+
+    fun searchMoviesForCategory(query: String) {
+        if (query.isBlank()) {
+            _categorySearchState.value = AdminUiState.Idle
+            return
+        }
+        viewModelScope.launch {
+            _categorySearchState.value = AdminUiState.Loading
+            try {
+                val response = apiService.searchMovies(query)
+                val items = response.data?.items ?: response.items ?: emptyList()
+                _categorySearchState.value = AdminUiState.Success(items)
+            } catch (e: Exception) {
+                _categorySearchState.value = AdminUiState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    fun clearCategorySearch() {
+        _categorySearchState.value = AdminUiState.Idle
+    }
+
+    fun addMovieToCategory(movieItem: MovieItem, onSuccess: (String) -> Unit) {
+        viewModelScope.launch {
+            _categoryStatus.value = "Đang tải dữ liệu phim ${movieItem.name}..."
+            try {
+                val detailResponse = apiService.getMovieDetail(movieItem.slug)
+                val m = detailResponse.movie ?: throw Exception("Không lấy được chi tiết phim")
+
+                val categories = m.category?.map { it.name } ?: emptyList()
+                val (ageRating, isKidsFriendly) = evaluateAgeRating(categories)
+                val keywords = generateKeywords(m.name, m.origin_name ?: "")
+
+                val firestoreMovie = FirestoreMovie(
+                    slug = m.slug,
+                    title = m.name,
+                    originName = m.origin_name ?: "",
+                    type = m.type ?: "single",
+                    status = m.status ?: "completed",
+                    posterUrl = m.getFullPosterUrl(),
+                    thumbUrl = m.thumb_url ?: "",
+                    year = m.year?.toLong() ?: 0L,
+                    content = m.content ?: "",
+                    categories = categories,
+                    countries = m.country?.map { it.name } ?: emptyList(),
+                    actors = m.actor ?: emptyList(),
+                    directors = m.director ?: emptyList(),
+                    searchKeywords = keywords,
+                    ageRating = ageRating,
+                    isKidsFriendly = isKidsFriendly,
+                    modifiedTime = Timestamp.now()
+                )
+
+                firestoreRepository.saveMovie(firestoreMovie)
+                _categoryStatus.value = null // clear status smoothly
+                onSuccess(m.slug)
+            } catch (e: Exception) {
+                _categoryStatus.value = "Lỗi khi thêm phim: ${e.message}"
+            }
+        }
+    }
+
+    fun fetchCategories() {
+        viewModelScope.launch {
+            _categories.value = firestoreRepository.getAllHomeCategories()
+        }
+    }
+
+    fun saveCategory(category: com.example.alphacinema.data.model.HomeCategory) {
+        viewModelScope.launch {
+            _categoryStatus.value = "Đang lưu danh mục..."
+            try {
+                firestoreRepository.saveHomeCategory(category)
+                _categoryStatus.value = "Lưu danh mục thành công!"
+                fetchCategories() // Refresh list
+            } catch (e: Exception) {
+                _categoryStatus.value = "Lỗi khi lưu: ${e.message}"
+            }
+        }
+    }
+
+    fun deleteCategory(categoryId: String) {
+        viewModelScope.launch {
+            _categoryStatus.value = "Đang xóa danh mục..."
+            try {
+                firestoreRepository.deleteHomeCategory(categoryId)
+                _categoryStatus.value = "Xóa danh mục thành công!"
+                fetchCategories() // Refresh list
+            } catch (e: Exception) {
+                _categoryStatus.value = "Lỗi khi xóa: ${e.message}"
+            }
+        }
+    }
+
+    fun clearCategoryStatus() {
+        _categoryStatus.value = null
+    }
 }
