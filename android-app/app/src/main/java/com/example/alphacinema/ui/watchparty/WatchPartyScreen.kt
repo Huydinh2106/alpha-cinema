@@ -1,14 +1,14 @@
 package com.example.alphacinema.ui.watchparty
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.view.View
 import android.view.ViewGroup
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
-import android.webkit.WebSettings
-import android.annotation.SuppressLint
-import android.webkit.WebView
-import android.webkit.WebViewClient
 
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -37,9 +38,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Share
@@ -58,6 +60,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,38 +72,28 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.alphacinema.data.model.WatchPartyChatMessage
 import com.example.alphacinema.data.model.WatchPartyMember
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
+import com.example.alphacinema.ui.player.findActivity
+import kotlinx.coroutines.delay
 
 
-// JS Bridge for host — only reports state changes (play/pause/seek)
-class WatchPartyJsBridge(
-    private val viewModel: WatchPartyViewModel,
-    private val getCurrentRoom: () -> com.example.alphacinema.data.model.WatchPartyRoom?
-) {
-    @JavascriptInterface
-    fun onPlay(timeSec: Double) {
-        viewModel.updatePlayback("playing", timeSec)
-    }
-
-    @JavascriptInterface
-    fun onPause(timeSec: Double) {
-        viewModel.updatePlayback("paused", timeSec)
-    }
-
-    @JavascriptInterface
-    fun onSeek(timeSec: Double) {
-        val state = getCurrentRoom()?.playbackState ?: "paused"
-        viewModel.updatePlayback(state, timeSec)
-    }
-}
-
+@OptIn(UnstableApi::class)
 @Composable
 fun WatchPartyScreen(
     videoUrl: String,
@@ -122,8 +115,14 @@ fun WatchPartyScreen(
     val isHost = viewModel.isHost
     val currentUid = viewModel.currentUid
 
-    // Track whether the WebView page has finished loading
-    var pageLoaded by remember { mutableStateOf(false) }
+    // Guest time display
+    var guestCurrentTimeMs by remember { mutableLongStateOf(0L) }
+    var guestDurationMs by remember { mutableLongStateOf(0L) }
+
+    // Fullscreen state
+    var isFullscreen by remember { mutableStateOf(false) }
+    var showEpisodeDialog by remember { mutableStateOf(false) }
+    val activity = context.findActivity()
 
     // Room dismissed → host left
     LaunchedEffect(roomDismissed) {
@@ -133,326 +132,303 @@ fun WatchPartyScreen(
         }
     }
 
-    // JS Bridge — created FIRST so it can be added to WebView during init
-    val jsBridge = remember(viewModel) {
-        WatchPartyJsBridge(viewModel) { room }
-    }
-
-    // WebView — addJavascriptInterface during creation (before any HTML loads)
-    @SuppressLint("JavascriptInterface")
-    val webView = remember {
-        WebView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            settings.loadWithOverviewMode = true
-            settings.useWideViewPort = true
-            settings.cacheMode = WebSettings.LOAD_DEFAULT
-            webChromeClient = WebChromeClient()
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
-                    pageLoaded = true
-                }
-            }
-            setBackgroundColor(android.graphics.Color.BLACK)
-            addJavascriptInterface(jsBridge, "AndroidBridge")
-        }
-    }
-
-    // Reset pageLoaded when video URL changes
-    LaunchedEffect(videoUrl) {
-        pageLoaded = false
+    // ExoPlayer
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context)
+            .setSeekBackIncrementMs(10_000)
+            .setSeekForwardIncrementMs(10_000)
+            .build()
     }
 
     // Load video
-    DisposableEffect(videoUrl) {
-        if (videoUrl.isNotBlank() && videoUrl.contains(".m3u8")) {
-            // Host: only event listeners, NO periodic reporting needed
-            val hostControls = if (isHost) """
-                video.addEventListener('play', function() {
-                    AndroidBridge.onPlay(video.currentTime);
-                });
-                video.addEventListener('pause', function() {
-                    AndroidBridge.onPause(video.currentTime);
-                });
-                video.addEventListener('seeked', function() {
-                    AndroidBridge.onSeek(video.currentTime);
-                });
-            """ else ""
-
-            // Guest: custom time overlay
-            val guestTimeOverlay = if (!isHost) """
-                <div id="timeOverlay"></div>
-                <style>
-                    #timeOverlay {
-                        position: fixed;
-                        bottom: 8px;
-                        left: 50%;
-                        transform: translateX(-50%);
-                        color: rgba(255,255,255,0.85);
-                        font-family: -apple-system, sans-serif;
-                        font-size: 13px;
-                        font-variant-numeric: tabular-nums;
-                        background: rgba(0,0,0,0.55);
-                        padding: 4px 14px;
-                        border-radius: 6px;
-                        pointer-events: none;
-                        z-index: 999;
-                        letter-spacing: 0.5px;
-                    }
-                </style>
-            """ else ""
-
-            // Guest: time display + Server Clock self-sync loop
-            val guestScript = if (!isHost) """
-                // Time display
-                var _ov = document.getElementById('timeOverlay');
-                function _fmt(s) {
-                    var h = Math.floor(s/3600);
-                    var m = Math.floor((s%3600)/60);
-                    var sec = Math.floor(s%60);
-                    if (h > 0) return h+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
-                    return m+':'+String(sec).padStart(2,'0');
-                }
-                video.addEventListener('timeupdate', function() {
-                    if (_ov && video.duration) {
-                        _ov.textContent = _fmt(video.currentTime) + ' / ' + _fmt(video.duration);
-                    }
-                });
-
-                // === Server Clock Sync ===
-                var _clockOffset = 0;
-                var _playStartedAt = 0;
-                var _baseTimeSec = 0;
-                var _syncActive = false;
-
-                // Called from Android when room state changes
-                function startServerSync(clockOffset, playStartedAt, baseTimeSec) {
-                    _clockOffset = clockOffset;
-                    _playStartedAt = playStartedAt;
-                    _baseTimeSec = baseTimeSec;
-                    _syncActive = true;
-                    // Immediately seek to correct position, then let loop fine-tune
-                    var serverNow = Date.now() + _clockOffset;
-                    var expectedPos = _baseTimeSec + (serverNow - _playStartedAt) / 1000.0;
-                    video.currentTime = expectedPos;
-                    video.playbackRate = 1.0;
-                    video.play();
-                }
-                function stopSync(pauseAtSec) {
-                    _syncActive = false;
-                    video.currentTime = pauseAtSec;
-                    video.pause();
-                    video.playbackRate = 1.0;
-                }
-
-                // Self-correction loop every 2 seconds
-                setInterval(function() {
-                    if (!_syncActive || _playStartedAt <= 0 || video.paused) return;
-                    var serverNow = Date.now() + _clockOffset;
-                    var expectedPos = _baseTimeSec + (serverNow - _playStartedAt) / 1000.0;
-                    var diff = expectedPos - video.currentTime;
-
-                    if (Math.abs(diff) > 5) {
-                        video.currentTime = expectedPos;
-                        video.playbackRate = 1.0;
-                        return;
-                    }
-                    if (Math.abs(diff) < 0.1) {
-                        video.playbackRate = 1.0;
-                        return;
-                    }
-                    if (diff > 0) {
-                        video.playbackRate = Math.min(1.05, 1.0 + diff * 0.02);
-                    } else {
-                        video.playbackRate = Math.max(0.95, 1.0 + diff * 0.02);
-                    }
-                }, 2000);
-            """ else ""
-
-            val html = """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                    <style>
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                        body { background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-                        video { width: 100%; height: 100%; object-fit: contain; background: #000; outline: none; }
-                    </style>
-                </head>
-                <body>
-                    <video id="video" ${if (isHost) "controls" else ""} autoplay playsinline></video>
-                    $guestTimeOverlay
-                    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-                    <script>
-                        var video = document.getElementById('video');
-                        var videoSrc = '${videoUrl}';
-                        if (Hls.isSupported()) {
-                            var hls = new Hls({
-                                maxBufferLength: 30,
-                                maxMaxBufferLength: 600,
-                                enableWorker: true,
-                                lowLatencyMode: true
-                            });
-                            hls.loadSource(videoSrc);
-                            hls.attachMedia(video);
-                            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                                video.play();
-                            });
-                        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                            video.src = videoSrc;
-                        }
-
-                        function seekTo(sec) {
-                            video.currentTime = sec;
-                            video.playbackRate = 1.0;
-                        }
-                        function playVideo() { video.play(); }
-                        function pauseVideo() { video.pause(); video.playbackRate = 1.0; }
-
-                        $guestScript
-                        $hostControls
-                    </script>
-                </body>
-                </html>
-            """.trimIndent()
-            webView.loadDataWithBaseURL("https://phimapi.com", html, "text/html", "utf-8", null)
-        }
-        onDispose {
-            webView.stopLoading()
-            webView.destroy()
+    LaunchedEffect(videoUrl) {
+        if (videoUrl.isNotBlank()) {
+            exoPlayer.setMediaItem(MediaItem.fromUri(videoUrl))
+            exoPlayer.prepare()
+            if (isHost) exoPlayer.playWhenReady = true
         }
     }
 
-    // Guest sync: pass server clock params to JS on state change
-    if (!isHost && room != null) {
-        LaunchedEffect(room?.playbackState, room?.playStartedAt, pageLoaded) {
-            val r = room ?: return@LaunchedEffect
-            if (!pageLoaded) return@LaunchedEffect
+    // Host: report play/pause/seek to Firebase
+    if (isHost) {
+        DisposableEffect(exoPlayer) {
+            var updating = false
+            val listener = object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (updating) return
+                    updating = true
+                    val t = exoPlayer.currentPosition / 1000.0
+                    if (isPlaying) viewModel.updatePlayback("playing", t)
+                    else if (exoPlayer.playbackState == Player.STATE_READY)
+                        viewModel.updatePlayback("paused", t)
+                    updating = false
+                }
+                override fun onPositionDiscontinuity(
+                    old: Player.PositionInfo, new: Player.PositionInfo, reason: Int
+                ) {
+                    if (updating || reason != Player.DISCONTINUITY_REASON_SEEK) return
+                    updating = true
+                    val t = new.positionMs / 1000.0
+                    val s = if (exoPlayer.isPlaying) "playing" else "paused"
+                    viewModel.updatePlayback(s, t)
+                    updating = false
+                }
+            }
+            exoPlayer.addListener(listener)
+            onDispose { exoPlayer.removeListener(listener) }
+        }
+    }
 
+    // Guest: Server Clock sync
+    if (!isHost) {
+        LaunchedEffect(room?.playbackState, room?.playStartedAt) {
+            val r = room ?: return@LaunchedEffect
             when (r.playbackState) {
                 "playing" -> {
-                    webView.evaluateJavascript(
-                        "startServerSync($serverTimeOffset, ${r.playStartedAt}, ${r.currentTimeSec});",
-                        null
-                    )
+                    val serverNow = System.currentTimeMillis() + serverTimeOffset
+                    val pos = r.currentTimeSec + (serverNow - r.playStartedAt) / 1000.0
+                    exoPlayer.seekTo((pos * 1000).toLong())
+                    exoPlayer.playWhenReady = true
+                    // Self-correction loop
+                    while (true) {
+                        delay(2000)
+                        val cr = room ?: break
+                        if (cr.playbackState != "playing") break
+                        val now = System.currentTimeMillis() + serverTimeOffset
+                        val exp = cr.currentTimeSec + (now - cr.playStartedAt) / 1000.0
+                        val act = exoPlayer.currentPosition / 1000.0
+                        val diff = exp - act
+                        when {
+                            kotlin.math.abs(diff) > 5.0 -> {
+                                exoPlayer.seekTo((exp * 1000).toLong())
+                                exoPlayer.playbackParameters = PlaybackParameters(1.0f)
+                            }
+                            kotlin.math.abs(diff) < 0.1 -> {
+                                exoPlayer.playbackParameters = PlaybackParameters(1.0f)
+                            }
+                            diff > 0 -> exoPlayer.playbackParameters = PlaybackParameters(
+                                (1.0f + diff.toFloat() * 0.02f).coerceAtMost(1.05f)
+                            )
+                            else -> exoPlayer.playbackParameters = PlaybackParameters(
+                                (1.0f + diff.toFloat() * 0.02f).coerceAtLeast(0.95f)
+                            )
+                        }
+                    }
                 }
                 "paused" -> {
-                    webView.evaluateJavascript(
-                        "stopSync(${r.currentTimeSec});",
-                        null
-                    )
+                    exoPlayer.playWhenReady = false
+                    exoPlayer.seekTo((r.currentTimeSec * 1000).toLong())
+                    exoPlayer.playbackParameters = PlaybackParameters(1.0f)
                 }
+            }
+        }
+        // Guest: update time display
+        LaunchedEffect(exoPlayer) {
+            while (true) {
+                guestCurrentTimeMs = exoPlayer.currentPosition
+                guestDurationMs = exoPlayer.duration.coerceAtLeast(0)
+                delay(500)
             }
         }
     }
 
-    // Layout — Column để chat chiếm hết phần dưới
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF070B16))
-    ) {
-        // Video player
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .background(Color.Black)
-        ) {
+    // Release player + restore orientation
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayer.release()
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            val window = activity?.window ?: return@onDispose
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            WindowInsetsControllerCompat(window, window.decorView)
+                .show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    // Fullscreen toggle
+    fun toggleFullscreen() {
+        isFullscreen = !isFullscreen
+        if (isFullscreen) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            val window = activity?.window ?: return
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            WindowInsetsControllerCompat(window, window.decorView).apply {
+                hide(WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            val window = activity?.window ?: return
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            WindowInsetsControllerCompat(window, window.decorView)
+                .show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    // Fullscreen mode
+    if (isFullscreen) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             AndroidView(
-                factory = { webView },
+                factory = { ctx ->
+                    (android.view.LayoutInflater.from(ctx).inflate(com.example.alphacinema.R.layout.custom_player_view, null) as androidx.media3.ui.PlayerView).apply {
+                        player = exoPlayer
+                        useController = isHost
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        setFullscreenButtonClickListener { toggleFullscreen() }
+
+                        // Force custom 10s icons
+                        val applyCustomIcons = {
+                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_rew)
+                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_replay_10)
+                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_ffwd)
+                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_forward_10)
+                        }
+                        applyCustomIcons()
+                        setControllerVisibilityListener(
+                            androidx.media3.ui.PlayerView.ControllerVisibilityListener { applyCustomIcons() }
+                        )
+
+                        // Episode selector button
+                        val epBtn = findViewById<android.widget.ImageButton>(com.example.alphacinema.R.id.btn_episode_selector)
+                        if (isHost && episodes.size > 1) {
+                            epBtn?.visibility = android.view.View.VISIBLE
+                            epBtn?.setOnClickListener { showEpisodeDialog = true }
+                        }
+                    }
+                },
+                update = { it.player = exoPlayer },
                 modifier = Modifier.fillMaxSize()
             )
-
-            // Gradient overlay for back button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(70.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.7f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-                    .align(Alignment.TopCenter)
-            )
-
-            // Back button
-            IconButton(
-                onClick = {
-                    viewModel.leaveRoom()
-                    onBack()
-                },
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(top = 8.dp, start = 12.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
-                    .align(Alignment.TopStart)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Rời phòng",
-                    tint = Color.White
-                )
-            }
-
-            // Room info badge
+            // Members overlay (top-right)
             if (room != null) {
                 Row(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .padding(top = 12.dp, end = 12.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .align(Alignment.TopEnd),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 8.dp).align(Alignment.TopEnd),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        Icons.Outlined.Groups,
-                        contentDescription = null,
-                        tint = Color(0xFFF6E29A),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "${members.size}/5",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Icon(Icons.Outlined.Groups, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(16.dp))
+                    Text("${members.size}/5", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
-
-            // Guest overlay hint
             if (!isHost) {
-                Text(
-                    text = "Chủ phòng đang điều khiển",
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.labelSmall,
+                val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
+                Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
+            }
+
+            // Episode picker dialog overlay
+            if (showEpisodeDialog) {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.15f))
+                        .clickable { showEpisodeDialog = false },
+                    contentAlignment = Alignment.BottomEnd
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(end = 48.dp, bottom = 56.dp)
+                            .widthIn(max = 280.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF1A2237).copy(alpha = 0.75f))
+                            .padding(16.dp)
+                            .clickable(enabled = false) {}
+                    ) {
+                        Text(
+                            "Chọn tập (${episodes.size} tập)",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                            columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(5),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.heightIn(max = 200.dp)
+                        ) {
+                            items(episodes.size) { idx ->
+                                val ep = episodes[idx]
+                                val isSelected = ep.id == currentEpisodeId
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (isSelected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.1f)
+                                        )
+                                        .clickable {
+                                            viewModel.changeEpisode(ep.id, ep.name)
+                                            showEpisodeDialog = false
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        ep.name.replace("Tập ", "").replace("tập ", "").ifBlank { "${idx + 1}" },
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    // Portrait mode
+    Column(
+        modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color(0xFF070B16))
+    ) {
+        // Video player with built-in fullscreen button
+        Box(
+            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    (android.view.LayoutInflater.from(ctx).inflate(com.example.alphacinema.R.layout.custom_player_view, null) as androidx.media3.ui.PlayerView).apply {
+                        player = exoPlayer
+                        useController = isHost
+                        setFullscreenButtonClickListener { toggleFullscreen() }
+
+                        // Force custom 10s icons (Media3 overrides them by default)
+                        val applyCustomIcons = {
+                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_rew)
+                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_replay_10)
+                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_ffwd)
+                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_forward_10)
+                        }
+                        applyCustomIcons()
+                        setControllerVisibilityListener(
+                            androidx.media3.ui.PlayerView.ControllerVisibilityListener { applyCustomIcons() }
+                        )
+                    }
+                },
+                update = { it.player = exoPlayer },
+                modifier = Modifier.fillMaxSize()
+            )
+            // Guest time
+            if (!isHost) {
+                val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
+                Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
+            }
+            // Back button
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .padding(8.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .align(Alignment.TopStart)
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Quay lại", tint = Color.White)
             }
         }
 
         // Room info + share
+        var showInviteDialog by remember { mutableStateOf(false) }
         if (room != null) {
             val hasMovie = room!!.movieSlug.isNotBlank()
             RoomInfoBar(
@@ -464,19 +440,85 @@ fun WatchPartyScreen(
                     clipboardManager.setText(AnnotatedString(room!!.roomId))
                     android.widget.Toast.makeText(context, "Đã sao chép mã phòng", android.widget.Toast.LENGTH_SHORT).show()
                 },
-                onShare = {
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(
-                            Intent.EXTRA_TEXT,
-                            if (hasMovie) "Xem phim \"${room!!.movieTitle}\" cùng tôi trên AlphaCinema! Mã phòng: ${room!!.roomId}"
-                            else "Xem phim cùng tôi trên AlphaCinema! Mã phòng: ${room!!.roomId}"
-                        )
-                        type = "text/plain"
-                    }
-                    context.startActivity(Intent.createChooser(sendIntent, "Mời bạn bè xem chung"))
-                },
+                onShare = { showInviteDialog = true },
                 onChangeMovie = onChangeMovieClick
+            )
+
+            // Invite popup
+            if (showInviteDialog) {
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { showInviteDialog = false },
+                    containerColor = Color(0xFF1A2237),
+                    title = {
+                        Text("Mời bạn bè", color = Color.White, fontWeight = FontWeight.Bold)
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Option 1: Copy room code
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.08f))
+                                    .clickable {
+                                        clipboardManager.setText(AnnotatedString(room!!.roomId))
+                                        android.widget.Toast.makeText(context, "Đã sao chép mã phòng: ${room!!.roomId}", android.widget.Toast.LENGTH_SHORT).show()
+                                        showInviteDialog = false
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Outlined.ContentCopy, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(22.dp))
+                                Column {
+                                    Text("Sao chép mã phòng", color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                    Text(room!!.roomId, color = Color(0xFFF6E29A), style = MaterialTheme.typography.labelMedium, letterSpacing = 2.sp)
+                                }
+                            }
+                            // Option 2: Share deep link
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.White.copy(alpha = 0.08f))
+                                    .clickable {
+                                        val deepLink = "alphacinema://watchparty/${room!!.roomId}"
+                                        val shareText = if (hasMovie) {
+                                            "Xem phim \"${room!!.movieTitle}\" cùng tôi trên AlphaCinema!\n$deepLink"
+                                        } else {
+                                            "Xem phim cùng tôi trên AlphaCinema!\n$deepLink"
+                                        }
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, shareText)
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Chia sẻ link phòng"))
+                                        showInviteDialog = false
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Outlined.Share, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(22.dp))
+                                Column {
+                                    Text("Gửi link mời", color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                    Text("Bạn bè bấm link tự vào phòng", color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {}
+                )
+            }
+        }
+
+        // Episode selector (host only, compact)
+        if (isHost && episodes.size > 1) {
+            EpisodeSelector(
+                episodes = episodes,
+                currentEpisodeId = currentEpisodeId,
+                onSelectEpisode = { ep -> viewModel.changeEpisode(ep.id, ep.name) }
             )
         }
 
@@ -485,18 +527,7 @@ fun WatchPartyScreen(
             MembersList(members = members, hostId = room?.hostId ?: "")
         }
 
-        // Episode selector (host only, khi có nhiều tập)
-        if (isHost && episodes.size > 1) {
-            EpisodeSelector(
-                episodes = episodes,
-                currentEpisodeId = currentEpisodeId,
-                onSelectEpisode = { ep ->
-                    viewModel.changeEpisode(ep.id, ep.name)
-                }
-            )
-        }
-
-        // Chat — chiếm hết phần còn lại ở dưới cùng
+        // Chat
         ChatSection(
             messages = chatMessages,
             currentUid = currentUid ?: "",
@@ -505,6 +536,7 @@ fun WatchPartyScreen(
         )
     }
 }
+
 
 @Composable
 private fun RoomInfoBar(
@@ -519,7 +551,8 @@ private fun RoomInfoBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 24.dp)
+            .padding(top = 16.dp)
     ) {
         Text(
             text = movieTitle,
@@ -529,41 +562,6 @@ private fun RoomInfoBar(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "Mã phòng:",
-                color = Color.White.copy(alpha = 0.5f),
-                style = MaterialTheme.typography.labelMedium
-            )
-            Text(
-                text = roomId,
-                color = Color(0xFFF6E29A),
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium,
-                letterSpacing = 3.sp
-            )
-            Icon(
-                Icons.Outlined.ContentCopy,
-                contentDescription = "Sao chép",
-                tint = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier
-                    .size(18.dp)
-                    .clickable { onCopyId() }
-            )
-        }
-
-        if (isHost) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Bạn là chủ phòng — chỉ bạn điều khiển video",
-                color = Color(0xFFF6E29A).copy(alpha = 0.7f),
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -572,7 +570,7 @@ private fun RoomInfoBar(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Share button
+            // Invite button
             Row(
                 modifier = Modifier
                     .weight(1f)
@@ -585,7 +583,7 @@ private fun RoomInfoBar(
             ) {
                 Icon(
                     Icons.Outlined.Share,
-                    contentDescription = "Chia sẻ",
+                    contentDescription = "Mời bạn bè",
                     tint = Color(0xFFF6E29A),
                     modifier = Modifier.size(18.dp)
                 )
@@ -640,6 +638,7 @@ private fun MembersList(members: List<WatchPartyMember>, hostId: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
+            .padding(top = 16.dp)
     ) {
         Text(
             text = "Thành viên (${members.size}/5)",
@@ -705,7 +704,7 @@ private fun EpisodeSelector(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
-            .padding(top = 12.dp)
+            .padding(top = 16.dp)
     ) {
         Text(
             text = "Chọn tập (${episodes.size} tập)",
