@@ -140,6 +140,8 @@ fun MainContent(
 ) {
     val navController = rememberNavController()
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
+    val scope = rememberCoroutineScope()
+    val firestoreRepo = remember { com.example.alphacinema.data.repository.FirestoreRepository() }
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val movieDetailViewModel: MovieDetailViewModel = viewModel()
@@ -548,6 +550,12 @@ fun MainContent(
                 PaymentScreen(
                     onBack = { navController.popBackStack() },
                     onContinuePayment = { planName, paymentMethod ->
+                        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        if (user != null) {
+                            scope.launch {
+                                firestoreRepo.updateUserSubscription(user.uid, planName.lowercase())
+                            }
+                        }
                         demoCurrentPlan = planName.lowercase()
                         demoMembershipExpiredDate = "30/06/2026"
                         showToast("Đã nâng cấp gói $planName qua $paymentMethod")
