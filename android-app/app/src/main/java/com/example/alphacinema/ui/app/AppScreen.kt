@@ -222,6 +222,24 @@ fun MainContent(
         navController.navigate(WatchPartyNavRoute(roomId = roomId))
     }
 
+    // Handle deep link: alphacinema://watchparty/{roomId}
+    val deepLinkHandled = remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!deepLinkHandled.value) {
+            val activity = (context as? android.app.Activity)
+            val data = activity?.intent?.data
+            if (data != null && data.scheme == "alphacinema" && data.host == "watchparty") {
+                val roomId = data.pathSegments?.firstOrNull()
+                if (!roomId.isNullOrBlank()) {
+                    deepLinkHandled.value = true
+                    watchPartyViewModel.joinRoom(roomId) {
+                        openWatchParty(roomId)
+                    }
+                }
+            }
+        }
+    }
+
     // Theo dõi current route để hiện/ẩn bottom bar
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val isOnMainRoute = navBackStackEntry?.destination?.hasRoute<MainRoute>() == true

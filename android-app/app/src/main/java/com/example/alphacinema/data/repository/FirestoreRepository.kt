@@ -436,4 +436,73 @@ class FirestoreRepository {
             emptyList()
         }
     }
+    suspend fun getCategoryMovies(categoryId: String, isKidsMode: Boolean, limit: Int = 20): List<com.example.alphacinema.data.model.FirestoreMovie> {
+        // ... (unchanged previous logic)
+        return try {
+            val categorySnapshot = db.collection("home_categories").document(categoryId).get().await()
+            if (!categorySnapshot.exists()) return emptyList()
+
+            val category = categorySnapshot.toObject(com.example.alphacinema.data.model.HomeCategory::class.java)
+            val slugs = category?.movieSlugs ?: emptyList()
+            if (slugs.isEmpty()) return emptyList()
+
+            val chunks = slugs.chunked(30)
+            val resultMovies = mutableListOf<com.example.alphacinema.data.model.FirestoreMovie>()
+
+            for (chunk in chunks) {
+                var query: Query = db.collection("movies").whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
+                if (isKidsMode) {
+                    query = query.whereEqualTo("isKidsFriendly", true)
+                }
+                
+                val snapshot = query.get().await()
+                val moviesInChunk = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val m = doc.toObject(com.example.alphacinema.data.model.FirestoreMovie::class.java)
+                        m?.apply { slug = doc.id }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                resultMovies.addAll(moviesInChunk)
+                if (resultMovies.size >= limit) break
+            }
+
+            val sortedResult = mutableListOf<com.example.alphacinema.data.model.FirestoreMovie>()
+            for (slug in slugs) {
+                val foundMovie = resultMovies.find { it.slug == slug }
+                if (foundMovie != null) {
+                    sortedResult.add(foundMovie)
+                }
+                if (sortedResult.size >= limit) break
+            }
+
+            sortedResult
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getCategoryMovies failed for categoryId=$categoryId", e)
+            emptyList()
+        }
+    }
+
+    // --- ADMIN CATEGORY MANAGEMENT ---
+    
+    suspend fun getAllHomeCategories(): List<com.example.alphacinema.data.model.HomeCategory> {
+        return try {
+            val snapshot = db.collection("home_categories").get().await()
+            snapshot.documents.mapNotNull { it.toObject(com.example.alphacinema.data.model.HomeCategory::class.java) }
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "getAllHomeCategories failed", e)
+            emptyList()
+        }
+    }
+
+    suspend fun saveHomeCategory(category: com.example.alphacinema.data.model.HomeCategory) {
+        if (category.id.isBlank()) return
+        db.collection("home_categories").document(category.id).set(category).await()
+    }
+
+    suspend fun deleteHomeCategory(categoryId: String) {
+        if (categoryId.isBlank()) return
+        db.collection("home_categories").document(categoryId).delete().await()
+    }
 }

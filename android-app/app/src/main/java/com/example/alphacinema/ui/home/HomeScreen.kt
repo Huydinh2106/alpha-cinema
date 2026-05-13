@@ -6,7 +6,6 @@ package com.example.alphacinema.ui.home
     import androidx.compose.foundation.border
     import androidx.compose.foundation.clickable
     import androidx.compose.foundation.interaction.MutableInteractionSource
-    import androidx.compose.foundation.interaction.collectIsPressedAsState
     import androidx.compose.foundation.combinedClickable
     import androidx.compose.foundation.lazy.LazyRow
     import androidx.compose.foundation.lazy.items
@@ -39,7 +38,6 @@ package com.example.alphacinema.ui.home
     import androidx.compose.runtime.*
     import androidx.lifecycle.viewmodel.compose.viewModel
     import com.example.alphacinema.R
-    import com.example.alphacinema.data.model.MovieItem
     import com.example.alphacinema.ui.app.ScreenType
     import com.example.alphacinema.ui.components.GradientPlayButton
     import com.example.alphacinema.ui.account.FilterKind
@@ -50,7 +48,6 @@ package com.example.alphacinema.ui.home
     import androidx.compose.ui.graphics.graphicsLayer
     import androidx.compose.ui.graphics.Brush
     import androidx.compose.ui.graphics.Color
-    import androidx.compose.ui.graphics.lerp
     import androidx.compose.ui.layout.ContentScale
     import androidx.compose.ui.text.font.FontWeight
     import androidx.compose.ui.text.style.TextAlign
@@ -122,16 +119,25 @@ package com.example.alphacinema.ui.home
         val heroItems by viewModel.heroMovies.collectAsState()
         val phimBoMoi by viewModel.phimBoMoi.collectAsState()
         val phimLeHot by viewModel.phimLeHot.collectAsState()
-        val phimHanhDong by viewModel.phimHanhDong.collectAsState()
-        
-        val pTrungQuoc by viewModel.phimTrungQuoc.collectAsState()
-        val pAuMy by viewModel.phimAuMy.collectAsState()
-        val pHanQuoc by viewModel.phimHanQuoc.collectAsState()
-        val pDienAnh by viewModel.phimDienAnh.collectAsState()
-        val pAnime by viewModel.animeMoi.collectAsState()
+        val normalHanhDong by viewModel.normalHanhDong.collectAsState()
+        val normalTinhCam by viewModel.normalTinhCam.collectAsState()
+        val normalAuMy by viewModel.normalAuMy.collectAsState()
+        val normalHinhSu by viewModel.normalHinhSu.collectAsState()
+        val normalVienTuong by viewModel.normalVienTuong.collectAsState()
+        val normalHaiHuoc by viewModel.normalHaiHuoc.collectAsState()
+        val normalKinhDi by viewModel.normalKinhDi.collectAsState()
+        val normalCoTrang by viewModel.normalCoTrang.collectAsState()
 
         val selectedChip by viewModel.selectedChip.collectAsState()
         val heroDescriptions by viewModel.heroDescriptions.collectAsState()
+        val isKidsMode by viewModel.isKidsMode.collectAsState()
+
+        val kidsHoatHinh by viewModel.kidsHoatHinh.collectAsState()
+        val kidsAnime by viewModel.kidsAnime.collectAsState()
+        val kidsGiaDinh by viewModel.kidsGiaDinh.collectAsState()
+        val kidsPhieuLuu by viewModel.kidsPhieuLuu.collectAsState()
+        val kidsHaiHuoc by viewModel.kidsHaiHuoc.collectAsState()
+        val kidsKhoaHoc by viewModel.kidsKhoaHoc.collectAsState()
 
         val movies = remember(heroItems, heroDescriptions) {
             heroItems.map {
@@ -142,8 +148,13 @@ package com.example.alphacinema.ui.home
                     rating = it.getRating(),
                     age = it.ageRating ?: "",
                     year = it.year?.toString() ?: "",
-                    season = "",
-                    episode = it.episode_current ?: "",
+                    season = it.tmdb?.season?.let { s -> if (s > 0) "Season $s" else "" } ?: "",
+                    episode = it.episode_current
+                        ?: when (it.tmdb?.type) {
+                            "tv" -> "Phim bộ"
+                            "movie" -> "Phim lẻ"
+                            else -> ""
+                        },
                     posterUrl = it.getFullPosterUrl(),
                     slug = it.slug
                 )
@@ -154,7 +165,12 @@ package com.example.alphacinema.ui.home
             }
         }
 
-        val recommendationGroups = remember(phimBoMoi, phimLeHot, phimHanhDong, pTrungQuoc, pAuMy, pHanQuoc, pDienAnh, pAnime, selectedChip, isLoading) {
+        val recommendationGroups = remember(
+            phimBoMoi, phimLeHot, 
+            normalHanhDong, normalTinhCam, normalAuMy, normalHinhSu, normalVienTuong, normalHaiHuoc, normalKinhDi, normalCoTrang,
+            kidsHoatHinh, kidsAnime, kidsGiaDinh, kidsPhieuLuu, kidsHaiHuoc, kidsKhoaHoc,
+            selectedChip, isLoading, isKidsMode
+        ) {
             val allGroups = mutableListOf<RecommendGroupUi>()
 
             fun mapToUi(list: List<com.example.alphacinema.data.model.MovieItem>) = list.map { 
@@ -174,35 +190,63 @@ package com.example.alphacinema.ui.home
                 ) 
             }.ifEmpty { if (isLoading) List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } else emptyList() }
 
-            val boMoiList = mapToUi(phimBoMoi)
-            val leHotList = mapToUi(phimLeHot)
-            val hanhDongList = mapToUi(phimHanhDong)
-            
-            val tqList = mapToUi(pTrungQuoc)
-            val amList = mapToUi(pAuMy)
-            val hqList = mapToUi(pHanQuoc)
-            val dienAnhList = mapToUi(pDienAnh)
-            val animeList = mapToUi(pAnime)
-
             fun addGroup(title: String, mappedList: List<RecommendMovieUi>) {
                 if (mappedList.isNotEmpty()) {
                     allGroups.add(RecommendGroupUi(title, mappedList))
                 }
             }
 
-            if (selectedChip == "Đề xuất" || selectedChip == "Phim bộ") {
-                addGroup("Phim bộ mới tải lên", boMoiList)
-                addGroup("Phim Hàn Quốc mới", hqList)
-                addGroup("Phim Trung Quốc mới", tqList)
-                addGroup("Siêu phẩm Âu Mỹ", amList)
-            }
-            if (selectedChip == "Đề xuất" || selectedChip == "Phim lẻ") {
-                addGroup("Phim lẻ nổi bật", leHotList)
-                addGroup("Phim điện ảnh mới cóng", dienAnhList)
-            }
-            if (selectedChip == "Đề xuất" || selectedChip == "Thể loại") {
-                addGroup("Kho tàng Anime mới nhất", animeList)
-                addGroup("Hoạt hình 3D", hanhDongList)
+            if (isKidsMode) {
+                val hoatHinhList = mapToUi(kidsHoatHinh)
+                val animeList = mapToUi(kidsAnime)
+                val giaDinhList = mapToUi(kidsGiaDinh)
+                val phieuLuuList = mapToUi(kidsPhieuLuu)
+                val haiHuocList = mapToUi(kidsHaiHuoc)
+                val khoaHocList = mapToUi(kidsKhoaHoc)
+
+                if (selectedChip == "Đề xuất" || selectedChip == "Hoạt hình") {
+                    addGroup("Thế giới Hoạt Hình", hoatHinhList)
+                    addGroup("Anime dễ thương", animeList)
+                }
+                if (selectedChip == "Đề xuất" || selectedChip == "Gia đình") {
+                    addGroup("Phim Gia Đình ấm áp", giaDinhList)
+                    addGroup("Phim Hài Hước vui nhộn", haiHuocList)
+                }
+                if (selectedChip == "Đề xuất" || selectedChip == "Phiêu lưu") {
+                    addGroup("Khám phá & Phiêu lưu", phieuLuuList)
+                    addGroup("Khoa học & Bí ẩn", khoaHocList)
+                }
+            } else {
+                val boMoiList = mapToUi(phimBoMoi)
+                val leHotList = mapToUi(phimLeHot)
+                
+                val hanhDongList = mapToUi(normalHanhDong)
+                val tinhCamList = mapToUi(normalTinhCam)
+                val auMyList = mapToUi(normalAuMy)
+                val hinhSuList = mapToUi(normalHinhSu)
+                val vienTuongList = mapToUi(normalVienTuong)
+                val haiHuocList = mapToUi(normalHaiHuoc)
+                val kinhDiList = mapToUi(normalKinhDi)
+                val coTrangList = mapToUi(normalCoTrang)
+
+                if (selectedChip == "Đề xuất" || selectedChip == "Phim bộ") {
+                    addGroup("Phim bộ đang thịnh hành", boMoiList)
+                    addGroup("Cổ Trang & Tiên Hiệp Đặc Sắc", coTrangList)
+                }
+                if (selectedChip == "Đề xuất" || selectedChip == "Phim lẻ") {
+                    addGroup("Phim lẻ nổi bật", leHotList)
+                    addGroup("Kinh Dị Lạnh Sống Lưng", kinhDiList)
+                }
+                if (selectedChip == "Đề xuất" || selectedChip == "Thể loại") {
+                    addGroup("Kỳ Án & Phá Án Đỉnh Cao", hinhSuList)
+                    addGroup("Khoa Học & Viễn Tưởng Đột Phá", vienTuongList)
+                    addGroup("Hài Hước Cười Ra Nước Mắt", haiHuocList)
+                }
+                if (selectedChip == "Đề xuất") {
+                    addGroup("Hành Động Khai Mở Nhãn Quan", hanhDongList)
+                    addGroup("Tình Cảm Ngọt Ngào & Lãng Mạn", tinhCamList)
+                    addGroup("Siêu Phẩm Điện Ảnh Âu Mỹ", auMyList)
+                }
             }
             allGroups
         }
@@ -230,19 +274,17 @@ package com.example.alphacinema.ui.home
 
         var previewMovie by remember { mutableStateOf<RecommendMovieUi?>(null) }
 
+        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val topPad = statusBarHeight + 80.dp
+        val bottomPad = navBarHeight + 96.dp
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF070B16))
         ) {
             BackgroundLayer(posterUrl = movies[currentMovieIndex].posterUrl)
-
-        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        // header height is approx 80dp (logo+title+subtitle+padding) + status bar
-        val topPad = statusBarHeight + 80.dp
-        // bottom bar (GlassBottomBar) is ~72dp pill + 12dp vertical padding each side + nav bar
-        val bottomPad = navBarHeight + 96.dp
 
             Column(
                 modifier = Modifier
@@ -254,6 +296,7 @@ package com.example.alphacinema.ui.home
                 Box(modifier = Modifier.padding(horizontal = 12.dp)) {
                     CategoryChips(
                         selectedChip = selectedChip,
+                        isKidsMode = isKidsMode,
                         onChipSelected = { viewModel.setCategory(it) }
                     )
                 }
@@ -517,9 +560,10 @@ package com.example.alphacinema.ui.home
     @Composable
     fun CategoryChips(
         selectedChip: String,
+        isKidsMode: Boolean,
         onChipSelected: (String) -> Unit
     ) {
-        val categories = listOf("Đề xuất", "Phim bộ", "Phim lẻ", "Thể loại")
+        val categories = if (isKidsMode) listOf("Đề xuất", "Hoạt hình", "Gia đình", "Phiêu lưu") else listOf("Đề xuất", "Phim bộ", "Phim lẻ", "Thể loại")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -747,12 +791,17 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
 
     @Composable
     fun FlowMetaRow(movie: MovieUi) {
-        val metaItems = listOf(
-            "IMDb  ${movie.rating}" to true,
-            movie.age to false,
-            movie.year to false,
-            movie.season to false,
-            movie.episode to false
+        val metaItems = mutableListOf<Pair<String, Boolean>>()
+        if (movie.rating != "N/A" && movie.rating.isNotBlank()) {
+            metaItems.add("TMDB  ${movie.rating}" to true)
+        }
+        metaItems.addAll(
+            listOf(
+                movie.age to false,
+                movie.year to false,
+                movie.season to false,
+                movie.episode to false
+            )
         )
 
         Row(
@@ -827,9 +876,14 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
     ) {
         // Map group title → (FilterKind, slug) for the "See more" action
         val (seeMoreKind, seeMoreSlug) = when (group.title) {
-            "Phim bộ mới"    -> FilterKind.MOVIE_TYPE to "series"
-            "Phim lẻ hot"   -> FilterKind.MOVIE_TYPE to "single"
-            "Phim hoạt hình" -> FilterKind.MOVIE_TYPE to "hoathinh"
+            "Phim bộ mới tải lên"    -> FilterKind.CUSTOM_CATEGORY to "phim-bo-moi"
+            "Phim lẻ nổi bật"   -> FilterKind.CUSTOM_CATEGORY to "phim-le-hot"
+            "Hoạt hình 3D" -> FilterKind.CUSTOM_CATEGORY to "phim-hoat-hinh"
+            "Phim Hàn Quốc mới" -> FilterKind.CUSTOM_CATEGORY to "phim-han-quoc"
+            "Phim Trung Quốc mới" -> FilterKind.CUSTOM_CATEGORY to "phim-trung-quoc"
+            "Siêu phẩm Âu Mỹ" -> FilterKind.CUSTOM_CATEGORY to "phim-au-my"
+            "Phim điện ảnh mới cóng" -> FilterKind.CUSTOM_CATEGORY to "phim-chieu-rap"
+            "Kho tàng Anime mới nhất" -> FilterKind.CUSTOM_CATEGORY to "anime-moi"
             else             -> FilterKind.GENRE      to group.title.lowercase().replace(" ", "-")
         }
         Column {

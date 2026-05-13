@@ -22,6 +22,9 @@ class HomeViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _isKidsMode = MutableStateFlow(false)
+    val isKidsMode: StateFlow<Boolean> = _isKidsMode.asStateFlow()
+
     // Movie sections
     private val _heroMovies = MutableStateFlow<List<MovieItem>>(emptyList())
     val heroMovies: StateFlow<List<MovieItem>> = _heroMovies.asStateFlow()
@@ -36,23 +39,48 @@ class HomeViewModel : ViewModel() {
     private val _phimLeHot = MutableStateFlow<List<MovieItem>>(emptyList())
     val phimLeHot: StateFlow<List<MovieItem>> = _phimLeHot.asStateFlow()
 
-    private val _phimHanhDong = MutableStateFlow<List<MovieItem>>(emptyList())
-    val phimHanhDong: StateFlow<List<MovieItem>> = _phimHanhDong.asStateFlow()
+    private val _normalHanhDong = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalHanhDong: StateFlow<List<MovieItem>> = _normalHanhDong.asStateFlow()
 
-    private val _phimTrungQuoc = MutableStateFlow<List<MovieItem>>(emptyList())
-    val phimTrungQuoc: StateFlow<List<MovieItem>> = _phimTrungQuoc.asStateFlow()
+    private val _normalTinhCam = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalTinhCam: StateFlow<List<MovieItem>> = _normalTinhCam.asStateFlow()
 
-    private val _phimAuMy = MutableStateFlow<List<MovieItem>>(emptyList())
-    val phimAuMy: StateFlow<List<MovieItem>> = _phimAuMy.asStateFlow()
+    private val _normalAuMy = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalAuMy: StateFlow<List<MovieItem>> = _normalAuMy.asStateFlow()
 
-    private val _phimHanQuoc = MutableStateFlow<List<MovieItem>>(emptyList())
-    val phimHanQuoc: StateFlow<List<MovieItem>> = _phimHanQuoc.asStateFlow()
+    private val _normalHinhSu = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalHinhSu: StateFlow<List<MovieItem>> = _normalHinhSu.asStateFlow()
 
-    private val _phimDienAnh = MutableStateFlow<List<MovieItem>>(emptyList())
-    val phimDienAnh: StateFlow<List<MovieItem>> = _phimDienAnh.asStateFlow()
+    private val _normalVienTuong = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalVienTuong: StateFlow<List<MovieItem>> = _normalVienTuong.asStateFlow()
 
-    private val _animeMoi = MutableStateFlow<List<MovieItem>>(emptyList())
-    val animeMoi: StateFlow<List<MovieItem>> = _animeMoi.asStateFlow()
+    private val _normalHaiHuoc = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalHaiHuoc: StateFlow<List<MovieItem>> = _normalHaiHuoc.asStateFlow()
+
+    private val _normalKinhDi = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalKinhDi: StateFlow<List<MovieItem>> = _normalKinhDi.asStateFlow()
+
+    private val _normalCoTrang = MutableStateFlow<List<MovieItem>>(emptyList())
+    val normalCoTrang: StateFlow<List<MovieItem>> = _normalCoTrang.asStateFlow()
+
+    // Kids sections
+    private val _kidsHoatHinh = MutableStateFlow<List<MovieItem>>(emptyList())
+    val kidsHoatHinh: StateFlow<List<MovieItem>> = _kidsHoatHinh.asStateFlow()
+
+    private val _kidsAnime = MutableStateFlow<List<MovieItem>>(emptyList())
+    val kidsAnime: StateFlow<List<MovieItem>> = _kidsAnime.asStateFlow()
+
+    private val _kidsGiaDinh = MutableStateFlow<List<MovieItem>>(emptyList())
+    val kidsGiaDinh: StateFlow<List<MovieItem>> = _kidsGiaDinh.asStateFlow()
+
+    private val _kidsPhieuLuu = MutableStateFlow<List<MovieItem>>(emptyList())
+    val kidsPhieuLuu: StateFlow<List<MovieItem>> = _kidsPhieuLuu.asStateFlow()
+
+    private val _kidsHaiHuoc = MutableStateFlow<List<MovieItem>>(emptyList())
+    val kidsHaiHuoc: StateFlow<List<MovieItem>> = _kidsHaiHuoc.asStateFlow()
+
+    private val _kidsKhoaHoc = MutableStateFlow<List<MovieItem>>(emptyList())
+    val kidsKhoaHoc: StateFlow<List<MovieItem>> = _kidsKhoaHoc.asStateFlow()
 
     // Active Category Chip
     private val _selectedChip = MutableStateFlow("Đề xuất")
@@ -60,7 +88,8 @@ class HomeViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            com.example.alphacinema.data.local.SettingsManager.getInstance().isKidsModeEnabled.collect {
+            com.example.alphacinema.data.local.SettingsManager.getInstance().isKidsModeEnabled.collect { kidsMode ->
+                _isKidsMode.value = kidsMode
                 loadData()
             }
         }
@@ -110,42 +139,50 @@ class HomeViewModel : ViewModel() {
                 // Collect slugs used so far for dedup
                 val heroSlugs = latest.take(10).map { it.slug }.toSet()
 
-                // Load remaining sections in parallel
+                // Load remaining sections in parallel using curated categories
                 val safeRun = { block: suspend () -> List<MovieItem> -> async { try { block() } catch(e:Exception){ emptyList() } } }
+                val heroSet = heroSlugs.toSet()
+                fun dedup(list: List<MovieItem>): List<MovieItem> = list.filter { it.slug !in heroSet }
                 
-                val phimBoDeferred = safeRun { repository.getMoviesByType("series", limit = 8, excludeSlugs = heroSlugs) }
-                val phimLeDeferred = safeRun { repository.getMoviesByType("single", limit = 8, excludeSlugs = heroSlugs) }
-                val hoatHinhDeferred = safeRun { repository.getMoviesByType("hoathinh", limit = 8, excludeSlugs = heroSlugs) }
+                if (_isKidsMode.value) {
+                    val hoatHinhDef = safeRun { repository.getMoviesByHomeCategory("kids-hoat-hinh", limit = 15) }
+                    val animeDef = safeRun { repository.getMoviesByHomeCategory("kids-anime", limit = 15) }
+                    val giaDinhDef = safeRun { repository.getMoviesByHomeCategory("kids-gia-dinh", limit = 15) }
+                    val phieuLuuDef = safeRun { repository.getMoviesByHomeCategory("kids-phieu-luu", limit = 15) }
+                    val haiHuocDef = safeRun { repository.getMoviesByHomeCategory("kids-hai-huoc", limit = 15) }
+                    val khoaHocDef = safeRun { repository.getMoviesByHomeCategory("kids-khoa-hoc", limit = 15) }
 
-                val hqDeferred = safeRun { repository.getMoviesByCountry("Hàn Quốc", limit = 8) }
-                val tqDeferred = safeRun { repository.getMoviesByCountry("Trung Quốc", limit = 8) }
-                val amDeferred = safeRun { repository.getMoviesByCountry("Mỹ", limit = 8) }
-                val dienAnhDeferred = safeRun { repository.getMoviesByType("single", limit = 15) } // Fetch a bit more to filter single/theatrical better
-                val animeDeferred = safeRun { repository.getMoviesByType("hoathinh", limit = 15) }
+                    _kidsHoatHinh.value = dedup(hoatHinhDef.await())
+                    _kidsAnime.value = dedup(animeDef.await())
+                    _kidsGiaDinh.value = dedup(giaDinhDef.await())
+                    _kidsPhieuLuu.value = dedup(phieuLuuDef.await())
+                    _kidsHaiHuoc.value = dedup(haiHuocDef.await())
+                    _kidsKhoaHoc.value = dedup(khoaHocDef.await())
+                } else {
+                    val phimBoDeferred = safeRun { repository.getMoviesByHomeCategory("phim-bo-moi", limit = 10) }
+                    val phimLeDeferred = safeRun { repository.getMoviesByHomeCategory("phim-le-hot", limit = 10) }
+                    
+                    val hanhDongDef = safeRun { repository.getMoviesByHomeCategory("normal-hanh-dong", limit = 10) }
+                    val tinhCamDef = safeRun { repository.getMoviesByHomeCategory("normal-tinh-cam", limit = 10) }
+                    val auMyDef = safeRun { repository.getMoviesByHomeCategory("normal-au-my", limit = 10) }
+                    val hinhSuDef = safeRun { repository.getMoviesByHomeCategory("normal-hinh-su", limit = 10) }
+                    val vienTuongDef = safeRun { repository.getMoviesByHomeCategory("normal-vien-tuong", limit = 10) }
+                    val haiHuocDef = safeRun { repository.getMoviesByHomeCategory("normal-hai-huoc", limit = 10) }
+                    val kinhDiDef = safeRun { repository.getMoviesByHomeCategory("normal-kinh-di", limit = 10) }
+                    val coTrangDef = safeRun { repository.getMoviesByHomeCategory("normal-co-trang", limit = 10) }
 
-                val phimBo = phimBoDeferred.await()
-                val phimLe = phimLeDeferred.await()
-                val hoatHinh = hoatHinhDeferred.await()
-                
-                val pHanQuoc = hqDeferred.await()
-                val pTrungQuoc = tqDeferred.await()
-                val pAuMy = amDeferred.await()
-                val pDienAnh = dienAnhDeferred.await()
-                val pAnime = animeDeferred.await()
-
-                val usedSlugs = heroSlugs.toMutableSet()
-                
-                fun dedup(list: List<MovieItem>): List<MovieItem> = list.filter { usedSlugs.add(it.slug) }
-
-                _phimBoMoi.value = dedup(phimBo)
-                _phimLeHot.value = dedup(phimLe)
-                _phimHanhDong.value = dedup(hoatHinh)
-                
-                _phimHanQuoc.value = dedup(pHanQuoc)
-                _phimTrungQuoc.value = dedup(pTrungQuoc)
-                _phimAuMy.value = dedup(pAuMy)
-                _phimDienAnh.value = dedup(pDienAnh)
-                _animeMoi.value = dedup(pAnime)
+                    _phimBoMoi.value = dedup(phimBoDeferred.await())
+                    _phimLeHot.value = dedup(phimLeDeferred.await())
+                    
+                    _normalHanhDong.value = dedup(hanhDongDef.await())
+                    _normalTinhCam.value = dedup(tinhCamDef.await())
+                    _normalAuMy.value = dedup(auMyDef.await())
+                    _normalHinhSu.value = dedup(hinhSuDef.await())
+                    _normalVienTuong.value = dedup(vienTuongDef.await())
+                    _normalHaiHuoc.value = dedup(haiHuocDef.await())
+                    _normalKinhDi.value = dedup(kinhDiDef.await())
+                    _normalCoTrang.value = dedup(coTrangDef.await())
+                }
 
             } catch (e: Exception) {
                 _error.value = e.message ?: "Failed to fetch movies"
