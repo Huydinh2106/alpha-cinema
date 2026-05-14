@@ -39,6 +39,10 @@ internal enum class ParsedSupportChatIntent {
 }
 
 internal object SupportChatResponseParser {
+    fun cleanDisplayText(raw: String): String {
+        return cleanReplyText(raw)
+    }
+
     fun parse(raw: String): ParsedSupportChatPayload {
         val trimmed = raw.trim()
         if (trimmed.isBlank()) {
@@ -262,9 +266,22 @@ internal object SupportChatResponseParser {
             .replace("\\n", "\n")
             .replace("\\t", "\t")
             .replace("\\\"", "\"")
+            .replace(Regex("""!\[[^\]]*]\([^)]*\)"""), "")
+            .replace(Regex("""\[(?:Image|Ảnh)\s*#?\d+[^\]]*]""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
             .replace(Regex("^(answer|response|reply|message)\\s*:\\s*", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""(?<=[.!?])\s+[-*–—•]\s+(?=(?:\*\*)?\p{L})"""), "\n\n")
+            .replace(Regex("""(?<=[.!?])\s+(?=\d+[.)]\s+)"""), "\n\n")
+            .replace(Regex("""(?m)^\s*[-*–—•]\s+"""), "")
+            .replace("**", "")
+            .replace("__", "")
+            .replace("`", "")
             .lines()
-            .joinToString("\n") { it.trimEnd() }
+            .joinToString("\n") { it.trim() }
+            .replace(Regex("""\s+[–—]\s+"""), " - ")
+            .replace(Regex("""[ \t]{2,}"""), " ")
+            .replace(Regex("""(?m)^\s*[.:;]\s*"""), "")
+            .replace(Regex("""(?m)^\s*[-*–—•]\s+"""), "")
             .replace(Regex("\n{3,}"), "\n\n")
             .trim()
     }

@@ -51,6 +51,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -84,6 +85,7 @@ fun PlayerScreen(
 
     val currentEpisode by rememberUpdatedState(episode)
     val currentMovie by rememberUpdatedState(movie)
+    val currentVideoUrl by rememberUpdatedState(videoUrl)
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
@@ -168,6 +170,27 @@ fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(exoPlayer, movie.id, episode?.id, videoUrl) {
+        if (videoUrl.isBlank()) return@LaunchedEffect
+
+        viewModel.saveWatchProgress(
+            movie = currentMovie,
+            episode = currentEpisode,
+            progress = exoPlayer.currentPosition,
+            duration = normalizedDurationMs(exoPlayer.duration)
+        )
+
+        while (true) {
+            delay(10_000)
+            viewModel.saveWatchProgress(
+                movie = currentMovie,
+                episode = currentEpisode,
+                progress = exoPlayer.currentPosition,
+                duration = normalizedDurationMs(exoPlayer.duration)
+            )
+        }
+    }
+
     LaunchedEffect(exoPlayer.currentMediaItemIndex) {
         delay(5000)
         hideSystemBars(context.findActivity())
@@ -184,6 +207,15 @@ fun PlayerScreen(
                 ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
             showSystemBars(activity)
+
+            if (currentVideoUrl.isNotBlank()) {
+                viewModel.saveWatchProgress(
+                    movie = currentMovie,
+                    episode = currentEpisode,
+                    progress = exoPlayer.currentPosition,
+                    duration = normalizedDurationMs(exoPlayer.duration)
+                )
+            }
 
             exoPlayer.release()
         }
@@ -356,4 +388,8 @@ private fun showSystemBars(activity: Activity?) {
 
     WindowInsetsControllerCompat(window, window.decorView)
         .show(WindowInsetsCompat.Type.systemBars())
+}
+
+private fun normalizedDurationMs(duration: Long): Long {
+    return if (duration > 0L && duration != C.TIME_UNSET) duration else 0L
 }

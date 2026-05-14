@@ -472,7 +472,7 @@ class SupportRepository {
         metadata: SupportChatMetadata?,
         preferRecommendationIntro: Boolean = false
     ): String {
-        val cleanedText = parsedText.trim()
+        val cleanedText = SupportChatResponseParser.cleanDisplayText(parsedText)
         return when {
             preferRecommendationIntro && metadata?.movieItems?.isNotEmpty() == true -> {
                 "Mình gợi ý vài phim phù hợp để bạn xem ngay:"
