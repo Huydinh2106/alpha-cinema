@@ -136,7 +136,7 @@ class AccountAuthStateHolder(
         } else {
             val nameError = validateRequired(uiState.name, "Tên")
             val emailError = validateEmail(uiState.email)
-            val passwordError = validateRequired(uiState.password, "Mật khẩu")
+            val passwordError = validatePassword(uiState.password)
             val confirmError = when {
                 uiState.confirmPassword.isBlank() -> "Nhập lại mật khẩu"
                 uiState.confirmPassword != uiState.password -> "Mật khẩu xác nhận không khớp"
@@ -165,6 +165,12 @@ class AccountAuthStateHolder(
         if (value.isBlank()) return "Email không được để trống"
         val emailRegex = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")
         return if (!emailRegex.matches(value.trim())) "Email không hợp lệ" else null
+    }
+
+    private fun validatePassword(value: String): String? {
+        if (value.isBlank()) return "Mật khẩu không được để trống"
+        if (value.length < 6) return "Mật khẩu tài khoản phải từ 6 ký tự trở lên"
+        return null
     }
 }
 
