@@ -10,6 +10,7 @@ data class UserProfile(
     var displayName: String = "",
     var photoUrl: String = "",
     var isAdmin: Boolean = false,
+    var subscriptionPlan: String = "free",
     @ServerTimestamp var createdAt: Timestamp? = null,
     @ServerTimestamp var updatedAt: Timestamp? = null
 )
