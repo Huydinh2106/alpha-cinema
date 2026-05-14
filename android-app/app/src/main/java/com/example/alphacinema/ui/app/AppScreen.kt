@@ -186,13 +186,14 @@ fun MainContent(
     }
 
     val appAuthStateHolder = rememberAccountAuthStateHolder(
-        onLogin = { email, password ->
+        onLogin = { email, password, onSuccess ->
             scope.launch {
                 appAuthLoading = true
                 try {
                     auth.signInWithEmailAndPassword(email, password).await()
                     // Sau khi đăng nhập xong, mở lại Watch Party lobby
                     showWatchPartyLobby = true
+                    onSuccess()
                 } catch (e: Exception) {
                     showToast(e.localizedMessage ?: "Đăng nhập thất bại")
                 } finally {
@@ -200,7 +201,7 @@ fun MainContent(
                 }
             }
         },
-        onRegister = { name, email, password ->
+        onRegister = { name, email, password, onSuccess ->
             scope.launch {
                 appAuthLoading = true
                 try {
@@ -211,6 +212,7 @@ fun MainContent(
                             .build()
                     )?.await()
                     showWatchPartyLobby = true
+                    onSuccess()
                 } catch (e: Exception) {
                     showToast(e.localizedMessage ?: "Đăng ký thất bại")
                 } finally {
@@ -218,7 +220,7 @@ fun MainContent(
                 }
             }
         },
-        onGoogleSignIn = {
+        onGoogleSignIn = { onSuccess ->
             scope.launch {
                 appAuthLoading = true
                 try {
@@ -240,6 +242,7 @@ fun MainContent(
                     val firebaseCredential = com.google.firebase.auth.GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
                     auth.signInWithCredential(firebaseCredential).await()
                     showWatchPartyLobby = true
+                    onSuccess()
                 } catch (e: Exception) {
                     showToast(e.localizedMessage ?: "Đăng nhập Google thất bại")
                 } finally {
@@ -841,7 +844,10 @@ fun MainContent(
         if (appAuthStateHolder.uiState.showDialog) {
             AuthBottomSheet(
                 state = appAuthStateHolder.uiState,
-                onEvent = appAuthStateHolder::onEvent
+                isLoading = appAuthLoading,
+                errorMessage = null,
+                onEvent = appAuthStateHolder::onEvent,
+                onForgotPassword = { appAuthStateHolder.onEvent(AccountAuthEvent.CloseDialog) }
             )
         }
 

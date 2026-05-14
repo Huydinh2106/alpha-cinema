@@ -195,15 +195,17 @@ fun AccountScreen(
     var otpSuccess by remember { mutableStateOf(false) }
     var otpError by remember { mutableStateOf<String?>(null) }
     var clearOtpTrigger by remember { mutableIntStateOf(0) }
+    var showForgotPassword by remember { mutableStateOf(false) }
 
     val authStateHolder = rememberAccountAuthStateHolder(
-        onLogin = { email, password ->
+        onLogin = { email, password, onSuccess ->
             scope.launch {
                 isLoading = true
                 errorMessage = null
                 try {
                     val result = auth.signInWithEmailAndPassword(email, password).await()
                     currentUser = result.user
+                    onSuccess()
                 } catch (e: Exception) {
                     errorMessage = e.localizedMessage ?: "Đăng nhập thất bại"
                 } finally {
@@ -211,13 +213,13 @@ fun AccountScreen(
                 }
             }
         },
-        onRegister = { name, email, password ->
+        onRegister = { name, email, password, onSuccess ->
             // Gửi mã OTP trước khi tạo tài khoản Firebase
             scope.launch {
                 isLoading = true
                 errorMessage = null
                 try {
-                    val sent = EmailVerificationHelper.sendOtp(email)
+                    val sent = EmailVerificationHelper.sendOtp(email, "Đăng ký tài khoản")
                     if (sent) {
                         // Lưu thông tin đăng ký tạm, chờ xác thực OTP
                         pendingName = name
@@ -226,6 +228,7 @@ fun AccountScreen(
                         otpError = null
                         otpSuccess = false
                         showOtpScreen = true
+                        onSuccess()
                     } else {
                         errorMessage = "Không thể gửi mã xác thực. Vui lòng thử lại."
                     }
@@ -236,7 +239,7 @@ fun AccountScreen(
                 }
             }
         },
-        onGoogleSignIn = {
+        onGoogleSignIn = { onSuccess ->
             scope.launch {
                 isLoading = true
                 errorMessage = null
@@ -259,6 +262,7 @@ fun AccountScreen(
                     val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
                     val result = auth.signInWithCredential(firebaseCredential).await()
                     currentUser = result.user
+                    onSuccess()
                 } catch (e: androidx.credentials.exceptions.NoCredentialException) {
                     errorMessage = "Không tìm thấy tài khoản Google. Hãy đăng nhập Google trên thiết bị trước."
                 } catch (e: Exception) {
@@ -639,7 +643,13 @@ fun AccountScreen(
         if (state.showDialog) {
             AuthBottomSheet(
                 state = state,
-                onEvent = authStateHolder::onEvent
+                isLoading = isLoading,
+                errorMessage = errorMessage,
+                onEvent = authStateHolder::onEvent,
+                onForgotPassword = {
+                    authStateHolder.onEvent(AccountAuthEvent.CloseDialog)
+                    showForgotPassword = true
+                }
             )
         }
 
@@ -697,7 +707,7 @@ fun AccountScreen(
                 onResendCode = {
                     scope.launch {
                         otpError = null
-                        val sent = EmailVerificationHelper.sendOtp(pendingEmail)
+                        val sent = EmailVerificationHelper.sendOtp(pendingEmail, "Đăng ký tài khoản")
                         if (!sent) {
                             otpError = "Không thể gửi lại mã. Vui lòng thử lại."
                         }
@@ -713,6 +723,53 @@ fun AccountScreen(
                 isSuccess = otpSuccess,
                 errorMessage = otpError,
                 clearTrigger = clearOtpTrigger
+            )
+        }
+
+        // ── Màn hình Quên mật khẩu (overlay toàn màn hình) ───────────────
+        if (showForgotPassword) {
+            ForgotPasswordScreen(
+                onCheckEmailExists = { emailToCheck ->
+                    try {
+                        // Bắt buộc dùng cách này để lách qua Email Enumeration Protection của Firebase
+                        auth.signInWithEmailAndPassword(emailToCheck, "DummyWrongPass123!@#").await()
+                        true
+                    } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                        false // Lỗi này báo tài khoản không tồn tại
+                    } catch (e: Exception) {
+                        true // Lỗi khác (ví dụ sai mật khẩu) tức là tài khoản ĐÃ TỒN TẠI
+                    }
+                },
+                onSendOtp = { emailAddr ->
+                    EmailVerificationHelper.sendOtp(emailAddr, "Quên mật khẩu")
+                },
+                onVerifyOtp = { code ->
+                    EmailVerificationHelper.verifyOtp(code)
+                },
+                onResetPassword = { emailAddr, newPw ->
+                    try {
+                        // 1. Gọi Cloud Function để đổi mật khẩu (quyền Admin)
+                        val response = com.example.alphacinema.data.api.RetrofitClient.functionsApi.resetPassword(
+                            mapOf("email" to emailAddr, "newPassword" to newPw)
+                        )
+                        
+                        if (response.isSuccessful) {
+                            // 2. Nếu đổi thành công, tiến hành ĐĂNG NHẬP luôn bằng mật khẩu mới
+                            val result = auth.signInWithEmailAndPassword(emailAddr, newPw).await()
+                            currentUser = result.user
+                            null // Thành công
+                        } else {
+                            response.errorBody()?.string() ?: "Lỗi khi đổi mật khẩu"
+                        }
+                    } catch (e: Exception) {
+                        e.localizedMessage ?: "Đã xảy ra lỗi kết nối"
+                    }
+                },
+                onClose = {
+                    EmailVerificationHelper.clearOtp()
+                    showForgotPassword = false
+                    currentUser = auth.currentUser
+                }
             )
         }
     }
@@ -1812,7 +1869,10 @@ private fun AccountEmptyState(message: String) {
 @Composable
 internal fun AuthBottomSheet(
     state: AccountAuthUiState,
-    onEvent: (AccountAuthEvent) -> Unit
+    isLoading: Boolean,
+    errorMessage: String?,
+    onEvent: (AccountAuthEvent) -> Unit,
+    onForgotPassword: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -1862,6 +1922,17 @@ internal fun AuthBottomSheet(
                 }
             }
 
+            if (errorMessage != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = errorMessage,
+                    color = Color(0xFFFF6B6B),
+                    fontSize = 14.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            }
+
             Spacer(modifier = Modifier.height(18.dp))
 
             if (state.mode == AuthMode.REGISTER) {
@@ -1904,23 +1975,50 @@ internal fun AuthBottomSheet(
                 )
             }
 
+            // Nút Quên mật khẩu (chỉ hiện ở chế độ Đăng nhập)
+            if (state.mode == AuthMode.LOGIN) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Quên mật khẩu?",
+                    color = Color(0xFFF6E29A),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .clickable { onForgotPassword() }
+                        .padding(vertical = 4.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = { onEvent(AccountAuthEvent.Submit) },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFF6E29A),
-                    contentColor = Color.Black
+                    contentColor = Color.Black,
+                    disabledContainerColor = Color(0xFFF6E29A).copy(alpha = 0.5f),
+                    disabledContentColor = Color.Black.copy(alpha = 0.5f)
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(52.dp),
+                enabled = !isLoading
             ) {
-                Text(
-                    text = if (state.mode == AuthMode.LOGIN) "Đăng nhập" else "Đăng ký",
-                    fontWeight = FontWeight.Bold
-                )
+                if (isLoading) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.Black,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = if (state.mode == AuthMode.LOGIN) "Đăng nhập" else "Đăng ký",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -1934,17 +2032,28 @@ internal fun AuthBottomSheet(
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = Color.White,
-                    containerColor = Color(0xFF18233F)
-                )
+                    containerColor = Color(0xFF18233F),
+                    disabledContentColor = Color.White.copy(alpha = 0.5f),
+                    disabledContainerColor = Color(0xFF18233F).copy(alpha = 0.5f)
+                ),
+                enabled = !isLoading
             ) {
-                Icon(
-                    painter = androidx.compose.ui.res.painterResource(id = com.example.alphacinema.R.drawable.ic_google),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = Color.Unspecified
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Đăng nhập bằng Google", fontWeight = FontWeight.SemiBold)
+                if (isLoading) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.alphacinema.R.drawable.ic_google),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = Color.Unspecified
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Đăng nhập bằng Google", fontWeight = FontWeight.SemiBold)
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))

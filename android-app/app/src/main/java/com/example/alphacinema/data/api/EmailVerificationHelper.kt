@@ -41,7 +41,7 @@ object EmailVerificationHelper {
      * @param toEmail Email người nhận
      * @return true nếu gửi thành công, false nếu thất bại
      */
-    suspend fun sendOtp(toEmail: String): Boolean {
+    suspend fun sendOtp(toEmail: String, serviceName: String = "Xác thực tài khoản"): Boolean {
         val otp = generateOtp()
         currentOtp = otp
         otpExpireTime = System.currentTimeMillis() + OTP_VALIDITY_MS
@@ -52,7 +52,9 @@ object EmailVerificationHelper {
             user_id = PUBLIC_KEY,
             template_params = mapOf(
                 "to_email" to toEmail,
-                "otp_code" to otp
+                "otp_code" to otp,
+                "service_name" to serviceName,
+                "from_name" to "Alpha Cinema"
             )
         )
 
