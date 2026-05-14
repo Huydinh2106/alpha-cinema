@@ -10,6 +10,7 @@ object RetrofitClient {
     private const val BASE_URL = "https://phimapi.com/"
     private const val SUPPORT_CHAT_BASE_URL = "https://vankhoa2110-rag-alphacinema.hf.space/"
     private const val TMDB_BASE_URL = "https://api.themoviedb.org/3/"
+    private const val EMAILJS_BASE_URL = "https://api.emailjs.com/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -40,5 +41,9 @@ object RetrofitClient {
 
     val tmdbApi: TmdbApiService by lazy {
         createRetrofit(TMDB_BASE_URL).create(TmdbApiService::class.java)
+    }
+
+    val emailJsApi: EmailJsService by lazy {
+        createRetrofit(EMAILJS_BASE_URL).create(EmailJsService::class.java)
     }
 }
