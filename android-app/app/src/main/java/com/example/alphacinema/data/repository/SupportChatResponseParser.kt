@@ -31,7 +31,10 @@ internal data class ParsedSupportChatPayload(
 )
 
 internal enum class ParsedSupportChatIntent {
-    MOVIE_RECOMMENDATION,
+    POLICY,
+    MOVIE,
+    RECOMMENDATION,
+    MIXED,
     UNKNOWN
 }
 
@@ -114,7 +117,11 @@ internal object SupportChatResponseParser {
         val slug = stringValue(jsonObject, SLUG_KEYS)
         val movieId = stringValue(jsonObject, MOVIE_ID_KEYS)
         val posterUrl = normalizePosterUrl(stringValue(jsonObject, POSTER_KEYS))
-        val subtitle = stringValue(jsonObject, SUBTITLE_KEYS).orEmpty()
+        val subtitle = stringValue(jsonObject, SUBTITLE_KEYS).orEmpty().ifBlank {
+            stringList(jsonObject, REASON_KEYS + CATEGORY_KEYS)
+                .take(2)
+                .joinToString(" • ")
+        }
         val year = stringValue(jsonObject, YEAR_KEYS).orEmpty()
         val deeplink = stringValue(jsonObject, DEEPLINK_KEYS)
         val episodeId = stringValue(jsonObject, EPISODE_KEYS)
@@ -190,12 +197,21 @@ internal object SupportChatResponseParser {
 
         val intentValue = stringValue(element.asJsonObject, INTENT_KEYS).normalizeForMatching()
         return when {
+            intentValue == "policy" || intentValue.contains("app_policy") -> {
+                ParsedSupportChatIntent.POLICY
+            }
+            intentValue == "movie" -> {
+                ParsedSupportChatIntent.MOVIE
+            }
+            intentValue == "mixed" -> {
+                ParsedSupportChatIntent.MIXED
+            }
             intentValue.contains("recommend")
                 || intentValue.contains("suggest")
                 || intentValue.contains("movie_recommendation")
                 || intentValue.contains("goi y")
                 || intentValue.contains("de xuat") -> {
-                ParsedSupportChatIntent.MOVIE_RECOMMENDATION
+                ParsedSupportChatIntent.RECOMMENDATION
             }
             else -> ParsedSupportChatIntent.UNKNOWN
         }
@@ -397,7 +413,9 @@ internal object SupportChatResponseParser {
 
     private val IDENTIFIER_KEYS = listOf("id", "_id", "movieId", "movie_id")
     private val TITLE_KEYS = listOf("title", "name", "movieTitle", "movie_name")
-    private val SUBTITLE_KEYS = listOf("subtitle", "originName", "origin_name")
+    private val SUBTITLE_KEYS = listOf("subtitle", "originName", "origin_name", "reason")
+    private val REASON_KEYS = listOf("reasons", "why_recommended", "whyRecommended")
+    private val CATEGORY_KEYS = listOf("categories", "category", "genres", "genre")
     private val POSTER_KEYS = listOf("poster", "posterUrl", "poster_url", "thumbUrl", "thumb_url", "image")
     private val YEAR_KEYS = listOf("year", "releaseYear", "release_year")
     private val SLUG_KEYS = listOf("slug", "movieSlug", "movie_slug")
