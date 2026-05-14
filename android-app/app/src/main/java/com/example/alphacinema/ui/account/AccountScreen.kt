@@ -21,9 +21,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -90,7 +92,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
-import coil.compose.AsyncImage
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -131,14 +132,14 @@ private enum class AccountPanelType {
     FEEDBACK
 }
 
-private enum class DemoMembershipPlanKey {
+internal enum class DemoMembershipPlanKey {
     FREE,
     BASIC,
     COUPLE,
     PREMIUM
 }
 
-private data class DemoMembershipPlanUi(
+internal data class DemoMembershipPlanUi(
     val key: DemoMembershipPlanKey,
     val badge: String,
     val title: String,
@@ -161,6 +162,7 @@ fun AccountScreen(
     onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> },
     onWatchTogether: () -> Unit = {},
     onOpenPayment: () -> Unit = {},
+    onOpenProfileSettings: () -> Unit = {},
     onLogout: () -> Unit = {},
     currentPlan: String? = null,
     membershipExpiredDate: String? = null
@@ -290,14 +292,27 @@ fun AccountScreen(
     var showCancelRenewDialog by remember { mutableStateOf(false) }
     var showLoginRequiredDialog by remember { mutableStateOf(false) }
     val isLoggedIn = currentUser != null
-    val demoMembershipPlan = remember(isLoggedIn, currentPlan, membershipExpiredDate) {
-        if (isLoggedIn) buildDemoMembershipPlan(currentPlan, membershipExpiredDate) else null
+    val demoMembershipPlan = remember(isLoggedIn, currentPlan, userProfile?.subscriptionPlan, membershipExpiredDate) {
+        if (isLoggedIn) buildDemoMembershipPlan(userProfile?.subscriptionPlan ?: currentPlan, membershipExpiredDate) else null
     }
-    val demoUser = remember(currentUser, demoMembershipPlan, isLoggedIn) {
+    val profileCache = remember { com.example.alphacinema.data.local.UserProfileCache(context) }
+    val demoUser = remember(currentUser, demoMembershipPlan, isLoggedIn, userProfile) {
         if (isLoggedIn && demoMembershipPlan != null) {
+            val name = currentUser?.displayName
+                ?: userProfile?.displayName
+                ?: profileCache.displayName.ifBlank { "Người dùng" }
+            // Use local cached file first, then remote URL
+            val localFile = profileCache.localAvatarFile
+            val avatar = if (localFile != null) {
+                localFile.absolutePath
+            } else {
+                currentUser?.photoUrl?.toString()
+                    ?: userProfile?.photoUrl
+                    ?: profileCache.avatarUrl
+            }
             DemoUserProfileUi(
-                name = currentUser?.displayName ?: "khoa",
-                avatarUrl = currentUser?.photoUrl?.toString().orEmpty(),
+                name = name,
+                avatarUrl = avatar.orEmpty(),
                 currentPlan = demoMembershipPlan
             )
         } else {
@@ -402,19 +417,15 @@ fun AccountScreen(
             if (isLoggedIn && demoUser != null && demoMembershipPlan != null) {
                 LoggedInProfileCard(
                     demoUser = demoUser,
-                    onClick = {
-                        if (demoMembershipPlan.key == DemoMembershipPlanKey.FREE) {
-                            onOpenPayment()
-                        } else {
-                            showPlanManagement = true
-                        }
-                    }
+                    onClick = onOpenProfileSettings
                 )
-                MembershipUpgradeCard(
-                    plan = demoMembershipPlan,
-                    onUpgradeClick = onOpenPayment,
-                    onManageClick = { showPlanManagement = true }
-                )
+                if (demoMembershipPlan.key == DemoMembershipPlanKey.FREE) {
+                    MembershipUpgradeCard(
+                        plan = demoMembershipPlan,
+                        onUpgradeClick = onOpenPayment,
+                        onManageClick = { showPlanManagement = true }
+                    )
+                }
             } else {
                 GuestProfileCard(
                     onLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
@@ -474,17 +485,6 @@ fun AccountScreen(
                 onItemClick = { item -> handleMenuAction(resolveMenuAction(item)) }
             )
 
-            if (isLoggedIn) {
-                LogoutButton(
-                    onLogout = {
-                        auth.signOut()
-                        currentUser = null
-                        activePanel = null
-                        showPlanManagement = false
-                        onLogout()
-                    }
-                )
-            }
 
 
             if (showPinDialog) {
@@ -771,7 +771,7 @@ private fun KidsModeCard(
     }
 }
 
-private fun buildDemoMembershipPlan(
+internal fun buildDemoMembershipPlan(
     currentPlan: String?,
     expiredDate: String?
 ): DemoMembershipPlanUi {
@@ -875,7 +875,7 @@ private fun LoggedInProfileCard(
             .background(background)
             .border(1.dp, border, shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 15.dp)
+            .padding(horizontal = 16.dp, vertical = 24.dp)
     ) {
         if (glowColor != Color.Transparent) {
             Box(
@@ -892,13 +892,13 @@ private fun LoggedInProfileCard(
 
         MembershipBadge(
             plan = plan,
-            modifier = Modifier.align(Alignment.TopEnd)
+            modifier = Modifier.align(Alignment.TopEnd).offset(y = (-8).dp)
         )
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 18.dp)
+
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -924,24 +924,6 @@ private fun LoggedInProfileCard(
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.46f),
                     modifier = Modifier.size(15.dp)
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                ProfilePlanIcon(plan = plan)
-                Text(
-                    text = planStatus,
-                    color = if (plan.key == DemoMembershipPlanKey.PREMIUM) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.72f),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (plan.key == DemoMembershipPlanKey.PREMIUM) FontWeight.Bold else FontWeight.Medium,
-                    lineHeight = 18.sp,
-                    maxLines = 2,
-                    modifier = Modifier.padding(start = 7.dp)
                 )
             }
         }
@@ -1206,8 +1188,14 @@ private fun LogoutButton(onLogout: () -> Unit) {
 @Composable
 private fun ProfileAvatar(demoUser: DemoUserProfileUi) {
     if (demoUser.avatarUrl.isNotBlank()) {
-        AsyncImage(
-            model = demoUser.avatarUrl,
+        // Use File object for local paths, URL string for remote
+        val imageModel: Any = if (demoUser.avatarUrl.startsWith("/")) {
+            java.io.File(demoUser.avatarUrl)
+        } else {
+            demoUser.avatarUrl
+        }
+        com.example.alphacinema.ui.components.AlphaCinemaImage(
+            model = imageModel,
             contentDescription = "Avatar",
             modifier = Modifier
                 .size(62.dp)
@@ -1307,7 +1295,7 @@ private fun ProfilePlanIcon(plan: DemoMembershipPlanUi) {
 }
 
 @Composable
-private fun MembershipBenefitRow(text: String) {
+internal fun MembershipBenefitRow(text: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -1336,7 +1324,7 @@ private fun MembershipBenefitRow(text: String) {
 }
 
 @Composable
-private fun PlanManagementSheet(
+internal fun PlanManagementSheet(
     plan: DemoMembershipPlanUi,
     onDismiss: () -> Unit,
     onChangePlan: () -> Unit,
@@ -1490,7 +1478,7 @@ private fun PlanManagementSheet(
 }
 
 @Composable
-private fun PlanInfoRow(
+internal fun PlanInfoRow(
     icon: ImageVector,
     label: String,
     value: String
@@ -1727,7 +1715,7 @@ private fun AccountMediaRow(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
+        com.example.alphacinema.ui.components.AlphaCinemaImage(
             model = posterUrl,
             contentDescription = title,
             modifier = Modifier
@@ -1822,7 +1810,7 @@ private fun AccountEmptyState(message: String) {
 }
 
 @Composable
-private fun AuthBottomSheet(
+internal fun AuthBottomSheet(
     state: AccountAuthUiState,
     onEvent: (AccountAuthEvent) -> Unit
 ) {
@@ -1949,6 +1937,13 @@ private fun AuthBottomSheet(
                     containerColor = Color(0xFF18233F)
                 )
             ) {
+                Icon(
+                    painter = androidx.compose.ui.res.painterResource(id = com.example.alphacinema.R.drawable.ic_google),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = Color.Unspecified
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Đăng nhập bằng Google", fontWeight = FontWeight.SemiBold)
             }
 
@@ -2005,7 +2000,7 @@ private fun AuthBottomSheet(
 }
 
 @Composable
-private fun AuthTextField(
+internal fun AuthTextField(
     value: String,
     onValueChanged: (String) -> Unit,
     label: String,
@@ -2030,7 +2025,7 @@ private fun AuthTextField(
 }
 
 @Composable
-private fun AuthPasswordField(
+internal fun AuthPasswordField(
     value: String,
     onValueChanged: (String) -> Unit,
     label: String,
@@ -2066,7 +2061,7 @@ private fun AuthPasswordField(
 }
 
 @Composable
-private fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
+internal fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Color.White,
     unfocusedTextColor = Color.White,
     focusedLabelColor = Color(0xFFF6E29A),
@@ -2081,5 +2076,4 @@ private fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
     errorTextColor = Color(0xFFFFA7A7),
     errorContainerColor = Color(0xFF2A1D2C)
 )
-
 

@@ -6,7 +6,7 @@ import com.example.alphacinema.data.model.MovieListResponse
 import retrofit2.http.GET
 import retrofit2.http.Query
 
-interface PhimApiService {
+interface   PhimApiService {
     @GET("danh-sach/phim-moi-cap-nhat")
     suspend fun getLatestMovies(
         @Query("page") page: Int = 1
