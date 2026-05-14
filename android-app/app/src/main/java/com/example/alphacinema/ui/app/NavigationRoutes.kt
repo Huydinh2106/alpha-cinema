@@ -25,3 +25,6 @@ data class WatchPartyNavRoute(val roomId: String)
 
 @Serializable
 data object WatchPartySearchNavRoute
+
+@Serializable
+data object ProfileSettingsNavRoute

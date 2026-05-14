@@ -427,7 +427,7 @@ package com.example.alphacinema.ui.home
             }
             // Ảnh poster mờ phía sau
             if (posterUrl.isNotEmpty()) {
-                AsyncImage(
+                com.example.alphacinema.ui.components.AlphaCinemaImage(
                     model = posterUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
@@ -510,12 +510,10 @@ package com.example.alphacinema.ui.home
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.logo_app),
+                        painter = painterResource(id = R.drawable.alphacinema),
                         contentDescription = "Logo",
-                        modifier = Modifier
-                            .size(logoSize)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.size(logoSize),
+                        contentScale = ContentScale.Fit
                     )
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -671,7 +669,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
             ) {
                 // Hiển thị poster từ URL
                 if (movie.posterUrl.isNotEmpty()) {
-                    AsyncImage(
+                    com.example.alphacinema.ui.components.AlphaCinemaImage(
                         model = movie.posterUrl,
                         contentDescription = movie.title,
                         contentScale = ContentScale.Crop,
@@ -968,7 +966,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
             ) {
                 // Poster image
                 if (movie.posterUrl.isNotEmpty()) {
-                    AsyncImage(
+                    com.example.alphacinema.ui.components.AlphaCinemaImage(
                         model = movie.posterUrl,
                         contentDescription = movie.title,
                         contentScale = ContentScale.Crop,

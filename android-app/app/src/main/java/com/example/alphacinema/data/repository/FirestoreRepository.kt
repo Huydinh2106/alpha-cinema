@@ -95,9 +95,29 @@ class FirestoreRepository {
         if (uid.isBlank()) return
         try {
             db.collection("users").document(uid)
-                .update("subscriptionPlan", plan).await()
+                .set(mapOf("subscriptionPlan" to plan), com.google.firebase.firestore.SetOptions.merge()).await()
         } catch (e: Exception) {
             android.util.Log.e("FirestoreRepository", "updateUserSubscription failed", e)
+        }
+    }
+
+    suspend fun updateUserDisplayName(uid: String, displayName: String) {
+        if (uid.isBlank()) return
+        try {
+            db.collection("users").document(uid)
+                .set(mapOf("displayName" to displayName), com.google.firebase.firestore.SetOptions.merge()).await()
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "updateUserDisplayName failed", e)
+        }
+    }
+
+    suspend fun updateUserPhotoUrl(uid: String, photoUrl: String) {
+        if (uid.isBlank()) return
+        try {
+            db.collection("users").document(uid)
+                .set(mapOf("photoUrl" to photoUrl), com.google.firebase.firestore.SetOptions.merge()).await()
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "updateUserPhotoUrl failed", e)
         }
     }
 

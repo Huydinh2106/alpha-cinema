@@ -23,7 +23,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.example.alphacinema.data.model.HomeCategory
 import com.example.alphacinema.data.model.MovieItem
 
@@ -354,7 +353,7 @@ fun CategoryEditorDialog(
                                             .padding(vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        AsyncImage(
+                                        com.example.alphacinema.ui.components.AlphaCinemaImage(
                                             model = movie.getFullPosterUrl(),
                                             contentDescription = null,
                                             modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)),
@@ -429,7 +428,7 @@ fun AdminMovieItemCard(movie: MovieItem, onAdd: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1627))
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
+            com.example.alphacinema.ui.components.AlphaCinemaImage(
                 model = movie.getFullPosterUrl(),
                 contentDescription = null,
                 modifier = Modifier
