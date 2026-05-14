@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.local.SettingsManager
 import com.example.alphacinema.data.repository.FirestoreRepository
-import com.example.alphacinema.ui.search.FilterKind
+import com.example.alphacinema.ui.account.FilterKind
 import com.example.alphacinema.ui.search.SearchMovieUi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,6 +85,7 @@ class MovieListViewModel : ViewModel() {
         val baseMovies = when (currentKind) {
             FilterKind.MOVIE_TYPE -> firestoreRepository.getMovies(isKidsMode, limit).filter { it.type == currentSlug }
             FilterKind.GENRE      -> firestoreRepository.getMoviesByCategory(currentSlug, isKidsMode, limit)
+            FilterKind.CUSTOM_CATEGORY -> firestoreRepository.getCategoryMovies(currentSlug, isKidsMode, limit)
             FilterKind.ALL        -> firestoreRepository.getMovies(isKidsMode, limit)
         }
         

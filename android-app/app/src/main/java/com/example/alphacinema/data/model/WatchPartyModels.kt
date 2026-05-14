@@ -10,7 +10,8 @@ data class WatchPartyRoom(
     val episodeId: String? = null,
     val episodeName: String? = null,
     val playbackState: String = "paused", // "playing" | "paused"
-    val currentTimeSec: Double = 0.0,
+    val currentTimeSec: Double = 0.0,     // video position at last state change
+    val playStartedAt: Long = 0,          // server timestamp when play started
     val lastUpdated: Long = 0,
     val createdAt: Long = 0,
     val maxMembers: Int = 5

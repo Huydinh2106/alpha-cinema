@@ -10,6 +10,7 @@ data class UserProfile(
     var displayName: String = "",
     var photoUrl: String = "",
     var isAdmin: Boolean = false,
+    var subscriptionPlan: String = "free",
     @ServerTimestamp var createdAt: Timestamp? = null,
     @ServerTimestamp var updatedAt: Timestamp? = null
 )
@@ -72,8 +73,15 @@ data class FirestoreMovie(
     var directors: List<String> = emptyList(),
     var searchKeywords: List<String> = emptyList(),
     var ageRating: String = "13+",
+    var tmdbVoteAverage: Double = 0.0,
     @get:com.google.firebase.firestore.PropertyName("isKidsFriendly")
     @set:com.google.firebase.firestore.PropertyName("isKidsFriendly")
     var isKidsFriendly: Boolean = false,
     @ServerTimestamp var modifiedTime: Timestamp? = null
+)
+
+data class HomeCategory(
+    var id: String = "",
+    var title: String = "",
+    var movieSlugs: List<String> = emptyList()
 )
