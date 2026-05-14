@@ -67,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.alphacinema.R
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatLinkItem
@@ -75,6 +76,7 @@ import com.example.alphacinema.data.model.SupportChatMovieItem
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.primaryAction
 import com.example.alphacinema.data.model.resolveRoute
+import com.example.alphacinema.data.repository.SupportChatResponseParser
 import com.example.alphacinema.ui.components.GradientPlayButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -534,6 +536,9 @@ private fun ChatBubble(
         SupportMessageSender.BOT -> Color(0xFF151F35)
         SupportMessageSender.LOADING -> Color(0xFF111B2E)
     }
+    val displayText = remember(message.text, fromUser) {
+        if (fromUser) message.text else SupportChatResponseParser.cleanDisplayText(message.text)
+    }
     val textColor = if (fromUser) Color(0xFF111111) else Color.White
     val bubbleShape = if (fromUser) UserBubbleShape else BotBubbleShape
 
@@ -570,9 +575,9 @@ private fun ChatBubble(
                         modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (message.text.isNotBlank()) {
+                        if (displayText.isNotBlank()) {
                             Text(
-                                text = message.text,
+                                text = displayText,
                                 color = textColor,
                                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
                             )

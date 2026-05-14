@@ -97,6 +97,24 @@ class SupportChatResponseParserTest {
     }
 
     @Test
+    fun parseTextOnlyReply_cleansMarkdownAndImageReferences() {
+        val payload = SupportChatResponseParser.parse(
+            """
+            {
+              "answer": "[Image #1]. - **Bac Si Watson** – Kich tinh, bi an. – **Nu than tinh yeu** – Lang man sau sac."
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(
+            "Bac Si Watson - Kich tinh, bi an.\n\nNu than tinh yeu - Lang man sau sac.",
+            payload.text
+        )
+        assertFalse(payload.text.contains("**"))
+        assertFalse(payload.text.contains("[Image"))
+    }
+
+    @Test
     fun watchActionFactory_fallsBackToDetailWhenPlaybackUnavailable() {
         val action = SupportChatActionFactory.createWatchMovieAction(
             slug = "ung-kinh-ma-quai-2026",
