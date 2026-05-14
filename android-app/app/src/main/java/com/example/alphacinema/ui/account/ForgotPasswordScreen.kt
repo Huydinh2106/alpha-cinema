@@ -9,7 +9,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -85,10 +88,23 @@ fun ForgotPasswordScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DarkBg)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { focusManager.clearFocus() }
+    ) {
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
-                .imePadding().padding(horizontal = 24.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             IconButton(onClick = {
@@ -145,8 +161,8 @@ fun ForgotPasswordScreen(
                             if (onCheckEmailExists(trimmed)) {
                                 if (onSendOtp(trimmed)) {
                                     otpValue = TextFieldValue(""); otpError = null; resendCountdown = 30; step = ForgotStep.OTP
-                                } else emailError = "Lỗi gửi mã"
-                            } else emailError = "Email chưa đăng ký"
+                                } else emailError = "Không thể gửi mã xác thực. Vui lòng kiểm tra lại email hoặc thử lại sau."
+                            } else emailError = "Email chưa được đăng ký trong hệ thống."
                             isLoading = false
                         }
                     },

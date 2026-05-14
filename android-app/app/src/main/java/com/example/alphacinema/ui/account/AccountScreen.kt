@@ -219,6 +219,23 @@ fun AccountScreen(
                 isLoading = true
                 errorMessage = null
                 try {
+                    // 1. Kiểm tra email đã tồn tại hay chưa
+                    var emailExists = false
+                    try {
+                        auth.signInWithEmailAndPassword(email, "DummyWrongPass123!@#").await()
+                        emailExists = true
+                    } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                        emailExists = false
+                    } catch (e: Exception) {
+                        emailExists = true
+                    }
+
+                    if (emailExists) {
+                        errorMessage = "Email đã được sử dụng. Vui lòng chọn email khác."
+                        return@launch
+                    }
+
+                    // 2. Gửi mã OTP
                     val sent = EmailVerificationHelper.sendOtp(email, "Đăng ký tài khoản")
                     if (sent) {
                         // Lưu thông tin đăng ký tạm, chờ xác thực OTP
@@ -230,10 +247,10 @@ fun AccountScreen(
                         showOtpScreen = true
                         onSuccess()
                     } else {
-                        errorMessage = "Không thể gửi mã xác thực. Vui lòng thử lại."
+                        errorMessage = "Không thể gửi mã xác thực. Vui lòng kiểm tra email hoặc thử lại sau."
                     }
                 } catch (e: Exception) {
-                    errorMessage = e.localizedMessage ?: "Lỗi gửi mã xác thực"
+                    errorMessage = "Lỗi gửi mã xác thực: ${e.localizedMessage}"
                 } finally {
                     isLoading = false
                 }

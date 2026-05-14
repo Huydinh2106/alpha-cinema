@@ -115,6 +115,7 @@ package com.example.alphacinema.ui.home
     ) {
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
+        var showNotificationScreen by remember { mutableStateOf(false) }
         
         val heroItems by viewModel.heroMovies.collectAsState()
         val phimBoMoi by viewModel.phimBoMoi.collectAsState()
@@ -358,6 +359,7 @@ package com.example.alphacinema.ui.home
             // Sticky Top Header - nằm trên cùng, không bị cuộn
             TopHeader(
                 collapseFraction = collapseFraction,
+                onNotificationClick = { showNotificationScreen = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
@@ -387,6 +389,14 @@ package com.example.alphacinema.ui.home
                             posterUrl = m.posterUrl, slug = m.slug
                         ))
                     }
+                )
+            }
+
+            // Notification Screen Overlay
+            if (showNotificationScreen) {
+                NotificationScreen(
+                    modifier = Modifier.zIndex(100f),
+                    onClose = { showNotificationScreen = false }
                 )
             }
         }
@@ -475,6 +485,7 @@ package com.example.alphacinema.ui.home
     @Composable
     fun TopHeader(
         collapseFraction: Float,
+        onNotificationClick: () -> Unit = {},
         modifier: Modifier = Modifier
     ) {
         // Animate các giá trị dựa trên scroll
@@ -536,10 +547,10 @@ package com.example.alphacinema.ui.home
                     }
                 }
 
-                IconButton(onClick = {}) {
+                IconButton(onClick = onNotificationClick) {
                     Icon(
                         imageVector = Icons.Outlined.NotificationsNone,
-                        contentDescription = null,
+                        contentDescription = "Thông báo",
                         tint = Color.White
                     )
                 }
