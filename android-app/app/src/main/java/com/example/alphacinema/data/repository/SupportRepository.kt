@@ -12,6 +12,7 @@ import com.example.alphacinema.data.model.SupportChatMovieItem
 import com.example.alphacinema.data.model.SupportChatReply
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.SupportChatRequest
+import com.example.alphacinema.data.model.SupportRecommendRequest
 import com.example.alphacinema.data.model.mergeWith
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +54,8 @@ internal object SupportSuggestionPolicy {
         parsedIntent: ParsedSupportChatIntent,
         memory: SupportChatMemoryContext = SupportChatMemoryContext()
     ): Boolean {
-        return parsedIntent == ParsedSupportChatIntent.MOVIE_RECOMMENDATION
+        return parsedIntent == ParsedSupportChatIntent.RECOMMENDATION
+            || parsedIntent == ParsedSupportChatIntent.MIXED
             || analyzeRecommendationRequest(question, memory).shouldSuggestMovies
     }
 
@@ -145,8 +147,9 @@ class SupportRepository {
                 val response = api.askQuestion(
                     SupportChatRequest(
                         question = question,
-                        topK = 4,
+                        topK = 6,
                         topNRecommendations = MAX_SUGGESTIONS,
+                        generationModel = "gpt-4o-mini",
                         sessionId = sessionId,
                         rememberHistory = true,
                         chatHistory = history
@@ -191,38 +194,94 @@ class SupportRepository {
             } else {
                 enrichedMovies
             }
+            val endpointMovies = if (shouldExposeSuggestions && filteredEnrichedMovies.size < MAX_SUGGESTIONS) {
+                fetchRecommendationEndpointMovies(
+                    question = question,
+                    isKidsMode = isKidsMode,
+                    excludeSlugs = buildSet {
+                        addAll(filteredEnrichedMovies.mapNotNull { it.slug })
+                        addAll(filteredEnrichedMovies.mapNotNull { it.movieId })
+                        if (recommendationRequest.isAlternativeRequest) {
+                            addAll(requestMemory.referencedMovieSlugs)
+                        }
+                    },
+                    limit = MAX_SUGGESTIONS - filteredEnrichedMovies.size
+                )
+            } else {
+                emptyList()
+            }
             val fallbackExcludeSlugs = buildSet {
                 if (recommendationRequest.isAlternativeRequest) {
                     addAll(requestMemory.referencedMovieSlugs)
                 }
                 addAll(filteredEnrichedMovies.mapNotNull { it.slug })
                 addAll(filteredEnrichedMovies.mapNotNull { it.movieId })
+                addAll(endpointMovies.mapNotNull { it.slug })
+                addAll(endpointMovies.mapNotNull { it.movieId })
             }
-            val fallbackMovies = if (shouldExposeSuggestions && filteredEnrichedMovies.size < MAX_SUGGESTIONS) {
+            val suggestedCount = filteredEnrichedMovies.size + endpointMovies.size
+            val fallbackMovies = if (shouldExposeSuggestions && suggestedCount < MAX_SUGGESTIONS) {
                 buildFallbackSuggestions(
                     question = question,
                     isKidsMode = isKidsMode,
                     memory = requestMemory,
                     excludeSlugs = fallbackExcludeSlugs,
-                    limit = MAX_SUGGESTIONS - filteredEnrichedMovies.size
+                    limit = MAX_SUGGESTIONS - suggestedCount
                 )
             } else {
                 emptyList()
             }
-            val movieItems = (filteredEnrichedMovies + fallbackMovies)
+            val movieItems = (filteredEnrichedMovies + endpointMovies + fallbackMovies)
                 .distinctBy { it.slug ?: it.movieId ?: it.id }
                 .take(MAX_SUGGESTIONS)
             val metadata = movieItems.takeIf { it.isNotEmpty() }
                 ?.let { SupportChatMetadata(movieItems = it) }
+            val usedSupplementalRecommendations = filteredEnrichedMovies.isEmpty() && movieItems.isNotEmpty()
 
             SupportChatReply(
-                text = resolveReplyText(apiResponse?.answer?.takeIf { it.isNotBlank() } ?: parsed.text, metadata),
+                text = resolveReplyText(
+                    parsedText = apiResponse?.answer?.takeIf { it.isNotBlank() } ?: parsed.text,
+                    metadata = metadata,
+                    preferRecommendationIntro = recommendationRequest.shouldSuggestMovies && usedSupplementalRecommendations
+                ),
                 metadata = metadata,
                 memory = requestMemory.mergeWith(parsed.memory),
                 sessionId = apiResponse?.sessionId ?: parsed.sessionId,
                 historyMessageCount = apiResponse?.historyMessageCount ?: parsed.historyMessageCount
             )
         }
+    }
+
+    private suspend fun fetchRecommendationEndpointMovies(
+        question: String,
+        isKidsMode: Boolean,
+        excludeSlugs: Set<String>,
+        limit: Int
+    ): List<SupportChatMovieItem> {
+        if (limit <= 0) return emptyList()
+
+        val rawBody = runCatching {
+            val response = api.recommend(
+                SupportRecommendRequest(
+                    query = question,
+                    topN = limit
+                )
+            )
+            val body = response.body()?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw HttpException(response)
+            }
+            body
+        }.getOrNull() ?: return emptyList()
+
+        val parsed = SupportChatResponseParser.parse(rawBody)
+        return enrichMovieSuggestions(
+            parsedSuggestions = parsed.movieSuggestions,
+            isKidsMode = isKidsMode
+        ).filterNot { movie ->
+            val keys = listOfNotNull(movie.slug, movie.movieId, movie.id)
+            keys.any { it in excludeSlugs }
+        }.take(limit)
     }
 
     private suspend fun buildOfflineReply(
@@ -410,10 +469,14 @@ class SupportRepository {
 
     private fun resolveReplyText(
         parsedText: String,
-        metadata: SupportChatMetadata?
+        metadata: SupportChatMetadata?,
+        preferRecommendationIntro: Boolean = false
     ): String {
         val cleanedText = parsedText.trim()
         return when {
+            preferRecommendationIntro && metadata?.movieItems?.isNotEmpty() == true -> {
+                "Mình gợi ý vài phim phù hợp để bạn xem ngay:"
+            }
             cleanedText.isNotBlank() && cleanedText != FALLBACK_REPLY -> cleanedText
             metadata?.movieItems?.isNotEmpty() == true -> "Mình gợi ý vài phim bạn có thể xem ngay:"
             else -> FALLBACK_REPLY
@@ -476,7 +539,7 @@ class SupportRepository {
 
     companion object {
         const val FALLBACK_REPLY = "Xin lỗi, hiện không thể trả lời"
-        private const val MAX_SUGGESTIONS = 3
+        private const val MAX_SUGGESTIONS = 5
         private const val MAX_HISTORY_TURNS = 8
 
         private val GENRE_KEYWORDS = listOf(
