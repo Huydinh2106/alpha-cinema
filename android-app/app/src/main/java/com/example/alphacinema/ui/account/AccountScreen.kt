@@ -64,6 +64,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,6 +100,8 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import com.example.alphacinema.data.api.EmailVerificationHelper
+import com.example.alphacinema.data.api.OtpVerifyResult
 import kotlinx.coroutines.tasks.await
 
 private const val WEB_CLIENT_ID = "1013232588133-86fl74ls04r8fkarnahh2b9pvie5g7kn.apps.googleusercontent.com"
@@ -183,6 +186,16 @@ fun AccountScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // ── Trạng thái OTP verification ──────────────────────────────────────────
+    var showOtpScreen by remember { mutableStateOf(false) }
+    var pendingName by remember { mutableStateOf("") }
+    var pendingEmail by remember { mutableStateOf("") }
+    var pendingPassword by remember { mutableStateOf("") }
+    var otpLoading by remember { mutableStateOf(false) }
+    var otpSuccess by remember { mutableStateOf(false) }
+    var otpError by remember { mutableStateOf<String?>(null) }
+    var clearOtpTrigger by remember { mutableIntStateOf(0) }
+
     val authStateHolder = rememberAccountAuthStateHolder(
         onLogin = { email, password ->
             scope.launch {
@@ -199,19 +212,25 @@ fun AccountScreen(
             }
         },
         onRegister = { name, email, password ->
+            // Gửi mã OTP trước khi tạo tài khoản Firebase
             scope.launch {
                 isLoading = true
                 errorMessage = null
                 try {
-                    val result = auth.createUserWithEmailAndPassword(email, password).await()
-                    result.user?.updateProfile(
-                        UserProfileChangeRequest.Builder()
-                            .setDisplayName(name)
-                            .build()
-                    )?.await()
-                    currentUser = auth.currentUser
+                    val sent = EmailVerificationHelper.sendOtp(email)
+                    if (sent) {
+                        // Lưu thông tin đăng ký tạm, chờ xác thực OTP
+                        pendingName = name
+                        pendingEmail = email
+                        pendingPassword = password
+                        otpError = null
+                        otpSuccess = false
+                        showOtpScreen = true
+                    } else {
+                        errorMessage = "Không thể gửi mã xác thực. Vui lòng thử lại."
+                    }
                 } catch (e: Exception) {
-                    errorMessage = e.localizedMessage ?: "Đăng ký thất bại"
+                    errorMessage = e.localizedMessage ?: "Lỗi gửi mã xác thực"
                 } finally {
                     isLoading = false
                 }
@@ -624,6 +643,78 @@ fun AccountScreen(
             )
         }
 
+        // ── Màn hình xác thực OTP (overlay toàn màn hình) ────────────────────
+        if (showOtpScreen) {
+            EmailVerificationScreen(
+                email = pendingEmail,
+                onVerifyCode = { code ->
+                    otpLoading = true
+                    otpError = null
+                    val result = EmailVerificationHelper.verifyOtp(code)
+                    when (result) {
+                        OtpVerifyResult.SUCCESS -> {
+                            // Mã đúng → tạo tài khoản Firebase
+                            scope.launch {
+                                try {
+                                    val authResult = auth.createUserWithEmailAndPassword(
+                                        pendingEmail, pendingPassword
+                                    ).await()
+                                    authResult.user?.updateProfile(
+                                        UserProfileChangeRequest.Builder()
+                                            .setDisplayName(pendingName)
+                                            .build()
+                                    )?.await()
+                                    otpSuccess = true
+                                    otpLoading = false
+                                    // Sau 2 giây (EmailVerificationScreen tự redirect),
+                                    // cập nhật user và đóng màn hình OTP
+                                    kotlinx.coroutines.delay(2200)
+                                    currentUser = auth.currentUser
+                                    showOtpScreen = false
+                                    otpSuccess = false
+                                } catch (e: Exception) {
+                                    otpError = e.localizedMessage ?: "Đăng ký thất bại"
+                                    otpLoading = false
+                                }
+                            }
+                        }
+                        OtpVerifyResult.WRONG_CODE -> {
+                            otpError = "Mã xác thực không đúng"
+                            otpLoading = false
+                            clearOtpTrigger++ // Trigger xóa mã trên giao diện
+                        }
+                        OtpVerifyResult.EXPIRED -> {
+                            otpError = "Mã xác thực đã hết hạn. Vui lòng gửi lại."
+                            otpLoading = false
+                            clearOtpTrigger++ // Trigger xóa mã trên giao diện
+                        }
+                        OtpVerifyResult.NO_OTP_SENT -> {
+                            otpError = "Chưa gửi mã. Vui lòng thử lại."
+                            otpLoading = false
+                        }
+                    }
+                },
+                onResendCode = {
+                    scope.launch {
+                        otpError = null
+                        val sent = EmailVerificationHelper.sendOtp(pendingEmail)
+                        if (!sent) {
+                            otpError = "Không thể gửi lại mã. Vui lòng thử lại."
+                        }
+                    }
+                },
+                onBackToLogin = {
+                    EmailVerificationHelper.clearOtp()
+                    showOtpScreen = false
+                    otpError = null
+                    otpSuccess = false
+                },
+                isLoading = otpLoading,
+                isSuccess = otpSuccess,
+                errorMessage = otpError,
+                clearTrigger = clearOtpTrigger
+            )
+        }
     }
 }
 
