@@ -180,6 +180,7 @@ fun MainContent(
     var showWatchPartyLobby by remember { mutableStateOf(false) }
     val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
     var appAuthLoading by remember { mutableStateOf(false) }
+    var appAuthError by remember { mutableStateOf<String?>(null) }
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
@@ -189,13 +190,14 @@ fun MainContent(
         onLogin = { email, password, onSuccess ->
             scope.launch {
                 appAuthLoading = true
+                appAuthError = null
                 try {
                     auth.signInWithEmailAndPassword(email, password).await()
                     // Sau khi đăng nhập xong, mở lại Watch Party lobby
                     showWatchPartyLobby = true
                     onSuccess()
                 } catch (e: Exception) {
-                    showToast(e.localizedMessage ?: "Đăng nhập thất bại")
+                    appAuthError = "Đăng nhập thất bại: ${e.localizedMessage}"
                 } finally {
                     appAuthLoading = false
                 }
@@ -204,7 +206,23 @@ fun MainContent(
         onRegister = { name, email, password, onSuccess ->
             scope.launch {
                 appAuthLoading = true
+                appAuthError = null
                 try {
+                    var emailExists = false
+                    try {
+                        auth.signInWithEmailAndPassword(email, "DummyWrongPass123!@#").await()
+                        emailExists = true
+                    } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                        emailExists = false
+                    } catch (e: Exception) {
+                        emailExists = true
+                    }
+
+                    if (emailExists) {
+                        appAuthError = "Email đã được sử dụng. Vui lòng chọn email khác."
+                        return@launch
+                    }
+
                     val result = auth.createUserWithEmailAndPassword(email, password).await()
                     result.user?.updateProfile(
                         com.google.firebase.auth.UserProfileChangeRequest.Builder()
@@ -214,7 +232,7 @@ fun MainContent(
                     showWatchPartyLobby = true
                     onSuccess()
                 } catch (e: Exception) {
-                    showToast(e.localizedMessage ?: "Đăng ký thất bại")
+                    appAuthError = "Đăng ký thất bại: ${e.localizedMessage}"
                 } finally {
                     appAuthLoading = false
                 }
@@ -223,6 +241,7 @@ fun MainContent(
         onGoogleSignIn = { onSuccess ->
             scope.launch {
                 appAuthLoading = true
+                appAuthError = null
                 try {
                     val credentialManager = androidx.credentials.CredentialManager.create(context)
                     val signInOption = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
@@ -244,7 +263,7 @@ fun MainContent(
                     showWatchPartyLobby = true
                     onSuccess()
                 } catch (e: Exception) {
-                    showToast(e.localizedMessage ?: "Đăng nhập Google thất bại")
+                    appAuthError = "Đăng nhập Google thất bại"
                 } finally {
                     appAuthLoading = false
                 }
@@ -845,8 +864,11 @@ fun MainContent(
             AuthBottomSheet(
                 state = appAuthStateHolder.uiState,
                 isLoading = appAuthLoading,
-                errorMessage = null,
-                onEvent = appAuthStateHolder::onEvent,
+                errorMessage = appAuthError,
+                onEvent = { event -> 
+                    appAuthError = null
+                    appAuthStateHolder.onEvent(event)
+                },
                 onForgotPassword = { appAuthStateHolder.onEvent(AccountAuthEvent.CloseDialog) }
             )
         }
