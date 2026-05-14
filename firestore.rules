@@ -19,6 +19,12 @@ service cloud.firestore {
       }
     }
 
+    match /home_categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
     match /movies/{movieId} {
       allow read: if true;
       // Only admin users can write movies

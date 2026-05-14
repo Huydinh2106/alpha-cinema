@@ -207,20 +207,41 @@ class SearchViewModel : ViewModel() {
     }
 
     private suspend fun fetchFilteredResults(page: Int): List<SearchMovieUi> {
+        val isKidsMode = com.example.alphacinema.data.local.SettingsManager.getInstance().isKidsModeEnabled.value
         val filters = _appliedFilters.value
         val keywordParam = currentQuery.trim()
-        val response = api.searchMovies(
-            keyword = keywordParam,
-            page = page,
-            limit = 21,
-            category = filters.category?.slug,
-            country = filters.country?.slug,
-            year = filters.year?.slug,
-            sortLang = filters.sortLang?.slug
-        )
 
-        val items = response.data?.items ?: response.items ?: emptyList()
-        return items.map { it.toSearchUi() }
+        if (isKidsMode) {
+            // Kids mode: use Firestore to ensure only isKidsFriendly movies are returned
+            // Note: Firestore search here only supports keyword filtering, not the advanced API filters
+            val repository = com.example.alphacinema.data.repository.FirestoreRepository()
+            val movies = repository.searchMovies(keywordParam, isKidsMode = true, limit = 20)
+            return movies.map { firestoreMovie ->
+                SearchMovieUi(
+                    movieId = firestoreMovie.slug,
+                    title = firestoreMovie.title,
+                    subtitle = firestoreMovie.categories.firstOrNull() ?: firestoreMovie.originName,
+                    badge = "Full",
+                    badgeColor = "gray",
+                    rating = if (firestoreMovie.tmdbVoteAverage > 0.0) firestoreMovie.tmdbVoteAverage.toString() else "N/A",
+                    posterUrl = firestoreMovie.posterUrl
+                )
+            }
+        } else {
+            // Normal mode: use API for full catalog search
+            val response = api.searchMovies(
+                keyword = keywordParam,
+                page = page,
+                limit = 21,
+                category = filters.category?.slug,
+                country = filters.country?.slug,
+                year = filters.year?.slug,
+                sortLang = filters.sortLang?.slug
+            )
+
+            val items = response.data?.items ?: response.items ?: emptyList()
+            return items.map { it.toSearchUi() }
+        }
     }
 
     private fun MovieItem.toSearchUi() = SearchMovieUi(

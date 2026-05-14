@@ -22,6 +22,18 @@ class MovieRepository {
         }
     }
 
+    suspend fun searchMoviesFromApi(keyword: String, page: Int = 1): List<MovieItem> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response = api.searchMovies(keyword = keyword, page = page)
+                response.items ?: response.data?.items ?: emptyList()
+            } catch (e: Exception) {
+                android.util.Log.e("MovieRepository", "searchMoviesFromApi failed", e)
+                emptyList()
+            }
+        }
+    }
+
     suspend fun getMoviesByType(type: String, page: Int = 1, limit: Int = 10, excludeSlugs: Set<String> = emptySet()): List<MovieItem> {
         return withContext(Dispatchers.IO) {
             val isKidsMode = SettingsManager.getInstance().isKidsModeEnabled.value
@@ -45,6 +57,14 @@ class MovieRepository {
             movies.map { it.toMovieItem() }
         }
     }
+
+    suspend fun getMoviesByHomeCategory(categoryId: String, limit: Int = 20): List<MovieItem> {
+        return withContext(Dispatchers.IO) {
+            val isKidsMode = SettingsManager.getInstance().isKidsModeEnabled.value
+            val movies = firestoreRepository.getCategoryMovies(categoryId, isKidsMode, limit)
+            movies.map { it.toMovieItem() }
+        }
+    }
     
     private fun FirestoreMovie.toMovieItem() = MovieItem(
         _id = slug,
@@ -59,7 +79,13 @@ class MovieRepository {
         quality = "FHD",
         lang = "Vietsub",
         ageRating = ageRating,
-        tmdb = null,
+        tmdb = com.example.alphacinema.data.model.TmdbInfo(
+            type = null,
+            id = null,
+            season = null,
+            vote_average = if (tmdbVoteAverage > 0.0) tmdbVoteAverage else null,
+            vote_count = null
+        ),
         category = categories.map { CategoryInfo(name = it, slug = "") },
         country = emptyList()
     )

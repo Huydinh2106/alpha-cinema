@@ -31,7 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.rounded.Star
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,9 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.alphacinema.R
-import com.example.alphacinema.ui.search.FilterKind
+import com.example.alphacinema.ui.account.FilterKind
 import com.example.alphacinema.ui.search.SearchMovieCardSkeleton
 import com.example.alphacinema.ui.search.SearchMovieUi
 
@@ -219,13 +217,13 @@ fun MovieListCard(movie: SearchMovieUi, onClick: () -> Unit = {}) {
         ) {
             // Poster image
             if (movie.posterUrl.isNotEmpty()) {
-                AsyncImage(
+                com.example.alphacinema.ui.components.AlphaCinemaImage(
                     model = movie.posterUrl,
                     contentDescription = movie.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    placeholder = painterResource(id = R.drawable.logo_app),
-                    error = painterResource(id = R.drawable.logo_app)
+                    
+                    
                 )
             } else {
                 Icon(
