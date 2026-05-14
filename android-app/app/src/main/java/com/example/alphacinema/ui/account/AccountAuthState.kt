@@ -41,9 +41,9 @@ sealed interface AccountAuthEvent {
 }
 
 class AccountAuthStateHolder(
-    private val onLogin: (email: String, password: String) -> Unit,
-    private val onRegister: (name: String, email: String, password: String) -> Unit,
-    private val onGoogleSignIn: () -> Unit
+    private val onLogin: (email: String, password: String, onSuccess: () -> Unit) -> Unit,
+    private val onRegister: (name: String, email: String, password: String, onSuccess: () -> Unit) -> Unit,
+    private val onGoogleSignIn: (onSuccess: () -> Unit) -> Unit
 ) {
     var uiState by mutableStateOf(AccountAuthUiState())
         private set
@@ -113,8 +113,9 @@ class AccountAuthStateHolder(
 
             AccountAuthEvent.Submit -> submit()
             AccountAuthEvent.ContinueWithGoogle -> {
-                onGoogleSignIn()
-                uiState = uiState.copy(showDialog = false)
+                onGoogleSignIn {
+                    uiState = uiState.copy(showDialog = false)
+                }
             }
         }
     }
@@ -130,8 +131,9 @@ class AccountAuthStateHolder(
             )
 
             if (emailError == null && passwordError == null) {
-                onLogin(uiState.email.trim(), uiState.password)
-                uiState = uiState.copy(showDialog = false)
+                onLogin(uiState.email.trim(), uiState.password) {
+                    uiState = uiState.copy(showDialog = false)
+                }
             }
         } else {
             val nameError = validateRequired(uiState.name, "Tên")
@@ -151,8 +153,9 @@ class AccountAuthStateHolder(
             )
 
             if (nameError == null && emailError == null && passwordError == null && confirmError == null) {
-                onRegister(uiState.name.trim(), uiState.email.trim(), uiState.password)
-                uiState = uiState.copy(showDialog = false)
+                onRegister(uiState.name.trim(), uiState.email.trim(), uiState.password) {
+                    uiState = uiState.copy(showDialog = false)
+                }
             }
         }
     }
@@ -176,9 +179,9 @@ class AccountAuthStateHolder(
 
 @Composable
 fun rememberAccountAuthStateHolder(
-    onLogin: (email: String, password: String) -> Unit = { _, _ -> },
-    onRegister: (name: String, email: String, password: String) -> Unit = { _, _, _ -> },
-    onGoogleSignIn: () -> Unit = {}
+    onLogin: (email: String, password: String, onSuccess: () -> Unit) -> Unit = { _, _, _ -> },
+    onRegister: (name: String, email: String, password: String, onSuccess: () -> Unit) -> Unit = { _, _, _, _ -> },
+    onGoogleSignIn: (onSuccess: () -> Unit) -> Unit = {}
 ): AccountAuthStateHolder {
     return remember {
         AccountAuthStateHolder(
