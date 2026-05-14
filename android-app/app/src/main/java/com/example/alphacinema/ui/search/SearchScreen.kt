@@ -4,9 +4,11 @@ package com.example.alphacinema.ui.search
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -456,8 +458,12 @@ fun HistoryChip(text: String, onClick: () -> Unit, onDelete: () -> Unit) {
 @Composable
 fun SearchMovieCard(movie: SearchMovieUi, onClick: () -> Unit = {}) {
     Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.68f).clip(RoundedCornerShape(18.dp)).background(Color(0xFF131A2F)).clickable(onClick = onClick)) {
-        AsyncImage(model = movie.posterUrl, contentDescription = movie.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
-            placeholder = painterResource(id = R.drawable.logo_app), error = painterResource(id = R.drawable.logo_app))
+        com.example.alphacinema.ui.components.AlphaCinemaImage(
+            model = movie.posterUrl,
+            contentDescription = movie.title,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
         Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.3f), Color.Black.copy(alpha = 0.85f)), startY = 100f)))
         Column(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.25f)).padding(horizontal = 6.dp, vertical = 2.dp)) {

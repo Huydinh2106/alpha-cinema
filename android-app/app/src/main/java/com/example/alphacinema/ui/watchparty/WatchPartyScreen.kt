@@ -7,6 +7,10 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.view.View
 import android.view.ViewGroup
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -43,6 +47,8 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
@@ -75,6 +81,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
@@ -114,6 +121,26 @@ fun WatchPartyScreen(
 
     val isHost = viewModel.isHost
     val currentUid = viewModel.currentUid
+    
+    val isMicMuted by viewModel.isMicMuted.collectAsState()
+    val speakingUsers by viewModel.speakingUsers.collectAsState()
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            room?.roomId?.let { viewModel.initAgora(context, it) }
+        }
+    }
+
+    LaunchedEffect(room?.roomId) {
+        if (room != null) {
+            val hasPermission = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (hasPermission) {
+                viewModel.initAgora(context, room!!.roomId)
+            } else {
+                permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
 
     // Guest time display
     var guestCurrentTimeMs by remember { mutableLongStateOf(0L) }
@@ -177,6 +204,18 @@ fun WatchPartyScreen(
             exoPlayer.addListener(listener)
             onDispose { exoPlayer.removeListener(listener) }
         }
+
+        // Force sync when a new member joins
+        var previousMembersSize by remember { mutableStateOf(members.size) }
+        LaunchedEffect(members.size) {
+            if (members.size > previousMembersSize && previousMembersSize > 0) {
+                // Wait 5 seconds to let the new guest load the video, then force a sync update
+                delay(5000)
+                val state = if (exoPlayer.isPlaying) "playing" else if (exoPlayer.playbackState == Player.STATE_READY) "paused" else return@LaunchedEffect
+                viewModel.updatePlayback(state, exoPlayer.currentPosition / 1000.0)
+            }
+            previousMembersSize = members.size
+        }
     }
 
     // Guest: Server Clock sync
@@ -186,7 +225,8 @@ fun WatchPartyScreen(
             when (r.playbackState) {
                 "playing" -> {
                     val serverNow = System.currentTimeMillis() + serverTimeOffset
-                    val pos = r.currentTimeSec + (serverNow - r.playStartedAt) / 1000.0
+                    // Trick: Add 150ms (0.15s) offset because guests usually lag slightly behind
+                    val pos = r.currentTimeSec + (serverNow - r.playStartedAt) / 1000.0 + 0.15
                     exoPlayer.seekTo((pos * 1000).toLong())
                     exoPlayer.playWhenReady = true
                     // Self-correction loop
@@ -195,7 +235,8 @@ fun WatchPartyScreen(
                         val cr = room ?: break
                         if (cr.playbackState != "playing") break
                         val now = System.currentTimeMillis() + serverTimeOffset
-                        val exp = cr.currentTimeSec + (now - cr.playStartedAt) / 1000.0
+                        // Trick: Add 150ms (0.15s) offset because guests usually lag slightly behind
+                        val exp = cr.currentTimeSec + (now - cr.playStartedAt) / 1000.0 + 0.15
                         val act = exoPlayer.currentPosition / 1000.0
                         val diff = exp - act
                         when {
@@ -312,6 +353,17 @@ fun WatchPartyScreen(
                 val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
                 Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
+                
+                IconButton(
+                    onClick = { toggleFullscreen() },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.4f))
+                ) {
+                    Icon(Icons.Outlined.FullscreenExit, "Thu nhỏ", tint = Color.White)
+                }
             }
 
             // Episode picker dialog overlay
@@ -413,6 +465,17 @@ fun WatchPartyScreen(
                 val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
                 Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
+                
+                IconButton(
+                    onClick = { toggleFullscreen() },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.4f))
+                ) {
+                    Icon(Icons.Outlined.Fullscreen, "Toàn màn hình", tint = Color.White)
+                }
             }
             // Back button
             IconButton(
@@ -436,6 +499,15 @@ fun WatchPartyScreen(
                 movieTitle = if (hasMovie) room!!.movieTitle else "Chưa chọn phim",
                 hasMovie = hasMovie,
                 isHost = isHost,
+                isMicMuted = isMicMuted,
+                onToggleMic = {
+                    val hasPermission = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                    if (hasPermission) {
+                        viewModel.toggleMic()
+                    } else {
+                        permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                    }
+                },
                 onCopyId = {
                     clipboardManager.setText(AnnotatedString(room!!.roomId))
                     android.widget.Toast.makeText(context, "Đã sao chép mã phòng", android.widget.Toast.LENGTH_SHORT).show()
@@ -524,7 +596,12 @@ fun WatchPartyScreen(
 
         // Members
         if (members.isNotEmpty()) {
-            MembersList(members = members, hostId = room?.hostId ?: "")
+            MembersList(
+                members = members,
+                hostId = room?.hostId ?: "",
+                speakingUsers = speakingUsers,
+                onAdjustVolume = { uid, vol -> viewModel.adjustUserVolume(uid, vol) }
+            )
         }
 
         // Chat
@@ -544,6 +621,8 @@ private fun RoomInfoBar(
     movieTitle: String,
     hasMovie: Boolean = true,
     isHost: Boolean,
+    isMicMuted: Boolean,
+    onToggleMic: () -> Unit,
     onCopyId: () -> Unit,
     onShare: () -> Unit,
     onChangeMovie: () -> Unit
@@ -570,6 +649,23 @@ private fun RoomInfoBar(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Mic button
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (isMicMuted) Color.Red.copy(alpha = 0.15f) else Color(0xFFF6E29A).copy(alpha = 0.15f))
+                    .clickable { onToggleMic() }
+                    .padding(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (isMicMuted) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                    contentDescription = "Mic",
+                    tint = if (isMicMuted) Color.Red else Color(0xFFF6E29A),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
             // Invite button
             Row(
                 modifier = Modifier
@@ -633,7 +729,12 @@ private fun RoomInfoBar(
 }
 
 @Composable
-private fun MembersList(members: List<WatchPartyMember>, hostId: String) {
+private fun MembersList(
+    members: List<WatchPartyMember>, 
+    hostId: String,
+    speakingUsers: Map<Int, Int>,
+    onAdjustVolume: (String, Int) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -651,43 +752,89 @@ private fun MembersList(members: List<WatchPartyMember>, hostId: String) {
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             members.forEach { member ->
-                val memberIsHost = member.uid == hostId
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.widthIn(max = 60.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (memberIsHost) Brush.linearGradient(
-                                    listOf(Color(0xFFF6E29A), Color(0xFFD4A843))
-                                ) else Brush.linearGradient(
-                                    listOf(Color(0xFF1A2237), Color(0xFF1A2237))
-                                )
-                            )
-                            .then(
-                                if (memberIsHost) Modifier.border(2.dp, Color(0xFFF6E29A), CircleShape)
-                                else Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                            ),
-                        contentAlignment = Alignment.Center
+                androidx.compose.runtime.key(member.uid) {
+                    val memberIsHost = member.uid == hostId
+                    val agoraUid = member.uid.hashCode() and 0x7FFFFFFF
+                    val isSpeaking = speakingUsers.containsKey(agoraUid)
+                    var showVolumePopup by remember { mutableStateOf(false) }
+                    var volume by remember { mutableStateOf(100f) }
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.widthIn(max = 60.dp)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (memberIsHost) Brush.linearGradient(
+                                        listOf(Color(0xFFF6E29A), Color(0xFFD4A843))
+                                    ) else Brush.linearGradient(
+                                        listOf(Color(0xFF1A2237), Color(0xFF1A2237))
+                                    )
+                                )
+                                .then(
+                                    if (isSpeaking) Modifier.border(2.dp, Color(0xFF4CAF50), CircleShape)
+                                    else if (memberIsHost) Modifier.border(2.dp, Color(0xFFF6E29A), CircleShape)
+                                    else Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
+                                )
+                                .clickable { showVolumePopup = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (member.photoUrl.isNotBlank()) {
+                                coil.compose.AsyncImage(
+                                    model = member.photoUrl,
+                                    contentDescription = member.displayName,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Text(
+                                    text = member.displayName.firstOrNull()?.uppercase() ?: "?",
+                                    color = if (memberIsHost) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = member.displayName.firstOrNull()?.uppercase() ?: "?",
-                            color = if (memberIsHost) Color.Black else Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            text = if (memberIsHost) "Host" else member.displayName.split(" ").lastOrNull() ?: "",
+                            color = if (memberIsHost) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.6f),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (memberIsHost) "Host" else member.displayName.split(" ").lastOrNull() ?: "",
-                        color = if (memberIsHost) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.6f),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+
+                    if (showVolumePopup) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showVolumePopup = false },
+                            containerColor = Color(0xFF1A2237),
+                            title = {
+                                Text("Âm lượng: ${member.displayName}", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                            },
+                            text = {
+                                androidx.compose.material3.Slider(
+                                    value = volume,
+                                    onValueChange = { 
+                                        volume = it 
+                                        onAdjustVolume(member.uid, it.toInt())
+                                    },
+                                    valueRange = 0f..100f
+                                )
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = { showVolumePopup = false },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A))
+                                ) {
+                                    Text("Đóng", color = Color.Black)
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }

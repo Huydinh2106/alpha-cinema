@@ -64,7 +64,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import com.example.alphacinema.R
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatMessage
@@ -631,12 +630,12 @@ private fun SupportMovieSuggestionCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (!movie.posterUrl.isNullOrBlank()) {
-                    AsyncImage(
+                    com.example.alphacinema.ui.components.AlphaCinemaImage(
                         model = movie.posterUrl,
                         contentDescription = movie.title,
                         contentScale = ContentScale.Crop,
-                        placeholder = painterResource(id = R.drawable.logo_app),
-                        error = painterResource(id = R.drawable.logo_app),
+                        
+                        
                         modifier = Modifier
                             .width(68.dp)
                             .height(96.dp)

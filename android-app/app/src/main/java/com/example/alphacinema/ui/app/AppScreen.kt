@@ -48,6 +48,7 @@ import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.ui.account.AccountScreen
+import com.example.alphacinema.ui.account.ProfileSettingsScreen
 import com.example.alphacinema.ui.admin.AdminScreen
 import com.example.alphacinema.ui.admin.AdminViewModel
 import com.example.alphacinema.ui.home.GlassBottomBar
@@ -69,7 +70,12 @@ import com.example.alphacinema.ui.watchparty.WatchPartyScreen
 import com.example.alphacinema.ui.watchparty.WatchPartyViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import androidx.compose.runtime.rememberCoroutineScope
+import com.example.alphacinema.ui.account.AccountAuthEvent
+import com.example.alphacinema.ui.account.AuthBottomSheet
+import com.example.alphacinema.ui.account.AuthMode
+import com.example.alphacinema.ui.account.rememberAccountAuthStateHolder
 
 // ── Animation Constants ─────────────────────────────────────────────────────
 
@@ -140,6 +146,8 @@ fun MainContent(
 ) {
     val navController = rememberNavController()
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
+    val scope = rememberCoroutineScope()
+    val firestoreRepo = remember { com.example.alphacinema.data.repository.FirestoreRepository() }
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val movieDetailViewModel: MovieDetailViewModel = viewModel()
@@ -170,11 +178,90 @@ fun MainContent(
     val wpIsJoining by watchPartyViewModel.isJoining.collectAsState()
     var watchPartyLobbyMovie by remember { mutableStateOf<com.example.alphacinema.ui.movie.detail.MovieDetailUi?>(null) }
     var showWatchPartyLobby by remember { mutableStateOf(false) }
-    var demoCurrentPlan by rememberSaveable { mutableStateOf<String?>(null) }
-    var demoMembershipExpiredDate by rememberSaveable { mutableStateOf<String?>(null) }
+    val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
+    var appAuthLoading by remember { mutableStateOf(false) }
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    val appAuthStateHolder = rememberAccountAuthStateHolder(
+        onLogin = { email, password ->
+            scope.launch {
+                appAuthLoading = true
+                try {
+                    auth.signInWithEmailAndPassword(email, password).await()
+                    // Sau khi đăng nhập xong, mở lại Watch Party lobby
+                    showWatchPartyLobby = true
+                } catch (e: Exception) {
+                    showToast(e.localizedMessage ?: "Đăng nhập thất bại")
+                } finally {
+                    appAuthLoading = false
+                }
+            }
+        },
+        onRegister = { name, email, password ->
+            scope.launch {
+                appAuthLoading = true
+                try {
+                    val result = auth.createUserWithEmailAndPassword(email, password).await()
+                    result.user?.updateProfile(
+                        com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                            .setDisplayName(name)
+                            .build()
+                    )?.await()
+                    showWatchPartyLobby = true
+                } catch (e: Exception) {
+                    showToast(e.localizedMessage ?: "Đăng ký thất bại")
+                } finally {
+                    appAuthLoading = false
+                }
+            }
+        },
+        onGoogleSignIn = {
+            scope.launch {
+                appAuthLoading = true
+                try {
+                    val credentialManager = androidx.credentials.CredentialManager.create(context)
+                    val signInOption = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
+                        .setFilterByAuthorizedAccounts(false)
+                        .setServerClientId("1013232588133-86fl74ls04r8fkarnahh2b9pvie5g7kn.apps.googleusercontent.com")
+                        .setAutoSelectEnabled(false)
+                        .setNonce(null)
+                        .build()
+                    val request = androidx.credentials.GetCredentialRequest.Builder()
+                        .addCredentialOption(signInOption)
+                        .build()
+                    val credentialResponse = credentialManager.getCredential(
+                        request = request,
+                        context = context as android.app.Activity
+                    )
+                    val googleIdTokenCredential = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(credentialResponse.credential.data)
+                    val firebaseCredential = com.google.firebase.auth.GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+                    auth.signInWithCredential(firebaseCredential).await()
+                    showWatchPartyLobby = true
+                } catch (e: Exception) {
+                    showToast(e.localizedMessage ?: "Đăng nhập Google thất bại")
+                } finally {
+                    appAuthLoading = false
+                }
+            }
+        }
+    )
+    var demoCurrentPlan by rememberSaveable { mutableStateOf<String?>(null) }
+    var demoMembershipExpiredDate by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Load subscription plan from Firestore on app start
+    LaunchedEffect(Unit) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (user != null && demoCurrentPlan == null) {
+            val profile = firestoreRepo.getUserProfile(user.uid)
+            val plan = profile?.subscriptionPlan
+            if (!plan.isNullOrBlank() && plan != "free") {
+                demoCurrentPlan = plan
+                demoMembershipExpiredDate = "30/06/2026"
+            }
+        }
     }
 
     fun openMovieDetail(slug: String) {
@@ -236,7 +323,7 @@ fun MainContent(
                 val roomId = data.pathSegments?.firstOrNull()
                 if (!roomId.isNullOrBlank()) {
                     deepLinkHandled.value = true
-                    watchPartyViewModel.joinRoom(roomId) {
+                    watchPartyViewModel.joinRoom(context, roomId) {
                         openWatchParty(roomId)
                     }
                 }
@@ -345,6 +432,9 @@ fun MainContent(
                             onOpenPayment = {
                                 navController.navigate(PaymentNavRoute)
                             },
+                            onOpenProfileSettings = {
+                                navController.navigate(ProfileSettingsNavRoute)
+                            },
                             onLogout = {
                                 demoCurrentPlan = null
                                 demoMembershipExpiredDate = null
@@ -423,7 +513,11 @@ fun MainContent(
                             )
                         },
                         onWatchTogether = {
-                            if (wpRoom != null && watchPartyViewModel.isHost) {
+                            val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                            if (currentUser == null) {
+                                // Chưa đăng nhập -> hiện popup đăng nhập ngay
+                                appAuthStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+                            } else if (wpRoom != null && watchPartyViewModel.isHost) {
                                 // Đang là chủ phòng -> đổi phim cho phòng hiện tại
                                 val activeEp = detailMovie.episodes.firstOrNull()
                                 watchPartyViewModel.changeMovie(
@@ -548,9 +642,28 @@ fun MainContent(
                 PaymentScreen(
                     onBack = { navController.popBackStack() },
                     onContinuePayment = { planName, paymentMethod ->
+                        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        if (user != null) {
+                            scope.launch {
+                                firestoreRepo.updateUserSubscription(user.uid, planName.lowercase())
+                            }
+                        }
                         demoCurrentPlan = planName.lowercase()
                         demoMembershipExpiredDate = "30/06/2026"
                         showToast("Đã nâng cấp gói $planName qua $paymentMethod")
+                    }
+                )
+            }
+
+            // ── Profile Settings ─────────────────────────────────────────
+            composable<ProfileSettingsNavRoute> {
+                ProfileSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPayment = { navController.navigate(PaymentNavRoute) },
+                    onLogout = {
+                        demoCurrentPlan = null
+                        demoMembershipExpiredDate = null
+                        navController.popBackStack()
                     }
                 )
             }
@@ -704,6 +817,7 @@ fun MainContent(
                 },
                 onCreateRoom = {
                     watchPartyViewModel.createRoom(
+                        context = context,
                         movieSlug = movie?.id ?: "",
                         movieTitle = movie?.title ?: "",
                         moviePosterUrl = movie?.posterUrl ?: "",
@@ -715,11 +829,19 @@ fun MainContent(
                     }
                 },
                 onJoinRoom = { roomId ->
-                    watchPartyViewModel.joinRoom(roomId) {
+                    watchPartyViewModel.joinRoom(context, roomId) {
                         showWatchPartyLobby = false
                         openWatchParty(roomId)
                     }
                 }
+            )
+        }
+
+        // Popup đăng nhập khi bấm Xem chung mà chưa login
+        if (appAuthStateHolder.uiState.showDialog) {
+            AuthBottomSheet(
+                state = appAuthStateHolder.uiState,
+                onEvent = appAuthStateHolder::onEvent
             )
         }
 
