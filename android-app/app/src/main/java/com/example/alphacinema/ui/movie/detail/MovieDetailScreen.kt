@@ -77,7 +77,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
@@ -254,7 +253,7 @@ private fun DetailTopBanner(
             .fillMaxWidth()
             .height(330.dp)
     ) {
-        AsyncImage(
+        com.example.alphacinema.ui.components.AlphaCinemaImage(
             model = movie.bannerUrl,
             contentDescription = movie.title,
             contentScale = ContentScale.Crop,
@@ -290,7 +289,7 @@ private fun DetailTopBanner(
             )
         }
 
-        AsyncImage(
+        com.example.alphacinema.ui.components.AlphaCinemaImage(
             model = movie.posterUrl,
             contentDescription = movie.title,
             contentScale = ContentScale.Crop,
@@ -808,7 +807,7 @@ private fun CastTab(cast: List<CastUi>) {
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (castItem.profileUrl != null) {
-                            AsyncImage(
+                            com.example.alphacinema.ui.components.AlphaCinemaImage(
                                 model = castItem.profileUrl,
                                 contentDescription = castItem.name,
                                 contentScale = ContentScale.Crop,
@@ -876,7 +875,7 @@ private fun CastTab(cast: List<CastUi>) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             val context = LocalContext.current
-            AsyncImage(
+            com.example.alphacinema.ui.components.AlphaCinemaImage(
                 model = ImageRequest.Builder(context)
                     .data("file:///android_asset/tmdb_logo.svg")
                     .decoderFactory(SvgDecoder.Factory())
@@ -916,7 +915,7 @@ private fun RecommendationTab(
                     .padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
+                com.example.alphacinema.ui.components.AlphaCinemaImage(
                     model = recommended.posterUrl,
                     contentDescription = recommended.title,
                     contentScale = ContentScale.Crop,

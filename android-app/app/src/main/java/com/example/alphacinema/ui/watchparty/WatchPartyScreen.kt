@@ -81,6 +81,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
@@ -781,12 +782,21 @@ private fun MembersList(
                                 .clickable { showVolumePopup = true },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = member.displayName.firstOrNull()?.uppercase() ?: "?",
-                                color = if (memberIsHost) Color.Black else Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
+                            if (member.photoUrl.isNotBlank()) {
+                                coil.compose.AsyncImage(
+                                    model = member.photoUrl,
+                                    contentDescription = member.displayName,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Text(
+                                    text = member.displayName.firstOrNull()?.uppercase() ?: "?",
+                                    color = if (memberIsHost) Color.Black else Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.content.Context
+import com.example.alphacinema.data.local.UserProfileCache
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -89,6 +90,7 @@ class WatchPartyViewModel : ViewModel() {
     // ── Create Room ─────────────────────────────────────────────────
 
     fun createRoom(
+        context: Context,
         movieSlug: String,
         movieTitle: String,
         moviePosterUrl: String,
@@ -104,7 +106,7 @@ class WatchPartyViewModel : ViewModel() {
                 val roomId = repository.createRoom(
                     hostId = user.uid,
                     hostName = user.displayName ?: "Người dùng",
-                    hostPhotoUrl = user.photoUrl?.toString() ?: "",
+                    hostPhotoUrl = getAvatarUrl(context, user),
                     movieSlug = movieSlug,
                     movieTitle = movieTitle,
                     moviePosterUrl = moviePosterUrl,
@@ -123,7 +125,7 @@ class WatchPartyViewModel : ViewModel() {
 
     // ── Join Room ───────────────────────────────────────────────────
 
-    fun joinRoom(roomId: String, onSuccess: () -> Unit) {
+    fun joinRoom(context: Context, roomId: String, onSuccess: () -> Unit) {
         val user = auth.currentUser ?: return
         viewModelScope.launch {
             _isJoining.value = true
@@ -133,7 +135,7 @@ class WatchPartyViewModel : ViewModel() {
                     roomId = roomId.uppercase().trim(),
                     uid = user.uid,
                     displayName = user.displayName ?: "Người dùng",
-                    photoUrl = user.photoUrl?.toString() ?: ""
+                    photoUrl = getAvatarUrl(context, user)
                 )
                 result.fold(
                     onSuccess = {
@@ -333,5 +335,13 @@ class WatchPartyViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         leaveRoom()
+    }
+
+    private fun getAvatarUrl(context: Context, user: com.google.firebase.auth.FirebaseUser): String {
+        val cache = UserProfileCache(context)
+        // Priority: cached avatar URL (from Firebase Storage) > Firebase Auth photoUrl
+        val cachedUrl = cache.avatarUrl
+        if (cachedUrl.isNotBlank() && !cachedUrl.startsWith("/")) return cachedUrl
+        return user.photoUrl?.toString() ?: ""
     }
 }
