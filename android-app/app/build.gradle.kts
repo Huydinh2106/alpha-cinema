@@ -93,6 +93,12 @@ dependencies {
     // Agora Voice SDK
     implementation("io.agora.rtc:voice-rtc-basic:4.6.3")
 
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Media
+    implementation("androidx.media:media:1.7.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

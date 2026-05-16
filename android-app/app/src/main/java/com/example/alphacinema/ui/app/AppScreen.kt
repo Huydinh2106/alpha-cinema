@@ -97,7 +97,13 @@ sealed interface SplashState {
 }
 
 @Composable
-fun AppScreen(modifier: Modifier = Modifier) {
+fun AppScreen(
+    modifier: Modifier = Modifier, 
+    initialShowNotification: Boolean = false,
+    initialNotificationType: String? = null,
+    initialMovieId: String? = null,
+    initialPlan: String? = null
+) {
     // Tạo HomeViewModel ở đây để dùng chung cho Splash (theo dõi isLoading)
     // và MainContent (truyền vào để HomeScreen không fetch lại lần 2)
     val homeViewModel: HomeViewModel = viewModel()
@@ -134,7 +140,13 @@ fun AppScreen(modifier: Modifier = Modifier) {
                 SplashScreen(onFinished = { animationFinished = true })
             }
             is SplashState.Done -> {
-                MainContent(modifier = modifier)
+                MainContent(
+                    modifier = modifier, 
+                    initialShowNotification = initialShowNotification,
+                    initialNotificationType = initialNotificationType,
+                    initialMovieId = initialMovieId,
+                    initialPlan = initialPlan
+                )
             }
         }
     }
@@ -142,7 +154,11 @@ fun AppScreen(modifier: Modifier = Modifier) {
 
 @Composable
 fun MainContent(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialShowNotification: Boolean = false,
+    initialNotificationType: String? = null,
+    initialMovieId: String? = null,
+    initialPlan: String? = null
 ) {
     val navController = rememberNavController()
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
@@ -193,11 +209,10 @@ fun MainContent(
                 appAuthError = null
                 try {
                     auth.signInWithEmailAndPassword(email, password).await()
-                    // Sau khi đăng nhập xong, mở lại Watch Party lobby
                     showWatchPartyLobby = true
                     onSuccess()
                 } catch (e: Exception) {
-                    appAuthError = "Đăng nhập thất bại: ${e.localizedMessage}"
+                    appAuthError = e.localizedMessage ?: "Lỗi đăng nhập"
                 } finally {
                     appAuthLoading = false
                 }
@@ -420,7 +435,14 @@ fun MainContent(
                 ) { screen ->
                     when (screen) {
                         ScreenType.HOME -> HomeScreen(
+                            initialShowNotification = initialShowNotification,
                             onPlayMovie = ::openPlayerFromHome,
+                            onOpenMovieDetail = { slug ->
+                                navController.navigate(MovieDetailNavRoute(slug = slug))
+                            },
+                            onNavigateToPlan = {
+                                navController.navigate(PaymentNavRoute)
+                            },
                             onSeeMore = { kind, slug, title ->
                                 navController.navigate(
                                     MovieListNavRoute(
@@ -871,6 +893,15 @@ fun MainContent(
                 },
                 onForgotPassword = { appAuthStateHolder.onEvent(AccountAuthEvent.CloseDialog) }
             )
+        }
+
+        // Xử lý Deep Link khi khởi chạy App từ Thông báo (Status bar)
+        LaunchedEffect(initialNotificationType, initialMovieId) {
+            if (initialNotificationType == "new_movie" && initialMovieId != null) {
+                navController.navigate(MovieDetailNavRoute(slug = initialMovieId))
+            } else if (initialNotificationType == "billing") {
+                navController.navigate(PaymentNavRoute)
+            }
         }
 
         if (isOnMainRoute) {

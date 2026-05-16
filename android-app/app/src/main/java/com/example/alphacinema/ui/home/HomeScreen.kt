@@ -110,12 +110,15 @@ package com.example.alphacinema.ui.home
     @Composable
     fun HomeScreen(
         viewModel: HomeViewModel = viewModel(),
+        initialShowNotification: Boolean = false,
         onPlayMovie: (MovieUi) -> Unit = {},
-        onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> }
+        onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> },
+        onOpenMovieDetail: (String) -> Unit = {},
+        onNavigateToPlan: () -> Unit = {}
     ) {
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
-        var showNotificationScreen by remember { mutableStateOf(false) }
+        var showNotificationScreen by remember { mutableStateOf(initialShowNotification) }
         
         val heroItems by viewModel.heroMovies.collectAsState()
         val phimBoMoi by viewModel.phimBoMoi.collectAsState()
@@ -396,7 +399,15 @@ package com.example.alphacinema.ui.home
             if (showNotificationScreen) {
                 NotificationScreen(
                     modifier = Modifier.zIndex(100f),
-                    onClose = { showNotificationScreen = false }
+                    onClose = { showNotificationScreen = false },
+                    onNavigateToMovie = { slug -> 
+                        showNotificationScreen = false
+                        onOpenMovieDetail(slug)
+                    },
+                    onNavigateToPlan = {
+                        showNotificationScreen = false
+                        onNavigateToPlan()
+                    }
                 )
             }
         }
