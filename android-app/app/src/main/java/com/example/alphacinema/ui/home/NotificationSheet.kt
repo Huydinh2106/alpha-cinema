@@ -122,94 +122,13 @@ enum class NotificationType(
 data class NotificationItem(
     val id: String,
     val type: NotificationType,
+    val rawType: String = "",
     val title: String,
     val message: String,
     val timeAgo: String,
-    val isRead: Boolean = false
-)
-
-// ── Dummy Data ───────────────────────────────────────────────────────────────
-fun getDummyNotifications(): List<NotificationItem> = listOf(
-    NotificationItem(
-        id = "1",
-        type = NotificationType.MARKETING,
-        title = "Giảm giá 50% gói Premium",
-        message = "Ưu đãi đặc biệt dành cho bạn! Nâng cấp lên Premium với giá chỉ 49,000đ/tháng. Áp dụng đến hết 31/05.",
-        timeAgo = "5 phút trước",
-        isRead = false
-    ),
-    NotificationItem(
-        id = "2",
-        type = NotificationType.NEW_MOVIE,
-        title = "Phim mới: Đào, Phở và Piano",
-        message = "Bộ phim đang gây sốt phòng vé đã có mặt trên Alpha Cinema. Xem ngay!",
-        timeAgo = "15 phút trước",
-        isRead = false
-    ),
-    NotificationItem(
-        id = "3",
-        type = NotificationType.SOCIAL,
-        title = "Lời mời Watch Party",
-        message = "Nguyễn Văn A đã mời bạn cùng xem \"Hai Muối\" ngay bây giờ.",
-        timeAgo = "30 phút trước",
-        isRead = false
-    ),
-    NotificationItem(
-        id = "4",
-        type = NotificationType.TRANSACTION,
-        title = "Thanh toán thành công",
-        message = "Bạn đã gia hạn gói Premium thành công. Gói có hiệu lực đến 14/06/2026.",
-        timeAgo = "2 giờ trước",
-        isRead = true
-    ),
-    NotificationItem(
-        id = "5",
-        type = NotificationType.SYSTEM,
-        title = "Cập nhật ứng dụng",
-        message = "Phiên bản mới 2.5.0 đã sẵn sàng! Nhiều tính năng thú vị và sửa lỗi.",
-        timeAgo = "5 giờ trước",
-        isRead = true
-    ),
-    NotificationItem(
-        id = "6",
-        type = NotificationType.MARKETING,
-        title = "Bộ sưu tập phim Hè 2026",
-        message = "Khám phá hơn 200+ bộ phim bom tấn mùa hè. Xem miễn phí với gói Premium.",
-        timeAgo = "1 ngày trước",
-        isRead = true
-    ),
-    NotificationItem(
-        id = "7",
-        type = NotificationType.SOCIAL,
-        title = "Bình luận mới",
-        message = "Trần Thị B đã trả lời bình luận của bạn về phim \"Lật Mặt 7\".",
-        timeAgo = "1 ngày trước",
-        isRead = true
-    ),
-    NotificationItem(
-        id = "8",
-        type = NotificationType.NEW_MOVIE,
-        title = "Tập mới đã cập nhật",
-        message = "Phim \"Bạn Cùng Phòng\" đã có tập 12 (tập mới nhất). Xem tiếp ngay!",
-        timeAgo = "2 ngày trước",
-        isRead = true
-    ),
-    NotificationItem(
-        id = "9",
-        type = NotificationType.TRANSACTION,
-        title = "Gói sắp hết hạn",
-        message = "Gói Premium của bạn sẽ hết hạn sau 3 ngày. Gia hạn ngay để không bị gián đoạn.",
-        timeAgo = "3 ngày trước",
-        isRead = true
-    ),
-    NotificationItem(
-        id = "10",
-        type = NotificationType.SYSTEM,
-        title = "Bảo mật tài khoản",
-        message = "Đã phát hiện đăng nhập mới từ thiết bị Samsung Galaxy. Nếu không phải bạn, hãy đổi mật khẩu ngay.",
-        timeAgo = "5 ngày trước",
-        isRead = true
-    )
+    val isRead: Boolean = false,
+    val movieId: String? = null,
+    val plan: String? = null
 )
 
 // ── Filter Chip Labels ───────────────────────────────────────────────────────
@@ -221,11 +140,79 @@ private val FILTER_ALL = "Tất cả"
 @Composable
 fun NotificationScreen(
     modifier: Modifier = Modifier,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onNavigateToMovie: (String) -> Unit = {},
+    onNavigateToPlan: () -> Unit = {}
 ) {
     // ── State ────────────────────────────────────────────────────────────────
-    val notifications = remember { mutableStateListOf(*getDummyNotifications().toTypedArray()) }
+    val notifications = remember { mutableStateListOf<NotificationItem>() }
     var selectedFilter by remember { mutableStateOf(FILTER_ALL) }
+
+    // Firestore listener
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        var listener: com.google.firebase.firestore.ListenerRegistration? = null
+        
+        if (user != null) {
+            listener = db.collection("users").document(user.uid).collection("notifications")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        android.util.Log.e("NotificationSheet", "Listen failed.", error)
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val items = snapshot.documents.mapNotNull { doc ->
+                            val title = doc.getString("title") ?: ""
+                            val message = doc.getString("body") ?: ""
+                            val typeString = doc.getString("type") ?: "system"
+                            val isRead = doc.getBoolean("isRead") ?: false
+                            
+                            val timestamp = doc.getTimestamp("timestamp")?.toDate()?.time ?: System.currentTimeMillis()
+                            val diff = System.currentTimeMillis() - timestamp
+                            val timeAgo = when {
+                                diff < 60000 -> "Vừa xong"
+                                diff < 3600000 -> "${diff / 60000} phút trước"
+                                diff < 86400000 -> "${diff / 3600000} giờ trước"
+                                else -> "${diff / 86400000} ngày trước"
+                            }
+                            
+                            val type = when (typeString) {
+                                "series_update", "new_movie" -> NotificationType.NEW_MOVIE
+                                "billing", "transaction" -> NotificationType.TRANSACTION
+                                "security_alert", "system" -> NotificationType.SYSTEM
+                                "social" -> NotificationType.SOCIAL
+                                "marketing" -> NotificationType.MARKETING
+                                else -> NotificationType.SYSTEM
+                            }
+
+                            val movieId = doc.getString("movieId")
+                            val plan = doc.getString("plan")
+
+                            NotificationItem(
+                                id = doc.id,
+                                type = type,
+                                rawType = typeString,
+                                title = title,
+                                message = message,
+                                timeAgo = timeAgo,
+                                isRead = isRead,
+                                movieId = movieId,
+                                plan = plan
+                            )
+                        }
+                        // Sắp xếp giảm dần theo thời gian (mới nhất lên trên)
+                        val sortedItems = items.sortedByDescending { item ->
+                            val doc = snapshot.documents.find { it.id == item.id }
+                            doc?.getTimestamp("timestamp")?.toDate()?.time ?: System.currentTimeMillis()
+                        }
+                        notifications.clear()
+                        notifications.addAll(sortedItems)
+                    }
+                }
+        }
+        onDispose { listener?.remove() }
+    }
 
     val filterOptions = remember {
         listOf(FILTER_ALL) + NotificationType.entries.map { it.label }
@@ -288,9 +275,15 @@ fun NotificationScreen(
                 unreadCount = unreadCount,
                 onClose = onClose,
                 onMarkAllRead = {
-                    val updated = notifications.map { it.copy(isRead = true) }
-                    notifications.clear()
-                    notifications.addAll(updated)
+                    val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                    if (user != null) {
+                        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        notifications.filter { !it.isRead }.forEach { notif ->
+                            db.collection("users").document(user.uid)
+                                .collection("notifications").document(notif.id)
+                                .update("isRead", true)
+                        }
+                    }
                 }
             )
 
@@ -317,8 +310,10 @@ fun NotificationScreen(
                         .fillMaxWidth()
                         .weight(1f),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        horizontal = 16.dp,
-                        vertical = 8.dp
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 120.dp // Thêm padding dưới để không bị che bởi Bottom Navigation
                     ),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -333,9 +328,22 @@ fun NotificationScreen(
                                 if (deleteTargetId != null) {
                                     deleteTargetId = null
                                 } else {
-                                    val index = notifications.indexOf(notification)
-                                    if (index >= 0 && !notification.isRead) {
-                                        notifications[index] = notification.copy(isRead = true)
+                                    if (!notification.isRead) {
+                                        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                                        if (user != null) {
+                                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                .collection("users").document(user.uid)
+                                                .collection("notifications").document(notification.id)
+                                                .update("isRead", true)
+                                        }
+                                    }
+                                    // Handle Deep Linking / Navigation
+                                    if (notification.rawType == "new_movie" && notification.movieId != null) {
+                                        onNavigateToMovie(notification.movieId)
+                                        onClose()
+                                    } else if (notification.rawType == "billing") {
+                                        onNavigateToPlan()
+                                        onClose()
                                     }
                                 }
                             },
@@ -343,7 +351,13 @@ fun NotificationScreen(
                                 deleteTargetId = notification.id
                             },
                             onDelete = {
-                                notifications.remove(notification)
+                                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                                if (user != null) {
+                                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        .collection("users").document(user.uid)
+                                        .collection("notifications").document(notification.id)
+                                        .delete()
+                                }
                                 deleteTargetId = null
                                 scope.launch {
                                     snackbarHostState.showSnackbar("Đã xóa thông báo thành công")
