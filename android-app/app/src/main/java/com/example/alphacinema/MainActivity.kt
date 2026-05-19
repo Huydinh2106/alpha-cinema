@@ -115,39 +115,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleFCMIntent(intent: Intent) {
-        // FCM background clicks put the notification payload into intent extras
+        // FCM background clicks put the notification payload into intent extras.
+        // CHỈ đánh dấu cần mở màn hình thông báo. KHÔNG lưu Firestore ở đây.
+        // Cloud Functions (onNewMovieAdded, ...) đã lưu document có đầy đủ trường (kèm imageUrl).
+        // Trước đây hàm này lưu thêm 1 document fallback với title "Thông báo từ Alpha Cinema"
+        // và không có imageUrl → tạo ra "thông báo lỗi" thứ 2 trong list.
         val extras = intent.extras ?: return
         val sentTime = extras.getLong("google.sent_time", 0L)
         if (sentTime > 0L) {
-            val notifTitle = extras.getString("gcm.notification.title") ?: "Thông báo từ Alpha Cinema"
-            val notifBody = extras.getString("gcm.notification.body") ?: ""
-            val type = extras.getString("type") ?: "system"
-
-            // Save to Firestore
-            val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-            if (currentUser != null) {
-                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                
-                // Avoid saving duplicate if user tapped quickly multiple times
-                val prefs = getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
-                val lastSentTime = prefs.getLong("last_fcm_time", 0L)
-                
-                if (sentTime > lastSentTime) {
-                    prefs.edit().putLong("last_fcm_time", sentTime).apply()
-                    
-                    val notificationData = hashMapOf(
-                        "title" to notifTitle,
-                        "body" to notifBody,
-                        "type" to type,
-                        "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                        "isRead" to false
-                    )
-                    db.collection("users").document(currentUser.uid)
-                        .collection("notifications").add(notificationData)
-                }
-            }
-            
-            // Mark that we should open notifications
             intent.putExtra("open_notifications", true)
         }
     }

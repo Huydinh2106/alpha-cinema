@@ -243,12 +243,19 @@ export const onNewMovieAdded = onDocumentWritten({
     for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
       const chunk = uniqueTokens.slice(i, i + chunkSize);
       const message: admin.messaging.MulticastMessage = {
-        notification: { title, body },
+        // notification.imageUrl: FCM tự hiển thị poster trên thanh trạng thái khi app background.
+        notification: { title, body, imageUrl: imageUrl || undefined },
         android: {
           priority: "high",
-          notification: { channelId: "push_notifications", priority: "default" }
+          notification: {
+            channelId: "push_notifications",
+            priority: "default",
+            // Bổ sung imageUrl trong AndroidNotification để FCM SDK render BigPictureStyle.
+            imageUrl: imageUrl || undefined
+          }
         },
-        data: { type, movieId: movieId },
+        // data.imageUrl: dùng khi app foreground, MyFirebaseMessagingService.kt sẽ tự load và set BigPictureStyle.
+        data: { type, movieId: movieId, imageUrl: imageUrl || "" },
         tokens: chunk
       };
       const response = await admin.messaging().sendEachForMulticast(message);
@@ -258,6 +265,21 @@ export const onNewMovieAdded = onDocumentWritten({
     console.log("No FCM tokens found to send push notifications.");
   }
 });
+
+// Ảnh hiển thị cho thông báo gói sắp hết hạn (BigPicture trên thanh trạng thái + thumb trong list).
+const SUBSCRIPTION_REMINDER_IMAGE =
+  "https://sf-static.upanhlaylink.com/img/image_2026051904b7f141257cc5aca5bc4506e7bf3924.jpg";
+
+// Map mã gói → tên hiển thị thân thiện trong thông báo.
+function planLabel(plan: string): string {
+  const key = (plan || "").toLowerCase();
+  switch (key) {
+    case "basic": return "Cơ Bản";
+    case "couple": return "Cặp Đôi";
+    case "premium": return "Premium";
+    default: return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "đăng ký";
+  }
+}
 
 // 6. Cronjob kiểm tra gói dịch vụ sắp hết hạn (chạy mỗi phút)
 export const checkExpiringSubscriptions = onSchedule({
@@ -270,7 +292,9 @@ export const checkExpiringSubscriptions = onSchedule({
   // Lấy tất cả user. (Lý tưởng nên có filter "subscriptionStatus" == "active" để tiết kiệm read)
   const usersSnapshot = await admin.firestore().collection("users").get();
 
-  const tokens: string[] = [];
+  // Gom (plan, displayDays) → danh sách FCM token để gửi push cá nhân hoá theo gói.
+  // Key có dạng "premium|3", "basic|1", v.v.
+  const tokensByPlanAndDays = new Map<string, string[]>();
   const batchArray: admin.firestore.WriteBatch[] = [];
   let currentBatch = admin.firestore().batch();
   let batchCount = 0;
@@ -332,8 +356,11 @@ export const checkExpiringSubscriptions = onSchedule({
 
       if (shouldNotify) {
         const uid = doc.id;
-        const title = "Gói sắp hết hạn";
-        const body = `Gói ${plan.toUpperCase()} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. Gia hạn ngay để không bị gián đoạn.`;
+        const label = planLabel(plan);
+        const title = `Gói ${label} sắp hết hạn`;
+        const body =
+          `Gói ${label} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. ` +
+          `Gia hạn ngay để không bị gián đoạn trải nghiệm xem phim.`;
         const type = "billing";
 
         // Thêm thông báo vào subcollection của user
@@ -343,6 +370,7 @@ export const checkExpiringSubscriptions = onSchedule({
           body,
           type,
           plan: plan,
+          imageUrl: SUBSCRIPTION_REMINDER_IMAGE,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           isRead: false
         });
@@ -355,7 +383,9 @@ export const checkExpiringSubscriptions = onSchedule({
         batchCount++;
 
         if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-          tokens.push(...userData.fcmTokens);
+          const key = `${(plan as string).toLowerCase()}|${displayDays}`;
+          if (!tokensByPlanAndDays.has(key)) tokensByPlanAndDays.set(key, []);
+          tokensByPlanAndDays.get(key)!.push(...userData.fcmTokens);
         }
       }
 
@@ -376,26 +406,47 @@ export const checkExpiringSubscriptions = onSchedule({
     await batch.commit();
   }
 
-  // Gửi FCM PUSH notification
-  if (tokens.length > 0) {
+  // Gửi FCM PUSH notification — push từng nhóm (plan, days) để body cá nhân hoá.
+  for (const [key, tokens] of tokensByPlanAndDays.entries()) {
+    if (tokens.length === 0) continue;
+    const [plan, daysStr] = key.split("|");
+    const displayDays = Number(daysStr);
+    const label = planLabel(plan);
+    const pushTitle = `Gói ${label} sắp hết hạn`;
+    const pushBody =
+      `Gói ${label} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. ` +
+      `Mở ứng dụng và gia hạn ngay!`;
+
     const uniqueTokens = Array.from(new Set(tokens));
     const chunkSize = 500;
     for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
       const chunk = uniqueTokens.slice(i, i + chunkSize);
       const message: admin.messaging.MulticastMessage = {
         notification: {
-          title: "Gói dịch vụ sắp hết hạn",
-          body: "Gói Premium của bạn sắp kết thúc. Mở ứng dụng và gia hạn ngay!"
+          title: pushTitle,
+          body: pushBody,
+          imageUrl: SUBSCRIPTION_REMINDER_IMAGE
         },
         android: {
           priority: "high",
-          notification: { channelId: "push_notifications", priority: "default" }
+          notification: {
+            channelId: "push_notifications",
+            priority: "default",
+            imageUrl: SUBSCRIPTION_REMINDER_IMAGE
+          }
         },
-        data: { type: "billing" },
+        data: {
+          type: "billing",
+          plan,
+          days: String(displayDays),
+          imageUrl: SUBSCRIPTION_REMINDER_IMAGE
+        },
         tokens: chunk
       };
       await admin.messaging().sendEachForMulticast(message);
-      console.log(`Sent expiring subscription push to ${chunk.length} devices.`);
+      console.log(
+        `Sent expiring push (plan=${plan}, days=${displayDays}) to ${chunk.length} devices.`
+      );
     }
   }
 });
