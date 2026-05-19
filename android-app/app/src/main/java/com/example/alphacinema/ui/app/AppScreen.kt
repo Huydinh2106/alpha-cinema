@@ -76,6 +76,7 @@ import com.example.alphacinema.ui.account.AccountAuthEvent
 import com.example.alphacinema.ui.account.AuthBottomSheet
 import com.example.alphacinema.ui.account.AuthMode
 import com.example.alphacinema.ui.account.rememberAccountAuthStateHolder
+import com.example.alphacinema.util.formatFirestoreDate
 
 // ── Animation Constants ─────────────────────────────────────────────────────
 
@@ -190,7 +191,8 @@ fun MainContent(
             scope.launch {
                 appAuthLoading = true
                 try {
-                    auth.signInWithEmailAndPassword(email, password).await()
+                    val result = auth.signInWithEmailAndPassword(email, password).await()
+                    result.user?.let { firestoreRepo.saveUser(it) }
                     // Sau khi đăng nhập xong, mở lại Watch Party lobby
                     showWatchPartyLobby = true
                 } catch (e: Exception) {
@@ -210,6 +212,7 @@ fun MainContent(
                             .setDisplayName(name)
                             .build()
                     )?.await()
+                    (auth.currentUser ?: result.user)?.let { firestoreRepo.saveUser(it) }
                     showWatchPartyLobby = true
                 } catch (e: Exception) {
                     showToast(e.localizedMessage ?: "Đăng ký thất bại")
@@ -238,7 +241,8 @@ fun MainContent(
                     )
                     val googleIdTokenCredential = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(credentialResponse.credential.data)
                     val firebaseCredential = com.google.firebase.auth.GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-                    auth.signInWithCredential(firebaseCredential).await()
+                    val result = auth.signInWithCredential(firebaseCredential).await()
+                    result.user?.let { firestoreRepo.saveUser(it) }
                     showWatchPartyLobby = true
                 } catch (e: Exception) {
                     showToast(e.localizedMessage ?: "Đăng nhập Google thất bại")
@@ -249,17 +253,20 @@ fun MainContent(
         }
     )
     var demoCurrentPlan by rememberSaveable { mutableStateOf<String?>(null) }
+    var demoMembershipStartedDate by rememberSaveable { mutableStateOf<String?>(null) }
     var demoMembershipExpiredDate by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Load subscription plan from Firestore on app start
     LaunchedEffect(Unit) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         if (user != null && demoCurrentPlan == null) {
+            firestoreRepo.saveUser(user)
             val profile = firestoreRepo.getUserProfile(user.uid)
             val plan = profile?.subscriptionPlan
             if (!plan.isNullOrBlank() && plan != "free") {
                 demoCurrentPlan = plan
-                demoMembershipExpiredDate = "30/06/2026"
+                demoMembershipStartedDate = formatFirestoreDate(profile?.subscriptionStartedAt)
+                demoMembershipExpiredDate = formatFirestoreDate(profile?.subscriptionExpiresAt)
             }
         }
     }
@@ -437,9 +444,11 @@ fun MainContent(
                             },
                             onLogout = {
                                 demoCurrentPlan = null
+                                demoMembershipStartedDate = null
                                 demoMembershipExpiredDate = null
                             },
                             currentPlan = demoCurrentPlan,
+                            membershipStartedDate = demoMembershipStartedDate,
                             membershipExpiredDate = demoMembershipExpiredDate
                         )
                     }
@@ -645,11 +654,20 @@ fun MainContent(
                         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                         if (user != null) {
                             scope.launch {
-                                firestoreRepo.updateUserSubscription(user.uid, planName.lowercase())
+                                val expiresAt = firestoreRepo.updateUserSubscription(
+                                    uid = user.uid,
+                                    plan = planName.lowercase(),
+                                    paymentMethod = paymentMethod
+                                )
+                                val profile = firestoreRepo.getUserProfile(user.uid)
+                                demoCurrentPlan = profile?.subscriptionPlan ?: planName.lowercase()
+                                demoMembershipStartedDate = formatFirestoreDate(profile?.subscriptionStartedAt)
+                                demoMembershipExpiredDate = formatFirestoreDate(profile?.subscriptionExpiresAt)
+                                    ?: formatFirestoreDate(expiresAt)
                             }
+                        } else {
+                            demoCurrentPlan = planName.lowercase()
                         }
-                        demoCurrentPlan = planName.lowercase()
-                        demoMembershipExpiredDate = "30/06/2026"
                         showToast("Đã nâng cấp gói $planName qua $paymentMethod")
                     }
                 )
@@ -662,6 +680,7 @@ fun MainContent(
                     onOpenPayment = { navController.navigate(PaymentNavRoute) },
                     onLogout = {
                         demoCurrentPlan = null
+                        demoMembershipStartedDate = null
                         demoMembershipExpiredDate = null
                         navController.popBackStack()
                     }

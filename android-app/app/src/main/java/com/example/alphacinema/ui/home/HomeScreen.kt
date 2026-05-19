@@ -37,6 +37,18 @@ package com.example.alphacinema.ui.home
     import androidx.compose.animation.core.tween
     import androidx.compose.runtime.*
     import androidx.lifecycle.viewmodel.compose.viewModel
+    import android.content.Context
+    import android.content.Intent
+    import android.net.Uri
+    import android.os.Handler
+    import android.os.Looper
+    import android.webkit.JavascriptInterface
+    import android.webkit.WebChromeClient
+    import android.webkit.WebResourceError
+    import android.webkit.WebResourceRequest
+    import android.webkit.WebView
+    import android.webkit.WebViewClient
+    import androidx.compose.ui.viewinterop.AndroidView
     import com.example.alphacinema.R
     import com.example.alphacinema.ui.app.ScreenType
     import com.example.alphacinema.ui.components.GradientPlayButton
@@ -45,6 +57,7 @@ package com.example.alphacinema.ui.home
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.draw.blur
     import androidx.compose.ui.draw.clip
+    import androidx.compose.ui.draw.clipToBounds
     import androidx.compose.ui.graphics.graphicsLayer
     import androidx.compose.ui.graphics.Brush
     import androidx.compose.ui.graphics.Color
@@ -53,6 +66,7 @@ package com.example.alphacinema.ui.home
     import androidx.compose.ui.text.style.TextAlign
     import androidx.compose.ui.text.style.TextOverflow
     import androidx.compose.ui.tooling.preview.Preview
+    import androidx.compose.ui.platform.LocalContext
     import androidx.compose.ui.platform.LocalDensity
     import androidx.compose.ui.unit.dp
     import androidx.compose.ui.unit.lerp
@@ -61,6 +75,7 @@ package com.example.alphacinema.ui.home
     import coil.compose.AsyncImage
     import androidx.compose.ui.res.painterResource
     import com.example.alphacinema.ui.theme.AlphaCinemaTheme
+    import kotlinx.coroutines.delay
     import kotlin.math.PI
     import kotlin.math.cos
     import kotlin.math.sin
@@ -94,7 +109,9 @@ package com.example.alphacinema.ui.home
         val age: String = "",
         val year: String = "",
         val episode: String = "",
-        val genres: List<String> = emptyList()
+        val genres: List<String> = emptyList(),
+        val tmdbId: String? = null,
+        val tmdbType: String? = null
     )
 
     data class RecommendGroupUi(
@@ -130,6 +147,8 @@ package com.example.alphacinema.ui.home
 
         val selectedChip by viewModel.selectedChip.collectAsState()
         val heroDescriptions by viewModel.heroDescriptions.collectAsState()
+        val previewTrailerKeys by viewModel.previewTrailerKeys.collectAsState()
+        val previewTrailerLoading by viewModel.previewTrailerLoading.collectAsState()
         val isKidsMode by viewModel.isKidsMode.collectAsState()
 
         val kidsHoatHinh by viewModel.kidsHoatHinh.collectAsState()
@@ -186,7 +205,9 @@ package com.example.alphacinema.ui.home
                     age = it.ageRating ?: "",
                     year = it.year?.toString() ?: "2024",
                     episode = it.episode_current ?: "Tập 1",
-                    genres = it.category?.map { c -> c.name } ?: emptyList()
+                    genres = it.category?.map { c -> c.name } ?: emptyList(),
+                    tmdbId = it.tmdb?.id,
+                    tmdbType = it.tmdb?.type
                 ) 
             }.ifEmpty { if (isLoading) List(5) { RecommendMovieUi("Đang tải...", "", "", "", "-", "", "") } else emptyList() }
 
@@ -251,7 +272,80 @@ package com.example.alphacinema.ui.home
             allGroups
         }
 
-
+        val top10Movies = remember {
+            listOf(
+                RecommendMovieUi(
+                    title = "Thoát Khỏi Tận Thế", 
+                    originName = "Project Hail Mary", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20260425-1/972224cff3b934fa1aa8781de7822a0d.jpg", 
+                    slug = "thoat-khoi-tan-the"
+                ),
+                RecommendMovieUi(
+                    title = "Avatar: Lửa và Tro Tàn", 
+                    originName = "Avatar: Fire and Ash", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20251221-1/687373bb9894616507f27c74c0eaa598.jpg", 
+                    slug = "avatar-lua-va-tro-tan"
+                ),
+                RecommendMovieUi(
+                    title = "Thảm Họa Thiên Thạch: Di Tản", 
+                    originName = "Greenland 2: Migration", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20260128-1/227d553ec342486d0cbdc34b0b1fc31d.jpg", 
+                    slug = "tham-hoa-thien-thach-di-tan"
+                ),
+                RecommendMovieUi(
+                    title = "Đại Hồng Thủy", 
+                    originName = "The Great Flood", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20251220-1/aa015742d7890f5bf4fc3af9e1bb59f4.jpg", 
+                    slug = "dai-hong-thuy"
+                ),
+                RecommendMovieUi(
+                    title = "Nguyên Thủ Đối Đầu (Nguyên Thủ Quốc Gia)", 
+                    originName = "Heads of State", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20250708-1/d7eff5448de409988466ff0c3f48bcaf.jpg", 
+                    slug = "nguyen-thu-doi-dau-nguyen-thu-quoc-gia"
+                ),
+                RecommendMovieUi(
+                    title = "Elio: Cậu Bé Đến Từ Trái Đất", 
+                    originName = "Elio", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20250820-1/718b5ba60d0b5dec1852e00ce8822665.jpg", 
+                    slug = "elio-cau-be-den-tu-trai-dat"
+                ),
+                RecommendMovieUi(
+                    title = "Phi Vụ Động Trời 2", 
+                    originName = "Zootopia 2", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20251223-1/6bc1d549b86e490274d93bab66a3654d.jpg", 
+                    slug = "phi-vu-dong-troi-2"
+                ),
+                RecommendMovieUi(
+                    title = "Cơn Say Mùa Xuân", 
+                    originName = "Spring Fever", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20260106-1/deeaf96194e9eb72cc990cb4747536e6.jpg", 
+                    slug = "con-say-mua-xuan"
+                ),
+                RecommendMovieUi(
+                    title = "Tên Trộm Dấu Yêu", 
+                    originName = "To My Beloved Thief", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20260105-1/0adea2e823ede3d6a2bca22d1f0ac286.jpg", 
+                    slug = "ten-trom-dau-yeu"
+                ),
+                RecommendMovieUi(
+                    title = "Liều Thuốc Cho Tình Yêu", 
+                    originName = "Recipe for Love", 
+                    quality = "HD", genre = "Trending", rating = "9.0", 
+                    posterUrl = "https://phimimg.com/upload/vod/20260203-1/c65d018cf7b9b5ec469fc42e15a0c60f.jpg", 
+                    slug = "lieu-thuoc-cho-tinh-yeu"
+                )
+            )
+        }
         val movieCount = movies.size
         val initialPage = remember(movieCount) {
             val middle = Int.MAX_VALUE / 2
@@ -273,6 +367,11 @@ package com.example.alphacinema.ui.home
         }
 
         var previewMovie by remember { mutableStateOf<RecommendMovieUi?>(null) }
+        LaunchedEffect(previewMovie?.slug) {
+            previewMovie?.let { movie ->
+                viewModel.loadPreviewTrailer(movie.slug, movie.tmdbId, movie.tmdbType)
+            }
+        }
 
         val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -326,6 +425,25 @@ package com.example.alphacinema.ui.home
                 }
                 Spacer(modifier = Modifier.height(26.dp))
                 
+                Top10Section(
+                    movies = top10Movies,
+                    onMovieClick = { recommendMovie ->
+                        onPlayMovie(MovieUi(
+                            title = recommendMovie.title,
+                            subtitle = recommendMovie.originName,
+                            description = recommendMovie.description,
+                            rating = recommendMovie.rating,
+                            age = recommendMovie.age,
+                            year = recommendMovie.year,
+                            season = "",
+                            episode = recommendMovie.episode,
+                            posterUrl = recommendMovie.posterUrl,
+                            slug = recommendMovie.slug
+                        ))
+                    }
+                )
+                Spacer(modifier = Modifier.height(22.dp))
+                
                 // RecommendationGroupsSection sẽ quản lý padding của riêng nó để tràn viền
                 RecommendationGroupsSection(
                     groups = recommendationGroups,
@@ -348,11 +466,6 @@ package com.example.alphacinema.ui.home
                     },
                     onSeeMore = onSeeMore
                 )
-                Spacer(modifier = Modifier.height(22.dp))
-                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    InterestSection()
-                }
-                Spacer(modifier = Modifier.height(20.dp))
             }
 
             // Sticky Top Header - nằm trên cùng, không bị cuộn
@@ -368,6 +481,8 @@ package com.example.alphacinema.ui.home
             if (previewMovie != null) {
                 MoviePreviewDialog(
                     movie = previewMovie!!,
+                    trailerKeys = previewTrailerKeys[previewMovie!!.slug],
+                    isTrailerLoading = previewMovie!!.slug in previewTrailerLoading,
                     onDismiss = { previewMovie = null },
                     onPlayClick = {
                         val m = previewMovie!!
@@ -998,43 +1113,6 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                         )
                 )
 
-                if (movie.quality.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF5C6273).copy(alpha = 0.95f))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = movie.quality,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                if (movie.age.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (movie.age == "P" || movie.age == "G") Color(0xFF4CAF50).copy(alpha = 0.9f) else Color(0xFFE53935).copy(alpha = 0.9f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = movie.age,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
-                        )
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1061,64 +1139,6 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     overflow = TextOverflow.Ellipsis
                 )
             }
-        }
-    }
-
-    @Composable
-    fun InterestSection() {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Ban dang quan tam gi?",
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Text(
-                    text = ">",
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineLarge
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                SuggestCard("Tinh cam")
-                SuggestCard("Tam ly")
-            }
-        }
-    }
-
-    @Composable
-    fun SuggestCard(title: String) {
-        Box(
-            modifier = Modifier
-                .width(170.dp)
-                .height(110.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF5B6CFF),
-                            Color(0xFFD75FA7)
-                        )
-                    )
-                )
-                .padding(16.dp),
-            contentAlignment = Alignment.BottomStart
-        ) {
-            Text(
-                text = title,
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 
@@ -1224,6 +1244,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
 @Composable
 fun MoviePreviewDialog(
     movie: RecommendMovieUi,
+    trailerKeys: List<String>?,
+    isTrailerLoading: Boolean,
     onDismiss: () -> Unit,
     onPlayClick: () -> Unit,
     onDetailClick: () -> Unit
@@ -1267,15 +1289,49 @@ fun MoviePreviewDialog(
                         .background(Color(0xFF282C3D)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.PlayArrow,
-                        contentDescription = "Preview Play",
-                        tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier
-                            .size(70.dp)
-                            .border(3.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                            .padding(14.dp)
-                    )
+                    when {
+                        !trailerKeys.isNullOrEmpty() -> {
+                            TrailerPreviewWebView(
+                                youtubeKeys = trailerKeys,
+                                posterUrl = movie.posterUrl,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        trailerKeys == null || isTrailerLoading -> {
+                            CircularProgressIndicator(
+                                color = Color(0xFFF6E29A),
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(42.dp)
+                            )
+                        }
+
+                        else -> {
+                            val context = LocalContext.current
+                            Column(
+                                modifier = Modifier
+                                    .clickable { openYoutubeTrailerSearch(context, movie) }
+                                    .padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.PlayArrow,
+                                    contentDescription = "Preview Play",
+                                    tint = Color.White.copy(alpha = 0.4f),
+                                    modifier = Modifier
+                                        .size(70.dp)
+                                        .border(3.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                                        .padding(14.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Tìm trailer trên YouTube",
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -1375,6 +1431,470 @@ fun MoviePreviewDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TrailerPreviewWebView(
+    youtubeKeys: List<String>,
+    posterUrl: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var currentIndex by remember(youtubeKeys) { mutableStateOf(0) }
+    var playerReady by remember(youtubeKeys, currentIndex) { mutableStateOf(false) }
+    var loadFailed by remember(youtubeKeys, currentIndex) { mutableStateOf(false) }
+    val currentKey = youtubeKeys.getOrNull(currentIndex)
+    val hasMoreKeys = currentIndex < youtubeKeys.lastIndex
+    val previewHtml = remember(currentKey) { currentKey?.let { buildYoutubePreviewHtml(it) } }
+
+    LaunchedEffect(currentIndex, playerReady, loadFailed) {
+        if (currentKey != null && !playerReady && !loadFailed) {
+            delay(7_000)
+            if (!playerReady) {
+                if (hasMoreKeys) {
+                    currentIndex += 1
+                } else {
+                    loadFailed = true
+                }
+            }
         }
     }
 
+    val webView = remember(currentKey) {
+        WebView(context).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            webChromeClient = WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun onReceivedError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    error: WebResourceError?
+                ) {
+                    if (request?.isForMainFrame == true) {
+                        if (hasMoreKeys) {
+                            currentIndex += 1
+                        } else {
+                            loadFailed = true
+                        }
+                    }
+                }
+            }
+            addJavascriptInterface(
+                object {
+                    @JavascriptInterface
+                    fun onPlayerPlaying() {
+                        mainHandler.post {
+                            playerReady = true
+                            loadFailed = false
+                        }
+                    }
+
+                    @JavascriptInterface
+                    fun onPlayerError(errorCode: String) {
+                        mainHandler.post {
+                            if (hasMoreKeys) {
+                                currentIndex += 1
+                            } else {
+                                loadFailed = true
+                            }
+                        }
+                    }
+                },
+                "PreviewBridge"
+            )
+            isHorizontalScrollBarEnabled = false
+            isVerticalScrollBarEnabled = false
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            settings.loadsImagesAutomatically = true
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            if (previewHtml != null) {
+                loadDataWithBaseURL(
+                    "https://www.youtube-nocookie.com",
+                    previewHtml,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+            }
+        }
+    }
+
+    DisposableEffect(webView) {
+        onDispose {
+            webView.stopLoading()
+            webView.loadUrl("about:blank")
+            webView.destroy()
+        }
+    }
+
+    Box(modifier = modifier.background(Color.Black)) {
+        if (currentKey != null && previewHtml != null) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { webView },
+                update = { view ->
+                    if (view.url == null) {
+                        view.loadDataWithBaseURL(
+                            "https://www.youtube-nocookie.com",
+                            previewHtml,
+                            "text/html",
+                            "UTF-8",
+                            null
+                        )
+                    }
+                }
+            )
+        }
+
+        if (!playerReady || loadFailed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF111522)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (posterUrl.isNotBlank()) {
+                    com.example.alphacinema.ui.components.AlphaCinemaImage(
+                        model = posterUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.48f))
+                    )
+                }
+
+                if (loadFailed) {
+                    Column(
+                        modifier = Modifier
+                            .clickable { currentKey?.let { openYoutubeVideo(context, it) } }
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .size(64.dp)
+                                .border(2.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                                .padding(14.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Mở trailer trên YouTube",
+                            color = Color.White.copy(alpha = 0.72f),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                } else {
+                    CircularProgressIndicator(
+                        color = Color(0xFFF6E29A),
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(42.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun buildYoutubePreviewHtml(youtubeKey: String): String {
+    return """
+        <!doctype html>
+        <html>
+          <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+              html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: #000;
+              }
+              iframe {
+                position: fixed;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                border: 0;
+                background: #000;
+              }
+              #player {
+                position: fixed;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+                pointer-events: none;
+              }
+            </style>
+          </head>
+          <body>
+            <div id="player"></div>
+            <script src="https://www.youtube.com/iframe_api"></script>
+            <script>
+              var player;
+              function onYouTubeIframeAPIReady() {
+                player = new YT.Player('player', {
+                  host: 'https://www.youtube-nocookie.com',
+                  videoId: '$youtubeKey',
+                  width: '100%',
+                  height: '100%',
+                  playerVars: {
+                    autoplay: 1,
+                    mute: 1,
+                    playsinline: 1,
+                    controls: 0,
+                    disablekb: 1,
+                    fs: 0,
+                    iv_load_policy: 3,
+                    rel: 0,
+                    modestbranding: 1,
+                    origin: 'https://www.youtube-nocookie.com'
+                  },
+                  events: {
+                    onReady: function(event) {
+                      event.target.mute();
+                      event.target.playVideo();
+                    },
+                    onStateChange: function(event) {
+                      if (event.data === YT.PlayerState.PLAYING && window.PreviewBridge) {
+                        window.setTimeout(function() {
+                          window.PreviewBridge.onPlayerPlaying();
+                        }, 700);
+                      }
+                    },
+                    onError: function(event) {
+                      if (window.PreviewBridge) {
+                        window.PreviewBridge.onPlayerError(String(event.data));
+                      }
+                    }
+                  }
+                });
+              }
+            </script>
+          </body>
+        </html>
+    """.trimIndent()
+}
+
+private fun openYoutubeVideo(context: Context, youtubeKey: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$youtubeKey"))
+    context.startActivity(intent)
+}
+
+private fun openYoutubeTrailerSearch(context: Context, movie: RecommendMovieUi) {
+    val queryTitle = movie.originName.ifBlank { movie.title }
+    val query = "$queryTitle trailer"
+    val uri = Uri.Builder()
+        .scheme("https")
+        .authority("www.youtube.com")
+        .path("results")
+        .appendQueryParameter("search_query", query)
+        .build()
+    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+}
+
+    @Composable
+    fun Top10Section(
+        movies: List<RecommendMovieUi>,
+        onMovieClick: (RecommendMovieUi) -> Unit
+    ) {
+        if (movies.isEmpty()) return
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+        ) {
+            Text(
+                text = "Top 10 Hôm Nay",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyRow(
+                contentPadding = PaddingValues(start = 0.dp, end = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(movies.size) { index ->
+                    Top10Item(
+                        movie = movies[index],
+                        rank = index + 1,
+                        onClick = { onMovieClick(movies[index]) }
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun Top10Item(
+        movie: RecommendMovieUi,
+        rank: Int,
+        onClick: () -> Unit
+    ) {
+        Column(
+            modifier = Modifier.clickable { onClick() },
+            horizontalAlignment = Alignment.End
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(190.dp)
+                    .height(185.dp)
+                    .clipToBounds(),
+                contentAlignment = Alignment.BottomEnd
+            ) {
+                // Keep the rank as a single outline text layer to avoid duplicated edges.
+                RankOutlineNumber(
+                    rank = rank,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x = 0.dp)
+                        .width(if (rank >= 10) 190.dp else 150.dp)
+                        .height(176.dp)
+                )
+
+                // Poster
+                Box(
+                    modifier = Modifier
+                        .width(130.dp)
+                        .height(185.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                ) {
+                    com.example.alphacinema.ui.components.AlphaCinemaImage(
+                        model = movie.posterUrl,
+                        contentDescription = movie.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = movie.title,
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.width(130.dp),
+                textAlign = TextAlign.Start
+            )
+            if (movie.originName.isNotBlank() && movie.originName != movie.title) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = movie.originName,
+                    color = Color.White.copy(alpha = 0.55f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.width(130.dp),
+                    textAlign = TextAlign.Start
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun RankOutlineNumber(
+        rank: Int,
+        modifier: Modifier = Modifier
+    ) {
+        val rankText = rank.toString()
+        val rankFontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
+        val rankFontWeight = FontWeight.Black
+        val rankFillColor = Color(0xFF070B16)
+
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.BottomStart
+        ) {
+            if (rankText == "10") {
+                RankDigitOutline(
+                    text = "1",
+                    fontSize = 172.sp,
+                    fontFamily = rankFontFamily,
+                    fontWeight = rankFontWeight,
+                    fillColor = rankFillColor,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .width(92.dp)
+                )
+                RankDigitOutline(
+                    text = "0",
+                    fontSize = 172.sp,
+                    fontFamily = rankFontFamily,
+                    fontWeight = rankFontWeight,
+                    fillColor = rankFillColor,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = 48.dp)
+                        .width(140.dp)
+                )
+            } else {
+                RankDigitOutline(
+                    text = rankText,
+                    fontSize = 172.sp,
+                    fontFamily = rankFontFamily,
+                    fontWeight = rankFontWeight,
+                    fillColor = rankFillColor
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun RankDigitOutline(
+        text: String,
+        fontSize: androidx.compose.ui.unit.TextUnit,
+        fontFamily: androidx.compose.ui.text.font.FontFamily,
+        fontWeight: FontWeight,
+        fillColor: Color,
+        modifier: Modifier = Modifier
+    ) {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.BottomStart
+        ) {
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = fontSize,
+                fontFamily = fontFamily,
+                fontWeight = fontWeight,
+                maxLines = 1,
+                style = androidx.compose.ui.text.TextStyle(
+                    drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 6.4f,
+                        join = androidx.compose.ui.graphics.StrokeJoin.Round
+                    )
+                )
+            )
+            Text(
+                text = text,
+                color = fillColor,
+                fontSize = fontSize,
+                fontFamily = fontFamily,
+                fontWeight = fontWeight,
+                maxLines = 1
+            )
+        }
+    }
