@@ -1,6 +1,7 @@
 package com.example.alphacinema
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -46,23 +47,108 @@ class MainActivity : ComponentActivity() {
         // Xin quyền thông báo cho Android 13+
         requestNotificationPermission()
 
-        // Lấy FCM token và in ra Logcat
-        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            Log.d("FCM", "===== FCM DEVICE TOKEN =====")
-            Log.d("FCM", token)
-            Log.d("FCM", "============================")
-        }
+        // Khởi tạo kênh thông báo
+        com.example.alphacinema.notification.NotificationHelper.createAllChannels(this)
+
+        // Lấy FCM token và cập nhật vào Firestore
+        FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                Log.d("FCM", "===== FCM DEVICE TOKEN: $token =====")
+                updateTokenInFirestore(token)
+            }
+            .addOnFailureListener { e ->
+                Log.e("FCM", "Failed to get FCM token", e)
+            }
 
         // Gắn exit animation listener để dismiss hệ thống splash TỨC THÌ
         // Không có animation exit → không thấy nó tồn tại
-        splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
-            splashScreenViewProvider.remove() // Xoá ngay, không animation
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            splashScreen.setOnExitAnimationListener { splashScreenView ->
+                splashScreenView.remove()
+            }
         }
+
+        // Bắt sự kiện khi click vào thông báo từ background
+        handleFCMIntent(intent)
+
+        // Kiểm tra xem có intent mở thông báo hay không
+        val showNotification = intent.getBooleanExtra("open_notifications", false)
+        Log.d("MainActivity", "onCreate open_notifications: $showNotification")
 
         setContent {
             AlphaCinemaTheme {
-                AppScreen(modifier = Modifier.fillMaxSize())
+                AppScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    initialShowNotification = showNotification
+                )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        
+        handleFCMIntent(intent)
+        
+        // Khi app đang mở, nếu nhận intent mới, Compose có thể không re-compose AppScreen ngay lập tức.
+        // Tuy nhiên, vì người dùng yêu cầu, ta nên pass nó xuống, nhưng vì MainActivity dùng setContent,
+        // cách tốt nhất là cập nhật một mutableState. Để nhanh, ta gọi lại setContent.
+        val showNotification = intent.getBooleanExtra("open_notifications", false)
+        Log.d("MainActivity", "onNewIntent open_notifications: $showNotification")
+        
+        setContent {
+            AlphaCinemaTheme {
+                val notificationType = intent.getStringExtra("notification_type")
+                val movieId = intent.getStringExtra("movieId")
+                val plan = intent.getStringExtra("plan")
+
+                AppScreen(
+                    modifier = Modifier.fillMaxSize(),
+                    initialShowNotification = showNotification,
+                    initialNotificationType = notificationType,
+                    initialMovieId = movieId,
+                    initialPlan = plan
+                )
+            }
+        }
+    }
+
+    private fun handleFCMIntent(intent: Intent) {
+        // FCM background clicks put the notification payload into intent extras
+        val extras = intent.extras ?: return
+        val sentTime = extras.getLong("google.sent_time", 0L)
+        if (sentTime > 0L) {
+            val notifTitle = extras.getString("gcm.notification.title") ?: "Thông báo từ Alpha Cinema"
+            val notifBody = extras.getString("gcm.notification.body") ?: ""
+            val type = extras.getString("type") ?: "system"
+
+            // Save to Firestore
+            val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (currentUser != null) {
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                
+                // Avoid saving duplicate if user tapped quickly multiple times
+                val prefs = getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                val lastSentTime = prefs.getLong("last_fcm_time", 0L)
+                
+                if (sentTime > lastSentTime) {
+                    prefs.edit().putLong("last_fcm_time", sentTime).apply()
+                    
+                    val notificationData = hashMapOf(
+                        "title" to notifTitle,
+                        "body" to notifBody,
+                        "type" to type,
+                        "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        "isRead" to false
+                    )
+                    db.collection("users").document(currentUser.uid)
+                        .collection("notifications").add(notificationData)
+                }
+            }
+            
+            // Mark that we should open notifications
+            intent.putExtra("open_notifications", true)
         }
     }
 
@@ -74,6 +160,17 @@ class MainActivity : ComponentActivity() {
             ) {
                 requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+    }
+
+    private fun updateTokenInFirestore(token: String) {
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            db.collection("users").document(currentUser.uid)
+                .update("fcmTokens", com.google.firebase.firestore.FieldValue.arrayUnion(token))
+                .addOnSuccessListener { Log.d("FCM", "Token updated in Firestore") }
+                .addOnFailureListener { e -> Log.w("FCM", "Error updating token", e) }
         }
     }
 }

@@ -113,3 +113,6 @@ export const onRatingWritten = v1.region(REGION).firestore
             logger.error(`Error updating stats for movie ${movieId}`, error);
         }
     });
+
+// --- Push Notifications ---
+export * from "./notifications";
