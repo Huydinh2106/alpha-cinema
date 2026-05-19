@@ -1,5 +1,14 @@
 package com.example.alphacinema.ui.payment
 
+import android.content.ContentValues
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +37,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
@@ -37,6 +47,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,6 +56,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,15 +65,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.example.alphacinema.data.model.MomoPaymentResponse
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val ScreenBackground = Color(0xFF070B16)
 private val SurfaceDark = Color(0xFF10192E)
@@ -235,7 +254,6 @@ fun PaymentScreen(
                                     )
                                 } else {
                                     paymentStatus = PaymentStatus.PROCESSING
-                                    // Handle other payment methods here
                                 }
                             },
                             onChangeSelection = { paymentStatus = PaymentStatus.IDLE }
@@ -292,6 +310,152 @@ fun PaymentScreen(
     }
 }
 
+@Composable
+private fun MomoQrPayment(
+    response: MomoPaymentResponse,
+    onCancel: () -> Unit,
+    onSuccess: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.White.copy(alpha = 0.07f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Text(
+            text = "Quét mã MoMo",
+            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold
+        )
+        
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White)
+                .padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = response.qrCodeUrl,
+                contentDescription = "Momo QR Code",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        // Nút tải mã QR xuống
+        OutlinedButton(
+            onClick = {
+                response.qrCodeUrl?.let { url ->
+                    scope.launch {
+                        saveImageToGallery(context, url)
+                    }
+                }
+            },
+            shape = RoundedCornerShape(12.dp),
+            border = border(1.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+            modifier = Modifier.height(42.dp)
+        ) {
+            Icon(Icons.Outlined.FileDownload, contentDescription = null, tint = AccentGold, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Tải mã QR xuống", color = AccentGold, fontSize = 13.sp)
+        }
+
+        Text(
+            text = "Số tiền: ${response.amount}đ",
+            color = AccentGold,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            text = "Mở ứng dụng MoMo và quét mã QR để hoàn tất thanh toán.",
+            color = Color.White.copy(alpha = 0.7f),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f).height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Hủy bỏ", color = Color.White)
+            }
+            
+            Button(
+                onClick = onSuccess,
+                modifier = Modifier.weight(1f).height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Đã thanh toán", color = Color(0xFF060914), fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+private suspend fun saveImageToGallery(context: Context, imageUrl: String) {
+    withContext(Dispatchers.IO) {
+        try {
+            val loader = ImageLoader(context)
+            val request = ImageRequest.Builder(context)
+                .data(imageUrl)
+                .allowHardware(false)
+                .build()
+
+            val result = (loader.execute(request) as? SuccessResult)?.drawable
+            val bitmap = (result as? BitmapDrawable)?.bitmap
+
+            if (bitmap != null) {
+                val filename = "MomoQR_${System.currentTimeMillis()}.jpg"
+                var fos: java.io.OutputStream? = null
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    context.contentResolver?.also { resolver ->
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
+                            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
+                        }
+                        val imageUri: Uri? = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                        fos = imageUri?.let { resolver.openOutputStream(it) }
+                    }
+                } else {
+                    val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                    val image = java.io.File(imagesDir, filename)
+                    fos = java.io.FileOutputStream(image)
+                }
+
+                fos?.use {
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Đã lưu mã QR vào thư viện", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Lỗi khi lưu ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
+
+// Các Composable còn lại giữ nguyên...
 @Composable
 private fun rememberPaymentPackages(): List<PaymentPackageUi> {
     return remember {
@@ -834,85 +998,6 @@ private fun ProcessingPaymentState() {
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )
-    }
-}
-
-@Composable
-private fun MomoQrPayment(
-    response: MomoPaymentResponse,
-    onCancel: () -> Unit,
-    onSuccess: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        Text(
-            text = "Quét mã MoMo",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold
-        )
-        
-        Box(
-            modifier = Modifier
-                .size(240.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.White)
-                .padding(12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            // Hiển thị QR Code từ URL của MoMo
-            AsyncImage(
-                model = response.qrCodeUrl,
-                contentDescription = "Momo QR Code",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-        }
-
-        Text(
-            text = "Số tiền: ${response.amount}đ",
-            color = AccentGold,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = "Mở ứng dụng MoMo và quét mã QR để hoàn tất thanh toán.",
-            color = Color.White.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = onCancel,
-                modifier = Modifier.weight(1f).height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text("Hủy bỏ", color = Color.White)
-            }
-            
-            Button(
-                onClick = onSuccess,
-                modifier = Modifier.weight(1f).height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text("Đã thanh toán", color = Color(0xFF060914), fontWeight = FontWeight.Bold)
-            }
-        }
     }
 }
 
