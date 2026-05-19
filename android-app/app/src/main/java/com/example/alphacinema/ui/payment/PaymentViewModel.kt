@@ -9,7 +9,6 @@ import com.example.alphacinema.util.HashUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 class PaymentViewModel : ViewModel() {
     private val _paymentResponse = MutableStateFlow<MomoPaymentResponse?>(null)
@@ -31,11 +30,13 @@ class PaymentViewModel : ViewModel() {
             _isLoading.value = true
             _error.value = null
             try {
-                // Tạo ID duy nhất cho mỗi giao dịch
                 val requestId = System.currentTimeMillis().toString()
                 val orderId = System.currentTimeMillis().toString()
-                val redirectUrl = "https://momo.vn" 
-                val ipnUrl = "https://momo.vn"
+                
+                // Cấu hình URL trỏ về Firebase Project của bạn
+                val redirectUrl = "https://alpha-cinema-39dfb.web.app/payment-success"
+                val ipnUrl = "https://asia-southeast1-alpha-cinema-39dfb.cloudfunctions.net/momoIpn"
+                
                 val requestType = "captureWallet"
                 val extraData = "" 
 
@@ -54,7 +55,6 @@ class PaymentViewModel : ViewModel() {
 
                 val request = MomoPaymentRequest(
                     partnerCode = partnerCode,
-                    //accessKey = accessKey,
                     partnerName = "ALPHA CINEMA",
                     storeId = storeId,
                     requestId = requestId,
@@ -74,12 +74,10 @@ class PaymentViewModel : ViewModel() {
                     if (body != null && body.resultCode == 0) {
                         _paymentResponse.value = body
                     } else {
-                        // MoMo trả về lỗi nghiệp vụ
                         val errorMessage = body?.message ?: "Lỗi từ MoMo"
                         _error.value = "$errorMessage (Mã lỗi: ${body?.resultCode})"
                     }
                 } else {
-                    // Lỗi HTTP (trả về 400 nếu sai signature hoặc cấu trúc JSON)
                     val errorDetail = response.errorBody()?.string() ?: "Unknown error"
                     _error.value = "Lỗi hệ thống MoMo: $errorDetail"
                 }
