@@ -9,6 +9,11 @@ data class MovieListResponse(
 
 data class MovieData(
     val items: List<MovieItem>?,
+    val pagination: Pagination?,
+    val params: MovieParams?  // v1/api endpoints nest pagination here
+)
+
+data class MovieParams(
     val pagination: Pagination?
 )
 
