@@ -33,7 +33,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
-import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
@@ -98,6 +97,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.example.alphacinema.util.formatFirestoreDate
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import com.example.alphacinema.data.api.EmailVerificationHelper
@@ -146,6 +146,7 @@ internal data class DemoMembershipPlanUi(
     val price: String,
     val description: String,
     val benefits: List<String>,
+    val startedDate: String = "",
     val expiredDate: String = ""
 )
 
@@ -165,6 +166,7 @@ fun AccountScreen(
     onOpenProfileSettings: () -> Unit = {},
     onLogout: () -> Unit = {},
     currentPlan: String? = null,
+    membershipStartedDate: String? = null,
     membershipExpiredDate: String? = null
 ) {
     val context = LocalContext.current
@@ -177,6 +179,7 @@ fun AccountScreen(
 
     LaunchedEffect(currentUser) {
         currentUser?.let {
+            firestoreRepository.saveUser(it)
             userProfile = firestoreRepository.getUserProfile(it.uid)
         } ?: run {
             userProfile = null
@@ -204,6 +207,10 @@ fun AccountScreen(
                 errorMessage = null
                 try {
                     val result = auth.signInWithEmailAndPassword(email, password).await()
+                    result.user?.let {
+                        firestoreRepository.saveUser(it)
+                        userProfile = firestoreRepository.getUserProfile(it.uid)
+                    }
                     currentUser = result.user
                     onSuccess()
                 } catch (e: Exception) {
@@ -278,6 +285,10 @@ fun AccountScreen(
                     val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credentialResponse.credential.data)
                     val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
                     val result = auth.signInWithCredential(firebaseCredential).await()
+                    result.user?.let {
+                        firestoreRepository.saveUser(it)
+                        userProfile = firestoreRepository.getUserProfile(it.uid)
+                    }
                     currentUser = result.user
                     onSuccess()
                 } catch (e: androidx.credentials.exceptions.NoCredentialException) {
@@ -313,8 +324,26 @@ fun AccountScreen(
     var showCancelRenewDialog by remember { mutableStateOf(false) }
     var showLoginRequiredDialog by remember { mutableStateOf(false) }
     val isLoggedIn = currentUser != null
-    val demoMembershipPlan = remember(isLoggedIn, currentPlan, userProfile?.subscriptionPlan, membershipExpiredDate) {
-        if (isLoggedIn) buildDemoMembershipPlan(userProfile?.subscriptionPlan ?: currentPlan, membershipExpiredDate) else null
+    val profileStartedDate = formatFirestoreDate(userProfile?.subscriptionStartedAt)
+    val profileExpiredDate = formatFirestoreDate(userProfile?.subscriptionExpiresAt)
+    val demoMembershipPlan = remember(
+        isLoggedIn,
+        currentPlan,
+        userProfile?.subscriptionPlan,
+        profileStartedDate,
+        profileExpiredDate,
+        membershipStartedDate,
+        membershipExpiredDate
+    ) {
+        if (isLoggedIn) {
+            buildDemoMembershipPlan(
+                currentPlan = userProfile?.subscriptionPlan ?: currentPlan,
+                expiredDate = profileExpiredDate ?: membershipExpiredDate,
+                startedDate = profileStartedDate ?: membershipStartedDate
+            )
+        } else {
+            null
+        }
     }
     val profileCache = remember { com.example.alphacinema.data.local.UserProfileCache(context) }
     val demoUser = remember(currentUser, demoMembershipPlan, isLoggedIn, userProfile) {
@@ -343,7 +372,6 @@ fun AccountScreen(
 
     val menuItems = mutableListOf(
         AccountMenuItemUi("Đang xem", { Icon(Icons.Outlined.WatchLater, contentDescription = null) }),
-        AccountMenuItemUi("Danh sách phim", { Icon(Icons.AutoMirrored.Outlined.ListAlt, contentDescription = null) }),
         AccountMenuItemUi("Yêu thích", { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null) }),
         AccountMenuItemUi("Chính sách", { Icon(Icons.Outlined.Info, contentDescription = null) }),
         AccountMenuItemUi("Góp ý", { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) })
@@ -352,9 +380,6 @@ fun AccountScreen(
         if (isAdminUser) {
             add(0, AccountMenuItemUi("Quản trị phim", { Icon(Icons.Filled.Settings, contentDescription = null, tint = Color(0xFFF6E29A)) }))
         }
-        // Thêm mục Xem chung sau Yêu thích
-        val favIndex = indexOfFirst { it.title == "Yêu thích" }
-        add(favIndex + 1, AccountMenuItemUi("Xem chung", { Icon(Icons.Outlined.Groups, contentDescription = null) }))
     }
     
     // Debug log (can be seen in Logcat)
@@ -501,11 +526,14 @@ fun AccountScreen(
                 }
             )
 
+            WatchTogetherHighlightCard(
+                onClick = { handleMenuAction(AccountMenuAction.WATCH_TOGETHER) }
+            )
+
             AccountMenuList(
                 items = menuItems,
                 onItemClick = { item -> handleMenuAction(resolveMenuAction(item)) }
             )
-
 
 
             if (showPinDialog) {
@@ -845,9 +873,66 @@ private fun KidsModeCard(
     }
 }
 
+@Composable
+private fun WatchTogetherHighlightCard(
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0xFFF6E29A).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .background(Color(0xFF1A2237), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Groups,
+                contentDescription = null,
+                tint = Color(0xFFF6E29A)
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .weight(1f)
+        ) {
+            Text(
+                text = "Xem chung",
+                color = Color(0xFFF6E29A),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Tạo phòng xem phim cùng bạn bè",
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 2.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.62f),
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
 internal fun buildDemoMembershipPlan(
     currentPlan: String?,
-    expiredDate: String?
+    expiredDate: String?,
+    startedDate: String? = null
 ): DemoMembershipPlanUi {
     val key = when (currentPlan?.lowercase()) {
         "basic" -> DemoMembershipPlanKey.BASIC
@@ -855,7 +940,8 @@ internal fun buildDemoMembershipPlan(
         "premium" -> DemoMembershipPlanKey.PREMIUM
         else -> DemoMembershipPlanKey.FREE
     }
-    val paidExpiredDate = expiredDate.orEmpty().ifBlank { "30/06/2026" }
+    val paidStartedDate = startedDate.orEmpty()
+    val paidExpiredDate = expiredDate.orEmpty()
 
     return when (key) {
         DemoMembershipPlanKey.FREE -> DemoMembershipPlanUi(
@@ -877,6 +963,7 @@ internal fun buildDemoMembershipPlan(
                 "Lưu danh sách yêu thích",
                 "Chất lượng HD"
             ),
+            startedDate = paidStartedDate,
             expiredDate = paidExpiredDate
         )
         DemoMembershipPlanKey.COUPLE -> DemoMembershipPlanUi(
@@ -890,6 +977,7 @@ internal fun buildDemoMembershipPlan(
                 "Đồng bộ thời gian xem phim",
                 "Chat trong phòng xem"
             ),
+            startedDate = paidStartedDate,
             expiredDate = paidExpiredDate
         )
         DemoMembershipPlanKey.PREMIUM -> DemoMembershipPlanUi(
@@ -905,6 +993,7 @@ internal fun buildDemoMembershipPlan(
                 "Mời bạn bè bằng link",
                 "Ưu tiên trải nghiệm xem phim"
             ),
+            startedDate = paidStartedDate,
             expiredDate = paidExpiredDate
         )
     }
@@ -937,7 +1026,11 @@ private fun LoggedInProfileCard(
         DemoMembershipPlanKey.PREMIUM -> Color(0xFFF6E29A).copy(alpha = 0.11f)
     }
     val planStatus = if (isPaid) {
-        "Gói ${plan.badge} • Đang hoạt động đến ${plan.expiredDate}"
+        if (plan.expiredDate.isNotBlank()) {
+            "Gói ${plan.badge} • Đang hoạt động đến ${plan.expiredDate}"
+        } else {
+            "Gói ${plan.badge} • Đang hoạt động"
+        }
     } else {
         "Gói Free"
     }
@@ -1486,9 +1579,22 @@ internal fun PlanManagementSheet(
                     value = plan.price
                 )
                 PlanInfoRow(
+                    icon = Icons.Outlined.CheckCircle,
+                    label = "Ngày đăng ký",
+                    value = if (plan.key == DemoMembershipPlanKey.FREE) {
+                        "Không áp dụng"
+                    } else {
+                        plan.startedDate.ifBlank { "Chưa lưu" }
+                    }
+                )
+                PlanInfoRow(
                     icon = Icons.Outlined.WatchLater,
                     label = "Ngày hết hạn",
-                    value = plan.expiredDate.ifBlank { "Không áp dụng" }
+                    value = if (plan.key == DemoMembershipPlanKey.FREE) {
+                        "Không áp dụng"
+                    } else {
+                        plan.expiredDate.ifBlank { "Chưa lưu" }
+                    }
                 )
                 PlanInfoRow(
                     icon = Icons.Outlined.CheckCircle,
@@ -2202,4 +2308,3 @@ internal fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
     errorTextColor = Color(0xFFFFA7A7),
     errorContainerColor = Color(0xFF2A1D2C)
 )
-

@@ -149,13 +149,16 @@ class MovieDetailViewModel : ViewModel() {
                     val episodeList = mutableListOf<EpisodeUi>()
                     val videoUrlMap = mutableMapOf<String, String>()
 
-                    episodes?.forEach { server ->
-                        server.server_data.forEachIndexed { index, ep ->
-                            val epId = "${slug}-ep-${index}"
+                    episodes
+                        ?.firstOrNull { server -> server.server_data.isNotEmpty() }
+                        ?.server_data
+                        ?.forEachIndexed { index, ep ->
+                            val episodeName = ep.name.ifBlank { "Tập ${index + 1}" }
+                            val epId = "${slug}-ep-${episodeList.size}"
                             episodeList.add(
                                 EpisodeUi(
                                     id = epId,
-                                    name = ep.name.ifBlank { "Tập ${index + 1}" },
+                                    name = episodeName,
                                     duration = movie.time ?: ""
                                 )
                             )
@@ -165,9 +168,6 @@ class MovieDetailViewModel : ViewModel() {
                                 videoUrlMap[epId] = ep.link_embed
                             }
                         }
-                        // Only use the first server
-                        if (episodeList.isNotEmpty()) return@forEach
-                    }
 
                     val posterUrl = movie.getFullPosterUrl()
                     val thumbUrl = movie.thumb_url?.let {

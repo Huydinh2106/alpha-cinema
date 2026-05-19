@@ -11,6 +11,10 @@ data class UserProfile(
     var photoUrl: String = "",
     var isAdmin: Boolean = false,
     var subscriptionPlan: String = "free",
+    var subscriptionStatus: String = "inactive",
+    var subscriptionStartedAt: Timestamp? = null,
+    var subscriptionExpiresAt: Timestamp? = null,
+    var subscriptionUpdatedAt: Timestamp? = null,
     @ServerTimestamp var createdAt: Timestamp? = null,
     @ServerTimestamp var updatedAt: Timestamp? = null
 )

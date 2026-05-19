@@ -2,6 +2,7 @@ package com.example.alphacinema.data.api
 
 import com.example.alphacinema.data.model.TmdbCreditsResponse
 import com.example.alphacinema.data.model.TmdbDetailResponse
+import com.example.alphacinema.data.model.TmdbVideosResponse
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -34,6 +35,20 @@ interface TmdbApiService {
         @Query("api_key") apiKey: String = TmdbConfig.API_KEY,
         @Query("language") language: String = "vi-VN"
     ): TmdbDetailResponse
+
+    @GET("movie/{movie_id}/videos")
+    suspend fun getMovieVideos(
+        @Path("movie_id") movieId: String,
+        @Query("api_key") apiKey: String = TmdbConfig.API_KEY,
+        @Query("language") language: String = "vi-VN"
+    ): TmdbVideosResponse
+
+    @GET("tv/{tv_id}/videos")
+    suspend fun getTvVideos(
+        @Path("tv_id") tvId: String,
+        @Query("api_key") apiKey: String = TmdbConfig.API_KEY,
+        @Query("language") language: String = "vi-VN"
+    ): TmdbVideosResponse
 }
 
 object TmdbConfig {

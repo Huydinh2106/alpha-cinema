@@ -97,14 +97,31 @@ fun MovieDetailScreen(
     onOpenMovie: (String) -> Unit,
     onWatchTogether: () -> Unit = {}
 ) {
+    val hasMultipleEpisodes = remember(movie.episodes) {
+        movie.episodes.distinctBy { it.normalizedEpisodeKey() }.size > 1
+    }
+    val episodesForPicker = remember(movie.episodes, hasMultipleEpisodes) {
+        if (hasMultipleEpisodes) {
+            movie.episodes.distinctBy { it.normalizedEpisodeKey() }
+        } else {
+            emptyList()
+        }
+    }
+    val showEpisodesTab = hasMultipleEpisodes || movie.relatedSeasons.isNotEmpty()
+    val visibleTabs = remember(showEpisodesTab) {
+        MovieDetailTab.entries.filter { tab ->
+            tab != MovieDetailTab.EPISODES || showEpisodesTab
+        }
+    }
     var selectedTabName by rememberSaveable(movie.id) {
-        mutableStateOf(if (movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty()) MovieDetailTab.EPISODES.name else MovieDetailTab.CAST.name)
+        mutableStateOf(if (showEpisodesTab) MovieDetailTab.EPISODES.name else MovieDetailTab.CAST.name)
     }
     var descriptionExpanded by rememberSaveable(movie.id) {
         mutableStateOf(false)
     }
 
-    val selectedTab = MovieDetailTab.valueOf(selectedTabName)
+    val selectedTab = visibleTabs.firstOrNull { it.name == selectedTabName }
+        ?: visibleTabs.first()
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -162,7 +179,7 @@ fun MovieDetailScreen(
                 Spacer(modifier = Modifier.height(18.dp))
                 ButtonRow(
                     onPlay = { activeEpisode?.let { onPlayMovie(movie, it) } },
-                    onEpisodes = if (movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty()) {
+                    onEpisodes = if (showEpisodesTab) {
                         {
                             selectedTabName = MovieDetailTab.EPISODES.name
                             coroutineScope.launch {
@@ -188,12 +205,12 @@ fun MovieDetailScreen(
 
         item {
             TabRow(
-                selectedTabIndex = selectedTab.ordinal,
+                selectedTabIndex = visibleTabs.indexOf(selectedTab).coerceAtLeast(0),
                 containerColor = Color.Transparent,
                 contentColor = Color.White,
                 indicator = {}
             ) {
-                MovieDetailTab.entries.filter { tab -> tab != MovieDetailTab.EPISODES || movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty() }.forEach { tab ->
+                visibleTabs.forEach { tab ->
                     val selected = tab == selectedTab
                     Tab(
                         selected = selected,
@@ -213,9 +230,9 @@ fun MovieDetailScreen(
         item {
             Spacer(modifier = Modifier.height(10.dp))
             when (selectedTab) {
-                MovieDetailTab.EPISODES -> if (movie.episodes.size > 1 || movie.relatedSeasons.isNotEmpty()) {
+                MovieDetailTab.EPISODES -> if (showEpisodesTab) {
                     EpisodeTabModern(
-                        episodes = movie.episodes,
+                        episodes = episodesForPicker,
                         currentEpisode = activeEpisode,
                         relatedSeasons = movie.relatedSeasons,
                         currentMovieName = movie.title,
@@ -225,10 +242,6 @@ fun MovieDetailScreen(
                 }
 
                 MovieDetailTab.CAST -> CastTab(cast = movie.cast)
-                MovieDetailTab.RECOMMENDATIONS -> RecommendationTab(
-                    movies = movie.recommendations,
-                    onOpenMovie = onOpenMovie
-                )
                 MovieDetailTab.COMMENTS -> CommentsTab(
                     comments = comments,
                     onPostComment = onPostComment
@@ -241,6 +254,16 @@ fun MovieDetailScreen(
             }
         }
     }
+}
+
+private fun EpisodeUi.normalizedEpisodeKey(): String {
+    return name
+        .lowercase()
+        .replace(Regex("(phần|mùa)\\s*\\d+\\s*(:|-)"), "")
+        .replace(Regex("tập\\s*"), "")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .ifBlank { id }
 }
 
 @Composable
@@ -610,16 +633,22 @@ private fun EpisodeTabModern(
     }
 
     var selectedGroup by remember(episodes) {
-        val activeGroup = if (currentEpisode != null) {
+        val activeGroup = if (groupedEpisodes.isEmpty()) {
+            ""
+        } else if (currentEpisode != null) {
             val match = Regex("(?i)(Phần|Mùa)\\s*\\d+").find(currentEpisode.name)
             match?.value ?: "Chung"
         } else {
             groupedEpisodes.keys.first()
         }
-        mutableStateOf(activeGroup)
+        mutableStateOf(
+            activeGroup.takeIf { groupedEpisodes.containsKey(it) }
+                ?: groupedEpisodes.keys.firstOrNull()
+                ?: ""
+        )
     }
 
-    if (!groupedEpisodes.containsKey(selectedGroup)) {
+    if (groupedEpisodes.isNotEmpty() && !groupedEpisodes.containsKey(selectedGroup)) {
         selectedGroup = groupedEpisodes.keys.first()
     }
 
@@ -738,43 +767,45 @@ private fun EpisodeTabModern(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val columns = 3
-            val episodesToShow = groupedEpisodes[selectedGroup] ?: emptyList()
-            episodesToShow.chunked(columns).forEach { rowEpisodes ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    rowEpisodes.forEach { episode ->
-                        val isCurrent = currentEpisode?.id == episode.id
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isCurrent) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, if (isCurrent) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                                .clickable { onSelectEpisode(episode) }
-                                .padding(vertical = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            val badgeText = episode.name
-                                .replace(Regex("(?i)(Phần|Mùa)\\s*\\d+\\s*(:|-)"), "")
-                                .replace(Regex("(?i)tập\\s*"), "")
-                                .trim()
-                            Text(
-                                text = badgeText,
-                                color = if (isCurrent) Color(0xFF0A0F1E) else Color.White,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+        if (groupedEpisodes.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                val columns = 3
+                val episodesToShow = groupedEpisodes[selectedGroup] ?: emptyList()
+                episodesToShow.chunked(columns).forEach { rowEpisodes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        rowEpisodes.forEach { episode ->
+                            val isCurrent = currentEpisode?.id == episode.id
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isCurrent) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.08f))
+                                    .border(1.dp, if (isCurrent) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .clickable { onSelectEpisode(episode) }
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                val badgeText = episode.name
+                                    .replace(Regex("(?i)(Phần|Mùa)\\s*\\d+\\s*(:|-)"), "")
+                                    .replace(Regex("(?i)tập\\s*"), "")
+                                    .trim()
+                                Text(
+                                    text = badgeText,
+                                    color = if (isCurrent) Color(0xFF0A0F1E) else Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-                    }
-                    repeat(columns - rowEpisodes.size) {
-                        Spacer(modifier = Modifier.weight(1f))
+                        repeat(columns - rowEpisodes.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -881,7 +912,8 @@ private fun CastTab(cast: List<CastUi>) {
                     .decoderFactory(SvgDecoder.Factory())
                     .build(),
                 contentDescription = "TMDB Logo",
-                modifier = Modifier.height(14.dp)
+                modifier = Modifier.height(14.dp).width(108.dp),
+                contentScale = ContentScale.Fit
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
