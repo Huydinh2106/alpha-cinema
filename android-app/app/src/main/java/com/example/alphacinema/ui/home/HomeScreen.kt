@@ -136,6 +136,44 @@ package com.example.alphacinema.ui.home
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
         var showNotificationScreen by remember { mutableStateOf(initialShowNotification) }
+
+        val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
+        var currentUid by remember { mutableStateOf(auth.currentUser?.uid) }
+        var unreadCount by remember { mutableStateOf(0) }
+
+        DisposableEffect(Unit) {
+            val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+                currentUid = firebaseAuth.currentUser?.uid
+            }
+            auth.addAuthStateListener(listener)
+            onDispose {
+                auth.removeAuthStateListener(listener)
+            }
+        }
+
+        DisposableEffect(currentUid) {
+            val uid = currentUid
+            if (uid == null) {
+                unreadCount = 0
+                return@DisposableEffect onDispose {}
+            }
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val listener = db.collection("users").document(uid).collection("notifications")
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        android.util.Log.e("HomeScreen", "Listen notifications failed.", error)
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        unreadCount = snapshot.documents.count { doc ->
+                            !(doc.getBoolean("isRead") ?: false)
+                        }
+                    }
+                }
+            onDispose {
+                listener.remove()
+            }
+        }
         
         val heroItems by viewModel.heroMovies.collectAsState()
         val phimBoMoi by viewModel.phimBoMoi.collectAsState()
@@ -475,6 +513,7 @@ package com.example.alphacinema.ui.home
             // Sticky Top Header - nằm trên cùng, không bị cuộn
             TopHeader(
                 collapseFraction = collapseFraction,
+                unreadCount = unreadCount,
                 onNotificationClick = { showNotificationScreen = true },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -611,6 +650,7 @@ package com.example.alphacinema.ui.home
     @Composable
     fun TopHeader(
         collapseFraction: Float,
+        unreadCount: Int,
         onNotificationClick: () -> Unit = {},
         modifier: Modifier = Modifier
     ) {
@@ -674,11 +714,35 @@ package com.example.alphacinema.ui.home
                 }
 
                 IconButton(onClick = onNotificationClick) {
-                    Icon(
-                        imageVector = Icons.Outlined.NotificationsNone,
-                        contentDescription = "Thông báo",
-                        tint = Color.White
-                    )
+                    Box {
+                        Icon(
+                            imageVector = Icons.Outlined.NotificationsNone,
+                            contentDescription = "Thông báo",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        if (unreadCount > 0) {
+                            val badgeSize = if (unreadCount > 9) 18.dp else 16.dp
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 4.dp, y = (-4).dp)
+                                    .defaultMinSize(minWidth = badgeSize, minHeight = badgeSize)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFEF4444)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                    color = Color.White,
+                                    fontSize = if (unreadCount > 9) 9.sp else 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    lineHeight = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 IconButton(onClick = {}) {

@@ -1,5 +1,5 @@
 import * as functions from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 
@@ -26,7 +26,7 @@ async function sendPush(tokens: string[], payload: admin.messaging.MulticastMess
 export const notifySeriesUpdate = functions.onCall({ region: REGION }, async (request) => {
   const { uid, seriesName, episode, seriesId } = request.data;
   const tokens = await getUserTokens(uid);
-  
+
   const message: admin.messaging.MulticastMessage = {
     notification: {
       title: `Tập ${episode} của ${seriesName} đã có!`,
@@ -42,7 +42,7 @@ export const notifySeriesUpdate = functions.onCall({ region: REGION }, async (re
     },
     tokens: tokens
   };
-  
+
   await sendPush(tokens, message);
   return { success: true };
 });
@@ -51,7 +51,7 @@ export const notifySeriesUpdate = functions.onCall({ region: REGION }, async (re
 export const notifyPersonalRecommendation = functions.onCall({ region: REGION }, async (request) => {
   const { uid, movieTitle, movieId } = request.data;
   const tokens = await getUserTokens(uid);
-  
+
   const message: admin.messaging.MulticastMessage = {
     notification: {
       title: `Gợi ý dành riêng cho bạn`,
@@ -66,7 +66,7 @@ export const notifyPersonalRecommendation = functions.onCall({ region: REGION },
     },
     tokens: tokens
   };
-  
+
   await sendPush(tokens, message);
   return { success: true };
 });
@@ -75,7 +75,7 @@ export const notifyPersonalRecommendation = functions.onCall({ region: REGION },
 export const notifySecurityAlert = functions.onCall({ region: REGION }, async (request) => {
   const { uid, deviceName, location } = request.data;
   const tokens = await getUserTokens(uid);
-  
+
   const message: admin.messaging.MulticastMessage = {
     notification: {
       title: `Cảnh báo bảo mật`,
@@ -93,7 +93,7 @@ export const notifySecurityAlert = functions.onCall({ region: REGION }, async (r
     },
     tokens: tokens
   };
-  
+
   await sendPush(tokens, message);
   return { success: true };
 });
@@ -102,13 +102,13 @@ export const notifySecurityAlert = functions.onCall({ region: REGION }, async (r
 export const notifyBilling = functions.onCall({ region: REGION }, async (request) => {
   const { uid, status, plan, expiry } = request.data;
   const tokens = await getUserTokens(uid);
-  
-  const title = status === "success" 
-    ? `Thanh toán thành công` 
-    : status === "failure" 
-      ? `Thanh toán thất bại` 
+
+  const title = status === "success"
+    ? `Thanh toán thành công`
+    : status === "failure"
+      ? `Thanh toán thất bại`
       : `Gói ${plan} sắp hết hạn`;
-      
+
   const body = status === "success"
     ? `Gói ${plan} đã được kích hoạt. Hạn dùng đến ${expiry}.`
     : status === "failure"
@@ -118,200 +118,284 @@ export const notifyBilling = functions.onCall({ region: REGION }, async (request
   const message: admin.messaging.MulticastMessage = {
     notification: { title, body },
     android: {
-      notification: { 
+      notification: {
         channelId: "push_notifications",
         priority: "high"
       },
     },
-    data: { 
-      type: "billing", 
-      plan: plan ?? "", 
-      status: status ?? "" 
+    data: {
+      type: "billing",
+      plan: plan ?? "",
+      status: status ?? ""
     },
     tokens: tokens
   };
-  
+
   await sendPush(tokens, message);
   return { success: true };
 });
 
 // 5. Trigger tự động khi có phim mới được thêm vào
-export const onNewMovieAdded = onDocumentCreated({
-    document: "movies/{movieId}",
-    region: REGION
+// Sử dụng onDocumentWritten thay vì onDocumentCreated vì Admin UI dùng
+// .set() với document ID cố định (slug), Firestore có thể coi đó là update
+// thay vì create → onDocumentCreated sẽ không trigger.
+// Logic chống trùng: chỉ gửi thông báo khi document chưa có trường notifiedAt.
+export const onNewMovieAdded = onDocumentWritten({
+  document: "movies/{movieId}",
+  region: REGION
 }, async (event) => {
-    console.log(`onNewMovieAdded triggered for document: ${event.params.movieId}`);
-    const movieData = event.data?.data();
-    if (!movieData) {
-        console.log("No movie data found.");
-        return;
+  const movieId = event.params.movieId;
+  console.log(`onNewMovieAdded triggered for document: ${movieId}`);
+
+  const afterData = event.data?.after?.data();
+  const beforeData = event.data?.before?.data();
+
+  // Không có dữ liệu sau khi ghi = document bị xóa → bỏ qua
+  if (!afterData) {
+    console.log("Document was deleted, skipping.");
+    return;
+  }
+
+  // Chống gửi trùng: nếu document đã có trường notifiedAt → đã gửi thông báo rồi → bỏ qua
+  if (afterData.notifiedAt) {
+    console.log(`Movie ${movieId} already notified at ${afterData.notifiedAt}. Skipping.`);
+    return;
+  }
+
+  // Nếu beforeData đã tồn tại VÀ đã có notifiedAt → chỉ là update nội dung → bỏ qua
+  if (beforeData && beforeData.notifiedAt) {
+    console.log(`Movie ${movieId} is being updated (already notified). Skipping.`);
+    return;
+  }
+
+  // Admin UI lưu phim với trường "title", còn thêm trực tiếp trên Firebase có thể dùng "name"
+  const movieTitle = afterData.title || afterData.name || afterData.origin_name || "Phim mới";
+  console.log(`Processing new movie: ${movieTitle}`);
+
+  // Lấy poster URL để hiển thị thumbnail trong giao diện thông báo
+  const rawPoster = afterData.posterUrl || afterData.poster_url || afterData.thumb_url || "";
+  const imageUrl = rawPoster && !rawPoster.startsWith("http") ? `https://phimimg.com/${rawPoster}` : rawPoster;
+
+  const title = `${movieTitle} vừa cập bến!`;
+  const body = `Siêu phẩm "${movieTitle}" đã chính thức có mặt trên Alpha Cinema. Vào xem ngay kẻo lỡ!`;
+  const type = "new_movie";
+
+  // Đánh dấu đã gửi thông báo để tránh gửi lại khi admin sửa phim
+  await admin.firestore().collection("movies").doc(movieId).update({
+    notifiedAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  console.log(`Marked movie ${movieId} as notified.`);
+
+  // Lấy tất cả user
+  const usersSnapshot = await admin.firestore().collection("users").get();
+  console.log(`Found ${usersSnapshot.size} users to notify.`);
+
+  const tokens: string[] = [];
+  const batchArray: admin.firestore.WriteBatch[] = [];
+  let currentBatch = admin.firestore().batch();
+  let batchCount = 0;
+
+  usersSnapshot.docs.forEach(doc => {
+    const uid = doc.id;
+    const userData = doc.data();
+
+    // Lưu thông báo vào subcollection "notifications" của TỪNG user
+    // Sử dụng movieId làm ID để tránh gửi 2 thông báo cho cùng 1 phim (nếu cập nhật hoặc re-trigger)
+    const notifRef = admin.firestore().collection("users").doc(uid).collection("notifications").doc(movieId);
+    currentBatch.set(notifRef, {
+      title,
+      body,
+      type,
+      movieId: movieId, // Lưu movieId (slug) để mở chi tiết phim
+      imageUrl: imageUrl || "", // Poster thumbnail cho giao diện thông báo
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: false
+    });
+    batchCount++;
+
+    if (batchCount === 400) {
+      batchArray.push(currentBatch);
+      currentBatch = admin.firestore().batch();
+      batchCount = 0;
     }
 
-    const movieTitle = movieData.name || movieData.title || movieData.origin_name || "Phim mới";
-    console.log(`Processing movie: ${movieTitle}`);
-    
-    // Đổi format thông báo cho hấp dẫn hơn và chắc chắn có tên phim
-    const title = `${movieTitle} vừa cập bến! 🍿`;
-    const body = `Siêu phẩm "${movieTitle}" đã chính thức có mặt trên Alpha Cinema. Vào xem ngay kẻo lỡ!`;
-    const type = "new_movie";
+    if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
+      tokens.push(...userData.fcmTokens);
+    }
+  });
 
-    // Lấy tất cả user
-    const usersSnapshot = await admin.firestore().collection("users").get();
-    console.log(`Found ${usersSnapshot.size} users to notify.`);
-    
-    const tokens: string[] = [];
-    const batchArray: admin.firestore.WriteBatch[] = [];
-    let currentBatch = admin.firestore().batch();
-    let batchCount = 0;
+  if (batchCount > 0) {
+    batchArray.push(currentBatch);
+  }
 
-    usersSnapshot.docs.forEach(doc => {
+  // Thực thi các batch write để lưu vào Firestore
+  console.log(`Saving notifications to Firestore in ${batchArray.length} batches...`);
+  for (const batch of batchArray) {
+    await batch.commit();
+  }
+  console.log("Firestore notifications saved.");
+
+  // Gửi Push Notification qua FCM
+  if (tokens.length > 0) {
+    const uniqueTokens = Array.from(new Set(tokens));
+    console.log(`Sending push notifications to ${uniqueTokens.length} unique tokens...`);
+    const chunkSize = 500;
+    for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
+      const chunk = uniqueTokens.slice(i, i + chunkSize);
+      const message: admin.messaging.MulticastMessage = {
+        notification: { title, body },
+        android: {
+          priority: "high",
+          notification: { channelId: "push_notifications", priority: "default" }
+        },
+        data: { type, movieId: movieId },
+        tokens: chunk
+      };
+      const response = await admin.messaging().sendEachForMulticast(message);
+      console.log(`Batch sent. Success: ${response.successCount}, Failure: ${response.failureCount}`);
+    }
+  } else {
+    console.log("No FCM tokens found to send push notifications.");
+  }
+});
+
+// 6. Cronjob kiểm tra gói dịch vụ sắp hết hạn (chạy mỗi phút)
+export const checkExpiringSubscriptions = onSchedule({
+  schedule: "every 1 minutes", // Chạy mỗi phút
+  timeZone: "Asia/Ho_Chi_Minh",
+  region: REGION
+}, async (event) => {
+  const now = new Date();
+
+  // Lấy tất cả user. (Lý tưởng nên có filter "subscriptionStatus" == "active" để tiết kiệm read)
+  const usersSnapshot = await admin.firestore().collection("users").get();
+
+  const tokens: string[] = [];
+  const batchArray: admin.firestore.WriteBatch[] = [];
+  let currentBatch = admin.firestore().batch();
+  let batchCount = 0;
+
+  usersSnapshot.docs.forEach(doc => {
+    const userData = doc.data();
+    const plan = userData.subscriptionPlan || userData.plan;
+    const status = userData.subscriptionStatus;
+    let expiryDate: Date | null = null;
+
+    // Kiểm tra trường mới subscriptionExpiresAt hoặc trường cũ expiryDate
+    const expiresAt = userData.subscriptionExpiresAt || userData.expiryDate;
+
+    if (expiresAt) {
+      if (expiresAt.toDate) {
+        expiryDate = expiresAt.toDate(); // Firestore Timestamp
+      } else {
+        expiryDate = new Date(expiresAt); // ISO string
+      }
+    }
+
+    // Chỉ xử lý nếu gói có hạn và là gói trả phí đang active
+    if (plan && plan !== "free" && expiryDate && status !== "inactive") {
+      const diffTime = expiryDate.getTime() - now.getTime();
+      // diffDays bây giờ là số thực, vd: 2.99 ngày
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+      let shouldNotify = false;
+      let displayDays = 0;
+      let flagToUpdate = "";
+
+      if (diffDays <= 0) {
+        // Đã hết hạn -> Cập nhật status thành inactive nếu cần
+        // Không gửi thông báo "sắp" nữa
+      } else if (diffDays <= 1) {
+        // Dưới 1 ngày, nếu chưa báo mốc 1 ngày
+        if (!userData.notified1Day) {
+          shouldNotify = true;
+          displayDays = 1;
+          flagToUpdate = "notified1Day";
+        }
+      } else if (diffDays <= 3) {
+        // Dưới 3 ngày, nếu chưa báo mốc 3 ngày
+        if (!userData.notified3Days) {
+          shouldNotify = true;
+          displayDays = 3;
+          flagToUpdate = "notified3Days";
+        }
+      } else if (diffDays > 3) {
+        // Gói còn trên 3 ngày (có thể do user vừa gia hạn) -> Reset flags
+        if (userData.notified3Days || userData.notified1Day) {
+          currentBatch.update(doc.ref, {
+            notified3Days: false,
+            notified1Day: false
+          });
+          batchCount++;
+        }
+      }
+
+      if (shouldNotify) {
         const uid = doc.id;
-        const userData = doc.data();
-        
-        // Lưu thông báo vào subcollection "notifications" của TỪNG user
+        const title = "Gói sắp hết hạn";
+        const body = `Gói ${plan.toUpperCase()} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. Gia hạn ngay để không bị gián đoạn.`;
+        const type = "billing";
+
+        // Thêm thông báo vào subcollection của user
         const notifRef = admin.firestore().collection("users").doc(uid).collection("notifications").doc();
         currentBatch.set(notifRef, {
-            title,
-            body,
-            type,
-            movieId: event.params.movieId, // Lưu movieId để mở chi tiết phim
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            isRead: false
+          title,
+          body,
+          type,
+          plan: plan,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          isRead: false
         });
         batchCount++;
 
-        if (batchCount === 400) {
-            batchArray.push(currentBatch);
-            currentBatch = admin.firestore().batch();
-            batchCount = 0;
-        }
+        // Đánh dấu đã gửi thông báo cho mốc này trên doc user
+        currentBatch.update(doc.ref, {
+          [flagToUpdate]: true
+        });
+        batchCount++;
 
         if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-            tokens.push(...userData.fcmTokens);
+          tokens.push(...userData.fcmTokens);
         }
-    });
+      }
 
-    if (batchCount > 0) {
+      if (batchCount >= 400) {
         batchArray.push(currentBatch);
+        currentBatch = admin.firestore().batch();
+        batchCount = 0;
+      }
     }
-    
-    // Thực thi các batch write để lưu vào Firestore
-    console.log(`Saving notifications to Firestore in ${batchArray.length} batches...`);
-    for (const batch of batchArray) {
-        await batch.commit();
+  });
+
+  if (batchCount > 0) {
+    batchArray.push(currentBatch);
+  }
+
+  // Commit các batch
+  for (const batch of batchArray) {
+    await batch.commit();
+  }
+
+  // Gửi FCM PUSH notification
+  if (tokens.length > 0) {
+    const uniqueTokens = Array.from(new Set(tokens));
+    const chunkSize = 500;
+    for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
+      const chunk = uniqueTokens.slice(i, i + chunkSize);
+      const message: admin.messaging.MulticastMessage = {
+        notification: {
+          title: "Gói dịch vụ sắp hết hạn",
+          body: "Gói Premium của bạn sắp kết thúc. Mở ứng dụng và gia hạn ngay!"
+        },
+        android: {
+          priority: "high",
+          notification: { channelId: "push_notifications", priority: "default" }
+        },
+        data: { type: "billing" },
+        tokens: chunk
+      };
+      await admin.messaging().sendEachForMulticast(message);
+      console.log(`Sent expiring subscription push to ${chunk.length} devices.`);
     }
-    console.log("Firestore notifications saved.");
-
-    // Gửi Push Notification qua FCM
-    if (tokens.length > 0) {
-        const uniqueTokens = Array.from(new Set(tokens));
-        console.log(`Sending push notifications to ${uniqueTokens.length} unique tokens...`);
-        const chunkSize = 500;
-        for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
-            const chunk = uniqueTokens.slice(i, i + chunkSize);
-            const message: admin.messaging.MulticastMessage = {
-                notification: { title, body },
-                android: { 
-                    priority: "high", // Đánh thức thiết bị khỏi Doze mode
-                    notification: { channelId: "push_notifications", priority: "default" } 
-                },
-                data: { type, movieId: event.params.movieId },
-                tokens: chunk
-            };
-            const response = await admin.messaging().sendEachForMulticast(message);
-            console.log(`Batch sent. Success: ${response.successCount}, Failure: ${response.failureCount}`);
-        }
-    } else {
-        console.log("No FCM tokens found to send push notifications.");
-    }
-});
-
-// 6. Cronjob kiểm tra gói dịch vụ sắp hết hạn (chạy lúc 08:00 sáng mỗi ngày)
-export const checkExpiringSubscriptions = onSchedule({
-    schedule: "every day 08:00",
-    timeZone: "Asia/Ho_Chi_Minh",
-    region: REGION
-}, async (event) => {
-    const now = new Date();
-    
-    const usersSnapshot = await admin.firestore().collection("users").get();
-    
-    const tokens: string[] = [];
-    const batchArray: admin.firestore.WriteBatch[] = [];
-    let currentBatch = admin.firestore().batch();
-    let batchCount = 0;
-
-    usersSnapshot.docs.forEach(doc => {
-        const userData = doc.data();
-        const plan = userData.plan || userData.subscriptionPlan;
-        let expiryDate: Date | null = null;
-        
-        if (userData.expiryDate) {
-            if (userData.expiryDate.toDate) {
-                expiryDate = userData.expiryDate.toDate(); // Firestore Timestamp
-            } else {
-                expiryDate = new Date(userData.expiryDate); // ISO string
-            }
-        }
-        
-        if (plan && plan !== "free" && expiryDate) {
-            const diffTime = expiryDate.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            // Cảnh báo trước 3 ngày và 1 ngày
-            if (diffDays === 3 || diffDays === 1) {
-                const uid = doc.id;
-                const title = "Gói sắp hết hạn";
-                const body = `Gói ${plan.toUpperCase()} của bạn sẽ hết hạn sau ${diffDays} ngày. Gia hạn ngay để không bị gián đoạn.`;
-                const type = "billing";
-
-                const notifRef = admin.firestore().collection("users").doc(uid).collection("notifications").doc();
-                currentBatch.set(notifRef, {
-                    title,
-                    body,
-                    type,
-                    plan: plan, // Lưu thông tin gói để điều hướng
-                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                    isRead: false
-                });
-                batchCount++;
-                
-                if (batchCount === 400) {
-                    batchArray.push(currentBatch);
-                    currentBatch = admin.firestore().batch();
-                    batchCount = 0;
-                }
-
-                if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-                    tokens.push(...userData.fcmTokens);
-                }
-            }
-        }
-    });
-
-    if (batchCount > 0) {
-        batchArray.push(currentBatch);
-    }
-    
-    for (const batch of batchArray) {
-        await batch.commit();
-    }
-
-    if (tokens.length > 0) {
-        const uniqueTokens = Array.from(new Set(tokens));
-        const chunkSize = 500;
-        for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
-            const chunk = uniqueTokens.slice(i, i + chunkSize);
-            const message: admin.messaging.MulticastMessage = {
-                notification: { title: "Gói sắp hết hạn", body: "Gói dịch vụ của bạn sắp hết hạn. Mở ứng dụng để xem chi tiết và gia hạn ngay!" },
-                android: { 
-                    priority: "high", // Đánh thức thiết bị khỏi Doze mode
-                    notification: { channelId: "push_notifications", priority: "default" } 
-                },
-                data: { type: "billing" },
-                tokens: chunk
-            };
-            await admin.messaging().sendEachForMulticast(message);
-        }
-    }
+  }
 });
