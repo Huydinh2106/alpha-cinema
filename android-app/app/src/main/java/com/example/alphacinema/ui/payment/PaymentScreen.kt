@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -362,7 +363,7 @@ private fun MomoQrPayment(
                 }
             },
             shape = RoundedCornerShape(12.dp),
-            border = border(1.dp, AccentGold.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+            border = BorderStroke(1.dp, AccentGold.copy(alpha = 0.5f)),
             modifier = Modifier.height(42.dp)
         ) {
             Icon(Icons.Outlined.FileDownload, contentDescription = null, tint = AccentGold, modifier = Modifier.size(18.dp))
@@ -455,7 +456,6 @@ private suspend fun saveImageToGallery(context: Context, imageUrl: String) {
     }
 }
 
-// Các Composable còn lại giữ nguyên...
 @Composable
 private fun rememberPaymentPackages(): List<PaymentPackageUi> {
     return remember {
