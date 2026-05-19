@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.QrCode2
@@ -42,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,11 +52,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.alphacinema.data.model.MomoPaymentResponse
 import kotlinx.coroutines.delay
 
 private val ScreenBackground = Color(0xFF070B16)
@@ -76,6 +80,7 @@ private data class PaymentPackageUi(
     val id: PaymentPackageId,
     val name: String,
     val price: String,
+    val amount: Long,
     val duration: String,
     val description: String,
     val features: List<String>,
@@ -100,6 +105,7 @@ private enum class PaymentStatus {
     IDLE,
     CONFIRMING,
     PROCESSING,
+    QR_DISPLAYED,
     SUCCESS,
     FAILED
 }
@@ -107,7 +113,8 @@ private enum class PaymentStatus {
 @Composable
 fun PaymentScreen(
     onBack: () -> Unit = {},
-    onContinuePayment: (packageName: String, paymentMethod: String) -> Unit = { _, _ -> }
+    onContinuePayment: (packageName: String, paymentMethod: String) -> Unit = { _, _ -> },
+    viewModel: PaymentViewModel = viewModel()
 ) {
     val packages = rememberPaymentPackages()
     val paymentMethods = rememberPaymentMethods()
@@ -117,16 +124,19 @@ fun PaymentScreen(
     var paymentStatus by remember { mutableStateOf(PaymentStatus.IDLE) }
     val isSelectionComplete = selectedPackage != null && selectedPaymentMethod != null
 
-    LaunchedEffect(paymentStatus) {
-        if (paymentStatus == PaymentStatus.PROCESSING) {
-            delay(2000)
-            selectedPackage?.let { packageUi ->
-                currentPackage = packageUi
-                selectedPaymentMethod?.let { method ->
-                    onContinuePayment(packageUi.name, method.title)
-                }
-            }
-            paymentStatus = PaymentStatus.SUCCESS
+    val momoResponse by viewModel.paymentResponse.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+
+    LaunchedEffect(momoResponse) {
+        if (momoResponse != null) {
+            paymentStatus = PaymentStatus.QR_DISPLAYED
+        }
+    }
+
+    LaunchedEffect(error) {
+        if (error != null) {
+            paymentStatus = PaymentStatus.FAILED
         }
     }
 
@@ -148,8 +158,9 @@ fun PaymentScreen(
         ) {
             PaymentTopBar(
                 onBack = {
-                    if (paymentStatus == PaymentStatus.CONFIRMING) {
+                    if (paymentStatus == PaymentStatus.CONFIRMING || paymentStatus == PaymentStatus.QR_DISPLAYED) {
                         paymentStatus = PaymentStatus.IDLE
+                        viewModel.clearPaymentResponse()
                     } else {
                         onBack()
                     }
@@ -184,10 +195,6 @@ fun PaymentScreen(
                         }
                     )
 
-                    if (selectedPaymentMethod?.id == PaymentMethodId.QR_CODE) {
-                        QrPaymentPlaceholder()
-                    }
-
                     PaymentPolicyNotice()
 
                     Button(
@@ -219,7 +226,18 @@ fun PaymentScreen(
                         OrderSummary(
                             selectedPackage = packageUi,
                             selectedPaymentMethod = method,
-                            onConfirmPayment = { paymentStatus = PaymentStatus.PROCESSING },
+                            onConfirmPayment = {
+                                if (method.id == PaymentMethodId.WALLET) {
+                                    paymentStatus = PaymentStatus.PROCESSING
+                                    viewModel.createMomoPayment(
+                                        amount = packageUi.amount,
+                                        orderInfo = "Thanh toán gói ${packageUi.name} Alpha Cinema"
+                                    )
+                                } else {
+                                    paymentStatus = PaymentStatus.PROCESSING
+                                    // Handle other payment methods here
+                                }
+                            },
                             onChangeSelection = { paymentStatus = PaymentStatus.IDLE }
                         )
                     }
@@ -227,6 +245,27 @@ fun PaymentScreen(
 
                 PaymentStatus.PROCESSING -> {
                     ProcessingPaymentState()
+                }
+
+                PaymentStatus.QR_DISPLAYED -> {
+                    momoResponse?.let { response ->
+                        MomoQrPayment(
+                            response = response,
+                            onCancel = {
+                                paymentStatus = PaymentStatus.IDLE
+                                viewModel.clearPaymentResponse()
+                            },
+                            onSuccess = {
+                                currentPackage = selectedPackage
+                                paymentStatus = PaymentStatus.SUCCESS
+                                selectedPackage?.let { packageUi ->
+                                    selectedPaymentMethod?.let { method ->
+                                        onContinuePayment(packageUi.name, method.title)
+                                    }
+                                }
+                            }
+                        )
+                    }
                 }
             }
 
@@ -242,8 +281,12 @@ fun PaymentScreen(
 
         if (paymentStatus == PaymentStatus.FAILED) {
             PaymentFailedModal(
+                errorMessage = error ?: "Thanh toán thất bại. Vui lòng thử lại.",
                 onRetry = { paymentStatus = PaymentStatus.CONFIRMING },
-                onDismiss = { paymentStatus = PaymentStatus.IDLE }
+                onDismiss = { 
+                    paymentStatus = PaymentStatus.IDLE 
+                    viewModel.clearPaymentResponse()
+                }
             )
         }
     }
@@ -257,6 +300,7 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 id = PaymentPackageId.BASIC,
                 name = "Basic",
                 price = "29.000đ / tháng",
+                amount = 29000,
                 duration = "1 tháng",
                 description = "Dành cho người dùng cá nhân",
                 features = listOf(
@@ -270,6 +314,7 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 id = PaymentPackageId.COUPLE,
                 name = "Couple",
                 price = "59.000đ / tháng",
+                amount = 59000,
                 duration = "1 tháng",
                 description = "Dành cho 2 người xem chung",
                 features = listOf(
@@ -284,6 +329,7 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 id = PaymentPackageId.PREMIUM,
                 name = "Premium",
                 price = "99.000đ / tháng",
+                amount = 99000,
                 duration = "1 tháng",
                 description = "Dành cho nhóm bạn / gia đình",
                 features = listOf(
@@ -306,21 +352,9 @@ private fun rememberPaymentMethods(): List<PaymentMethodUi> {
         listOf(
             PaymentMethodUi(
                 id = PaymentMethodId.WALLET,
-                title = "Ví điện tử",
-                description = "Thanh toán nhanh qua ví điện tử",
+                title = "Ví điện tử MoMo",
+                description = "Thanh toán nhanh qua ví điện tử Momo",
                 icon = Icons.Outlined.AccountBalanceWallet
-            ),
-            PaymentMethodUi(
-                id = PaymentMethodId.BANK_CARD,
-                title = "Thẻ ngân hàng",
-                description = "Hỗ trợ thẻ ATM, Visa và Mastercard",
-                icon = Icons.Outlined.CreditCard
-            ),
-            PaymentMethodUi(
-                id = PaymentMethodId.QR_CODE,
-                title = "QR Code",
-                description = "Quét mã QR để hoàn tất thanh toán",
-                icon = Icons.Outlined.QrCode2
             )
         )
     }
@@ -713,10 +747,6 @@ private fun OrderSummary(
             SummaryRow(label = "Phương thức", value = selectedPaymentMethod.title)
         }
 
-        if (selectedPaymentMethod.id == PaymentMethodId.QR_CODE) {
-            QrPaymentPlaceholder()
-        }
-
         PaymentPolicyNotice()
 
         Button(
@@ -791,19 +821,98 @@ private fun ProcessingPaymentState() {
             modifier = Modifier.size(54.dp)
         )
         Text(
-            text = "Đang xử lý thanh toán...",
+            text = "Đang kết nối MoMo...",
             color = Color.White,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center
         )
         Text(
-            text = "Vui lòng không rời khỏi màn hình trong lúc hệ thống xác nhận giao dịch.",
+            text = "Vui lòng chờ trong giây lát hệ thống đang tạo mã thanh toán.",
             color = Color.White.copy(alpha = 0.62f),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )
+    }
+}
+
+@Composable
+private fun MomoQrPayment(
+    response: MomoPaymentResponse,
+    onCancel: () -> Unit,
+    onSuccess: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.White.copy(alpha = 0.07f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        Text(
+            text = "Quét mã MoMo",
+            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold
+        )
+        
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White)
+                .padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Hiển thị QR Code từ URL của MoMo
+            AsyncImage(
+                model = response.qrCodeUrl,
+                contentDescription = "Momo QR Code",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        Text(
+            text = "Số tiền: ${response.amount}đ",
+            color = AccentGold,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+
+        Text(
+            text = "Mở ứng dụng MoMo và quét mã QR để hoàn tất thanh toán.",
+            color = Color.White.copy(alpha = 0.7f),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f).height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Hủy bỏ", color = Color.White)
+            }
+            
+            Button(
+                onClick = onSuccess,
+                modifier = Modifier.weight(1f).height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Đã thanh toán", color = Color(0xFF060914), fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -850,6 +959,7 @@ private fun PaymentSuccessModal(
 
 @Composable
 private fun PaymentFailedModal(
+    errorMessage: String,
     onRetry: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -868,7 +978,7 @@ private fun PaymentFailedModal(
             textAlign = TextAlign.Center
         )
         Text(
-            text = "Thanh toán thất bại. Vui lòng thử lại.",
+            text = errorMessage,
             color = Color.White.copy(alpha = 0.72f),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
@@ -916,50 +1026,6 @@ private fun ResultModalShell(content: @Composable ColumnScope.() -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
             content = content
-        )
-    }
-}
-
-@Composable
-private fun QrPaymentPlaceholder() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(22.dp))
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(138.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.White.copy(alpha = 0.9f))
-                .border(2.dp, AccentGold.copy(alpha = 0.7f), RoundedCornerShape(18.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Outlined.QrCode2,
-                    contentDescription = null,
-                    tint = Color(0xFF070B16),
-                    modifier = Modifier.size(58.dp)
-                )
-                Text(
-                    text = "AlphaCinema Pay",
-                    color = Color(0xFF070B16),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-        }
-        Text(
-            text = "Quét mã bằng ứng dụng ngân hàng hoặc ví điện tử để tiếp tục.",
-            color = Color.White.copy(alpha = 0.64f),
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center
         )
     }
 }
