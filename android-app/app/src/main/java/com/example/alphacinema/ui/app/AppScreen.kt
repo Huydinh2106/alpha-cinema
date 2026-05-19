@@ -98,7 +98,13 @@ sealed interface SplashState {
 }
 
 @Composable
-fun AppScreen(modifier: Modifier = Modifier) {
+fun AppScreen(
+    modifier: Modifier = Modifier, 
+    initialShowNotification: Boolean = false,
+    initialNotificationType: String? = null,
+    initialMovieId: String? = null,
+    initialPlan: String? = null
+) {
     // Tạo HomeViewModel ở đây để dùng chung cho Splash (theo dõi isLoading)
     // và MainContent (truyền vào để HomeScreen không fetch lại lần 2)
     val homeViewModel: HomeViewModel = viewModel()
@@ -135,7 +141,13 @@ fun AppScreen(modifier: Modifier = Modifier) {
                 SplashScreen(onFinished = { animationFinished = true })
             }
             is SplashState.Done -> {
-                MainContent(modifier = modifier)
+                MainContent(
+                    modifier = modifier, 
+                    initialShowNotification = initialShowNotification,
+                    initialNotificationType = initialNotificationType,
+                    initialMovieId = initialMovieId,
+                    initialPlan = initialPlan
+                )
             }
         }
     }
@@ -143,7 +155,11 @@ fun AppScreen(modifier: Modifier = Modifier) {
 
 @Composable
 fun MainContent(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialShowNotification: Boolean = false,
+    initialNotificationType: String? = null,
+    initialMovieId: String? = null,
+    initialPlan: String? = null
 ) {
     val navController = rememberNavController()
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
@@ -181,31 +197,50 @@ fun MainContent(
     var showWatchPartyLobby by remember { mutableStateOf(false) }
     val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
     var appAuthLoading by remember { mutableStateOf(false) }
+    var appAuthError by remember { mutableStateOf<String?>(null) }
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
     }
 
     val appAuthStateHolder = rememberAccountAuthStateHolder(
-        onLogin = { email, password ->
+        onLogin = { email, password, onSuccess ->
             scope.launch {
                 appAuthLoading = true
+                appAuthError = null
                 try {
                     val result = auth.signInWithEmailAndPassword(email, password).await()
                     result.user?.let { firestoreRepo.saveUser(it) }
                     // Sau khi đăng nhập xong, mở lại Watch Party lobby
                     showWatchPartyLobby = true
+                    onSuccess()
                 } catch (e: Exception) {
-                    showToast(e.localizedMessage ?: "Đăng nhập thất bại")
+                    appAuthError = e.localizedMessage ?: "Lỗi đăng nhập"
                 } finally {
                     appAuthLoading = false
                 }
             }
         },
-        onRegister = { name, email, password ->
+        onRegister = { name, email, password, onSuccess ->
             scope.launch {
                 appAuthLoading = true
+                appAuthError = null
                 try {
+                    var emailExists = false
+                    try {
+                        auth.signInWithEmailAndPassword(email, "DummyWrongPass123!@#").await()
+                        emailExists = true
+                    } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                        emailExists = false
+                    } catch (e: Exception) {
+                        emailExists = true
+                    }
+
+                    if (emailExists) {
+                        appAuthError = "Email đã được sử dụng. Vui lòng chọn email khác."
+                        return@launch
+                    }
+
                     val result = auth.createUserWithEmailAndPassword(email, password).await()
                     result.user?.updateProfile(
                         com.google.firebase.auth.UserProfileChangeRequest.Builder()
@@ -214,16 +249,18 @@ fun MainContent(
                     )?.await()
                     (auth.currentUser ?: result.user)?.let { firestoreRepo.saveUser(it) }
                     showWatchPartyLobby = true
+                    onSuccess()
                 } catch (e: Exception) {
-                    showToast(e.localizedMessage ?: "Đăng ký thất bại")
+                    appAuthError = "Đăng ký thất bại: ${e.localizedMessage}"
                 } finally {
                     appAuthLoading = false
                 }
             }
         },
-        onGoogleSignIn = {
+        onGoogleSignIn = { onSuccess ->
             scope.launch {
                 appAuthLoading = true
+                appAuthError = null
                 try {
                     val credentialManager = androidx.credentials.CredentialManager.create(context)
                     val signInOption = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
@@ -244,8 +281,9 @@ fun MainContent(
                     val result = auth.signInWithCredential(firebaseCredential).await()
                     result.user?.let { firestoreRepo.saveUser(it) }
                     showWatchPartyLobby = true
+                    onSuccess()
                 } catch (e: Exception) {
-                    showToast(e.localizedMessage ?: "Đăng nhập Google thất bại")
+                    appAuthError = "Đăng nhập Google thất bại"
                 } finally {
                     appAuthLoading = false
                 }
@@ -405,7 +443,14 @@ fun MainContent(
                 ) { screen ->
                     when (screen) {
                         ScreenType.HOME -> HomeScreen(
+                            initialShowNotification = initialShowNotification,
                             onPlayMovie = ::openPlayerFromHome,
+                            onOpenMovieDetail = { slug ->
+                                navController.navigate(MovieDetailNavRoute(slug = slug))
+                            },
+                            onNavigateToPlan = {
+                                navController.navigate(PaymentNavRoute)
+                            },
                             onSeeMore = { kind, slug, title ->
                                 navController.navigate(
                                     MovieListNavRoute(
@@ -860,8 +905,23 @@ fun MainContent(
         if (appAuthStateHolder.uiState.showDialog) {
             AuthBottomSheet(
                 state = appAuthStateHolder.uiState,
-                onEvent = appAuthStateHolder::onEvent
+                isLoading = appAuthLoading,
+                errorMessage = appAuthError,
+                onEvent = { event -> 
+                    appAuthError = null
+                    appAuthStateHolder.onEvent(event)
+                },
+                onForgotPassword = { appAuthStateHolder.onEvent(AccountAuthEvent.CloseDialog) }
             )
+        }
+
+        // Xử lý Deep Link khi khởi chạy App từ Thông báo (Status bar)
+        LaunchedEffect(initialNotificationType, initialMovieId) {
+            if (initialNotificationType == "new_movie" && initialMovieId != null) {
+                navController.navigate(MovieDetailNavRoute(slug = initialMovieId))
+            } else if (initialNotificationType == "billing") {
+                navController.navigate(PaymentNavRoute)
+            }
         }
 
         if (isOnMainRoute) {

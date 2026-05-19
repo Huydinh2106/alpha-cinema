@@ -1,5 +1,5 @@
-import {onRequest} from "firebase-functions/v2/https";
 import * as v1 from "firebase-functions/v1";
+import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 
@@ -9,6 +9,7 @@ const db = admin.firestore();
 const REGION = "asia-southeast1";
 const BASE_URL = "https://phimapi.com";
 
+// --- API Movies (v2) ---
 export const getLatestMovies = onRequest({ cors: true, region: REGION, maxInstances: 10 }, async (req, res) => {
     try {
         const page = req.query.page || 1;
@@ -67,36 +68,51 @@ export const getMovieDetail = onRequest({ cors: true, region: REGION, maxInstanc
     }
 });
 
-
-export const onRatingWritten = v1.region(REGION).firestore
-    .document("movies/{movieId}/ratings/{userId}")
-    .onWrite(async (change: any, context: any) => {
-    const movieId = context.params.movieId;
-    
+// --- Auth Admin (v2) ---
+export const resetPasswordAdmin = onRequest({ cors: true, region: REGION, invoker: "public" }, async (req, res) => {
+    // Không cần set Header CORS thủ công vì đã có { cors: true }
     try {
-        const ratingsSnapshot = await db.collection("movies").doc(movieId).collection("ratings").get();
-        
-        let totalRatings = 0;
-        let sumScore = 0;
-        
-        ratingsSnapshot.forEach((doc) => {
-            const rating = doc.data();
-            if (typeof rating.score === "number") {
-                sumScore += rating.score;
-                totalRatings++;
-            }
-        });
-        
-        const averageRating = totalRatings > 0 ? (sumScore / totalRatings) : 0;
-        
-        await db.collection("movies").doc(movieId).set({
-            averageRating: Math.round(averageRating * 10) / 10,
-            totalRatings: totalRatings
-        }, { merge: true });
-        
-        logger.info(`Updated stats for movie ${movieId}: avg=${averageRating}, total=${totalRatings}`);
-    } catch (error) {
-        logger.error(`Error updating stats for movie ${movieId}`, error);
+        const { email, newPassword } = req.body;
+        if (!email || !newPassword) {
+            res.status(400).send("Missing email or newPassword");
+            return;
+        }
+
+        const user = await admin.auth().getUserByEmail(email);
+        await admin.auth().updateUser(user.uid, { password: newPassword });
+
+        res.status(200).send("Password updated successfully");
+    } catch (error: any) {
+        logger.error("Error resetting password", error);
+        res.status(500).send(error.message || "Internal Server Error");
     }
 });
 
+// --- Firestore Triggers ---
+export const onRatingWritten = v1.region(REGION).firestore
+    .document("movies/{movieId}/ratings/{userId}")
+    .onWrite(async (change: any, context: any) => {
+        const movieId = context.params.movieId;
+        try {
+            const ratingsSnapshot = await db.collection("movies").doc(movieId).collection("ratings").get();
+            let totalRatings = 0;
+            let sumScore = 0;
+            ratingsSnapshot.forEach((doc) => {
+                const rating = doc.data();
+                if (typeof rating.score === "number") {
+                    sumScore += rating.score;
+                    totalRatings++;
+                }
+            });
+            const averageRating = totalRatings > 0 ? (sumScore / totalRatings) : 0;
+            await db.collection("movies").doc(movieId).set({
+                averageRating: Math.round(averageRating * 10) / 10,
+                totalRatings: totalRatings
+            }, { merge: true });
+        } catch (error) {
+            logger.error(`Error updating stats for movie ${movieId}`, error);
+        }
+    });
+
+// --- Push Notifications ---
+export * from "./notifications";
