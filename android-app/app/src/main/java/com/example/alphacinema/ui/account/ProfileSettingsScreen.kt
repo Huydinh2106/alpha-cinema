@@ -45,6 +45,7 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.storage.FirebaseStorage
+import com.example.alphacinema.util.formatFirestoreDate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
@@ -73,6 +74,7 @@ fun ProfileSettingsScreen(
 
     LaunchedEffect(currentUser) {
         currentUser?.let {
+            firestoreRepo.saveUser(it)
             val profile = firestoreRepo.getUserProfile(it.uid)
             userProfile = profile
             // Update cache with fresh data
@@ -94,6 +96,8 @@ fun ProfileSettingsScreen(
         currentUser?.photoUrl?.toString() ?: userProfile?.photoUrl ?: cachedAvatar
     }
     val plan = userProfile?.subscriptionPlan ?: "free"
+    val subscriptionStartedDate = formatFirestoreDate(userProfile?.subscriptionStartedAt)
+    val subscriptionExpiredDate = formatFirestoreDate(userProfile?.subscriptionExpiresAt)
 
     Box(
         modifier = Modifier
@@ -239,6 +243,8 @@ fun ProfileSettingsScreen(
 
                 ProfilePage.MANAGE_SUBSCRIPTION -> SubscriptionManagementPage(
                     plan = plan,
+                    subscriptionStartedDate = subscriptionStartedDate,
+                    subscriptionExpiredDate = subscriptionExpiredDate,
                     onBack = { currentPage = ProfilePage.MAIN },
                     onChangePlan = onOpenPayment
                 )
@@ -814,10 +820,16 @@ private fun SettingsMenuItem(
 @Composable
 private fun SubscriptionManagementPage(
     plan: String,
+    subscriptionStartedDate: String?,
+    subscriptionExpiredDate: String?,
     onBack: () -> Unit,
     onChangePlan: () -> Unit
 ) {
-    val membershipPlan = buildDemoMembershipPlan(plan, "30/06/2026")
+    val membershipPlan = buildDemoMembershipPlan(
+        currentPlan = plan,
+        expiredDate = subscriptionExpiredDate,
+        startedDate = subscriptionStartedDate
+    )
 
     Column(
         modifier = Modifier
@@ -906,9 +918,22 @@ private fun SubscriptionManagementPage(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     PlanInfoRow(
+                        icon = Icons.Outlined.CheckCircle,
+                        label = "Ngày đăng ký",
+                        value = if (membershipPlan.key == DemoMembershipPlanKey.FREE) {
+                            "Không áp dụng"
+                        } else {
+                            membershipPlan.startedDate.ifBlank { "Chưa lưu" }
+                        }
+                    )
+                    PlanInfoRow(
                         icon = Icons.Outlined.WatchLater,
                         label = "Ngày hết hạn",
-                        value = membershipPlan.expiredDate.ifBlank { "Không áp dụng" }
+                        value = if (membershipPlan.key == DemoMembershipPlanKey.FREE) {
+                            "Không áp dụng"
+                        } else {
+                            membershipPlan.expiredDate.ifBlank { "Chưa lưu" }
+                        }
                     )
                     PlanInfoRow(
                         icon = Icons.Outlined.CheckCircle,

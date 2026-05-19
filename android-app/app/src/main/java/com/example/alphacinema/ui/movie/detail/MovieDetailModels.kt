@@ -3,7 +3,6 @@ package com.example.alphacinema.ui.movie.detail
 enum class MovieDetailTab(val title: String) {
     EPISODES("Tập phim"),
     CAST("Diễn viên"),
-    RECOMMENDATIONS("Đề xuất"),
     COMMENTS("Bình luận"),
     RATINGS("Đánh giá")
 }
