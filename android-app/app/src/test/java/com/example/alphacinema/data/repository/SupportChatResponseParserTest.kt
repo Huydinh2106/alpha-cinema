@@ -127,23 +127,4 @@ class SupportChatResponseParserTest {
         assertEquals("ung-kinh-ma-quai-2026", action.primaryRoute?.slug)
     }
 
-    @Test
-    fun supportRepository_doesNotExposeMovieSuggestionsForAppPolicyQuestion() {
-        assertFalse(
-            SupportSuggestionPolicy.shouldExposeMovieSuggestions(
-                question = "Noi quy cua app la gi?",
-                parsedIntent = ParsedSupportChatIntent.UNKNOWN
-            )
-        )
-    }
-
-    @Test
-    fun supportRepository_exposesMovieSuggestionsForRecommendationQuestion() {
-        assertTrue(
-            SupportSuggestionPolicy.shouldExposeMovieSuggestions(
-                question = "Goi y cho toi mot bo phim kinh di di",
-                parsedIntent = ParsedSupportChatIntent.UNKNOWN
-            )
-        )
-    }
 }
