@@ -24,6 +24,7 @@ package com.example.alphacinema.ui.home
     import androidx.compose.material.icons.outlined.NotificationsNone
     import androidx.compose.material.icons.outlined.PersonOutline
     import androidx.compose.material.icons.outlined.PlayArrow
+    import androidx.compose.material.icons.outlined.KeyboardArrowDown
     import androidx.compose.material.icons.outlined.Search
     import androidx.compose.material.icons.outlined.Settings
     import androidx.compose.material.icons.outlined.Info
@@ -131,11 +132,13 @@ package com.example.alphacinema.ui.home
         onPlayMovie: (MovieUi) -> Unit = {},
         onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> },
         onOpenMovieDetail: (String) -> Unit = {},
-        onNavigateToPlan: () -> Unit = {}
+        onNavigateToPlan: () -> Unit = {},
+        onNavigateToMovieType: (type: String, title: String) -> Unit = { _, _ -> }
     ) {
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
         var showNotificationScreen by remember { mutableStateOf(initialShowNotification) }
+        var showGenreSheet by remember { mutableStateOf(false) }
         
         val heroItems by viewModel.heroMovies.collectAsState()
         val phimBoMoi by viewModel.phimBoMoi.collectAsState()
@@ -400,7 +403,16 @@ package com.example.alphacinema.ui.home
                     CategoryChips(
                         selectedChip = selectedChip,
                         isKidsMode = isKidsMode,
-                        onChipSelected = { viewModel.setCategory(it) }
+                        onChipSelected = { chip ->
+                            if (!isKidsMode && (chip == "Phim bộ" || chip == "Phim lẻ")) {
+                                val type = if (chip == "Phim bộ") "phim-bo" else "phim-le"
+                                onNavigateToMovieType(type, chip)
+                            } else if (!isKidsMode && chip == "Thể loại") {
+                                showGenreSheet = true
+                            } else {
+                                viewModel.setCategory(chip)
+                            }
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(22.dp))
@@ -424,7 +436,8 @@ package com.example.alphacinema.ui.home
                         movie = movies[currentMovieIndex],
                         currentMovieIndex = currentMovieIndex,
                         total = movies.size,
-                        onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
+                        onPlayClick = { onPlayMovie(movies[currentMovieIndex]) },
+                        onInfoClick = { onOpenMovieDetail(movies[currentMovieIndex].slug) }
                     )
                 }
                 Spacer(modifier = Modifier.height(26.dp))
@@ -501,11 +514,7 @@ package com.example.alphacinema.ui.home
                     onDetailClick = {
                         val m = previewMovie!!
                         previewMovie = null
-                        onPlayMovie(MovieUi(
-                            title = m.title, subtitle = m.originName, description = m.description,
-                            rating = m.rating, age = m.age, year = m.year, season = "", episode = m.episode,
-                            posterUrl = m.posterUrl, slug = m.slug
-                        ))
+                        onOpenMovieDetail(m.slug)
                     }
                 )
             }
@@ -525,6 +534,19 @@ package com.example.alphacinema.ui.home
                     }
                 )
             }
+        }
+
+        // Genre bottom sheet
+        if (showGenreSheet) {
+            GenreBottomSheet(
+                onGenreSelected = { genres, sortField ->
+                    showGenreSheet = false
+                    val slugs = genres.joinToString(",") { it.slug }
+                    val label = genres.joinToString(", ") { it.label }
+                    onNavigateToMovieType("the-loai/$slugs|sort=$sortField", label)
+                },
+                onDismiss = { showGenreSheet = false }
+            )
         }
     }
 
@@ -706,6 +728,8 @@ package com.example.alphacinema.ui.home
             categories.forEach { category ->
                 if (selectedChip == category) {
                     FilledChip(text = category, selected = true, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
+                } else if (category == "Thể loại") {
+                    GenreOutlineChip(text = category, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
                 } else {
                     OutlineChip(text = category, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
                 }
@@ -732,8 +756,8 @@ package com.example.alphacinema.ui.home
         }
     }
 
-    @Composable
-    fun OutlineChip(text: String, modifier: Modifier = Modifier) {
+	    @Composable
+	    fun OutlineChip(text: String, modifier: Modifier = Modifier) {
         Box(
             modifier = modifier
                 .clip(RoundedCornerShape(16.dp))
@@ -748,6 +772,37 @@ package com.example.alphacinema.ui.home
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1
             )
+	        }
+	    }
+
+    @Composable
+    fun GenreOutlineChip(text: String, modifier: Modifier = Modifier) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.2.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = text,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 
@@ -830,7 +885,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
         movie: MovieUi,
         currentMovieIndex: Int,
         total: Int,
-        onPlayClick: () -> Unit = {}
+        onPlayClick: () -> Unit = {},
+        onInfoClick: () -> Unit = {}
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
@@ -869,7 +925,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                 )
 
                 Button(
-                    onClick = onPlayClick,
+                    onClick = onInfoClick,
                     modifier = Modifier
                         .weight(1f)
                         .height(actionButtonHeight),

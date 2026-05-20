@@ -29,6 +29,11 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
+    match /momoOrders/{orderId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
     match /movies/{movieId} {
       allow read: if true;
       // Only admin users can write movies

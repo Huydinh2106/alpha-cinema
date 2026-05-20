@@ -18,7 +18,11 @@ interface   PhimApiService {
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 10,
         @Query("sort_field") sortField: String = "modified.time",
-        @Query("sort_type") sortType: String = "desc"
+        @Query("sort_type") sortType: String = "desc",
+        @Query("sort_lang") sortLang: String? = null,
+        @Query("category") category: String? = null,
+        @Query("country") country: String? = null,
+        @Query("year") year: String? = null
     ): MovieListResponse
 
     @GET("v1/api/the-loai/{slug}")
@@ -27,7 +31,10 @@ interface   PhimApiService {
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 10,
         @Query("sort_field") sortField: String = "modified.time",
-        @Query("sort_type") sortType: String = "desc"
+        @Query("sort_type") sortType: String = "desc",
+        @Query("sort_lang") sortLang: String? = null,
+        @Query("country") country: String? = null,
+        @Query("year") year: String? = null
     ): MovieListResponse
 
     @GET("v1/api/tim-kiem")
