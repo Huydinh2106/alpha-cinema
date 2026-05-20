@@ -35,3 +35,6 @@ data object WatchPartySearchNavRoute
 
 @Serializable
 data object ProfileSettingsNavRoute
+
+@Serializable
+data object WatchHistoryNavRoute
