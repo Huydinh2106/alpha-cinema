@@ -58,6 +58,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-svg:2.7.0")
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.github.momo-wallet:mobile-sdk:1.0.5") {
+        exclude(group = "com.android.support")
+    }
 
     // Lottie Animation
     implementation("com.airbnb.android:lottie-compose:6.6.2")

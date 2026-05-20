@@ -1,15 +1,19 @@
 package com.example.alphacinema.ui.payment
 
+import android.app.Activity
 import android.content.ContentValues
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,8 +68,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -73,15 +78,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.ImageLoader
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.request.SuccessResult
 import com.example.alphacinema.data.model.MomoPaymentResponse
+import com.example.alphacinema.payment.MomoSdkCoordinator
+import com.example.alphacinema.payment.MomoSdkPaymentRequest
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.NumberFormat
+import java.util.EnumMap
+import java.util.Locale
 
 private val ScreenBackground = Color(0xFF070B16)
 private val SurfaceDark = Color(0xFF10192E)
@@ -89,6 +98,8 @@ private val SurfaceMuted = Color(0xFF151E34)
 private val AccentGold = Color(0xFFF6E29A)
 private val AccentTeal = Color(0xFF63E6D8)
 private val ErrorRed = Color(0xFFFF7A7A)
+private val MomoPrimary = Color(0xFFA50064)
+private val MomoSoft = Color(0xFFFCEAF4)
 
 private enum class PaymentPackageId {
     BASIC,
@@ -133,18 +144,22 @@ private enum class PaymentStatus {
 @Composable
 fun PaymentScreen(
     onBack: () -> Unit = {},
-    onContinuePayment: (packageName: String, paymentMethod: String) -> Unit = { _, _ -> },
+    onPaymentConfirmed: () -> Unit = {},
     viewModel: PaymentViewModel = viewModel()
 ) {
+    val context = LocalContext.current
     val packages = rememberPaymentPackages()
     val paymentMethods = rememberPaymentMethods()
     var selectedPackage by remember { mutableStateOf<PaymentPackageUi?>(null) }
     var selectedPaymentMethod by remember { mutableStateOf<PaymentMethodUi?>(null) }
     var currentPackage by remember { mutableStateOf<PaymentPackageUi?>(null) }
     var paymentStatus by remember { mutableStateOf(PaymentStatus.IDLE) }
+    var sdkError by remember { mutableStateOf<String?>(null) }
     val isSelectionComplete = selectedPackage != null && selectedPaymentMethod != null
 
     val momoResponse by viewModel.paymentResponse.collectAsState()
+    val paymentConfirmed by viewModel.paymentConfirmed.collectAsState()
+    val paymentStatusMessage by viewModel.paymentStatusMessage.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
 
@@ -156,8 +171,31 @@ fun PaymentScreen(
 
     LaunchedEffect(error) {
         if (error != null) {
+            sdkError = null
             paymentStatus = PaymentStatus.FAILED
         }
+    }
+
+    LaunchedEffect(paymentConfirmed) {
+        if (paymentConfirmed) {
+            currentPackage = selectedPackage
+            paymentStatus = PaymentStatus.SUCCESS
+            onPaymentConfirmed()
+            viewModel.clearPaymentResponse()
+        }
+    }
+
+    if (paymentStatus == PaymentStatus.QR_DISPLAYED && momoResponse != null) {
+        MomoQrPayment(
+            response = momoResponse!!,
+            statusMessage = paymentStatusMessage,
+            onCancel = {
+                paymentStatus = PaymentStatus.IDLE
+                viewModel.clearPaymentResponse()
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+        return
     }
 
     Box(
@@ -248,11 +286,48 @@ fun PaymentScreen(
                             selectedPaymentMethod = method,
                             onConfirmPayment = {
                                 if (method.id == PaymentMethodId.WALLET) {
+                                    val orderInfo = "Thanh toán gói ${packageUi.name} Alpha Cinema"
+                                    val plan = packageUi.name.lowercase()
+                                    val activity = context.findActivity()
                                     paymentStatus = PaymentStatus.PROCESSING
-                                    viewModel.createMomoPayment(
-                                        amount = packageUi.amount,
-                                        orderInfo = "Thanh toán gói ${packageUi.name} Alpha Cinema"
-                                    )
+                                    sdkError = null
+                                    if (activity == null) {
+                                        sdkError = "Không mở được màn hình thanh toán MoMo"
+                                        paymentStatus = PaymentStatus.FAILED
+                                    } else {
+                                        MomoSdkCoordinator.requestPayment(
+                                            activity = activity,
+                                            request = MomoSdkPaymentRequest(
+                                                amount = packageUi.amount,
+                                                orderInfo = orderInfo,
+                                                plan = plan
+                                            )
+                                        ) { result ->
+                                            result.fold(
+                                                onSuccess = { tokenResult ->
+                                                    viewModel.processMomoAppPayment(
+                                                        orderId = tokenResult.orderId,
+                                                        amount = packageUi.amount,
+                                                        orderInfo = orderInfo,
+                                                        plan = plan,
+                                                        token = tokenResult.token,
+                                                        phoneNumber = tokenResult.phoneNumber,
+                                                        env = tokenResult.env
+                                                    )
+                                                },
+                                                onFailure = { throwable ->
+                                                    sdkError = throwable.message ?: "Thanh toán MoMo không thành công"
+                                                    paymentStatus = PaymentStatus.FAILED
+                                                }
+                                            )
+                                        }
+                                    }
+                                } else if (method.id == PaymentMethodId.QR_CODE) {
+                                    val orderInfo = "Thanh toán gói ${packageUi.name} Alpha Cinema"
+                                    val plan = packageUi.name.lowercase()
+                                    paymentStatus = PaymentStatus.PROCESSING
+                                    sdkError = null
+                                    viewModel.createMomoPayment(packageUi.amount, orderInfo, plan)
                                 } else {
                                     paymentStatus = PaymentStatus.PROCESSING
                                 }
@@ -267,24 +342,7 @@ fun PaymentScreen(
                 }
 
                 PaymentStatus.QR_DISPLAYED -> {
-                    momoResponse?.let { response ->
-                        MomoQrPayment(
-                            response = response,
-                            onCancel = {
-                                paymentStatus = PaymentStatus.IDLE
-                                viewModel.clearPaymentResponse()
-                            },
-                            onSuccess = {
-                                currentPackage = selectedPackage
-                                paymentStatus = PaymentStatus.SUCCESS
-                                selectedPackage?.let { packageUi ->
-                                    selectedPaymentMethod?.let { method ->
-                                        onContinuePayment(packageUi.name, method.title)
-                                    }
-                                }
-                            }
-                        )
-                    }
+                    ProcessingPaymentState()
                 }
             }
 
@@ -300,10 +358,11 @@ fun PaymentScreen(
 
         if (paymentStatus == PaymentStatus.FAILED) {
             PaymentFailedModal(
-                errorMessage = error ?: "Thanh toán thất bại. Vui lòng thử lại.",
+                errorMessage = sdkError ?: error ?: "Thanh toán thất bại. Vui lòng thử lại.",
                 onRetry = { paymentStatus = PaymentStatus.CONFIRMING },
                 onDismiss = { 
                     paymentStatus = PaymentStatus.IDLE 
+                    sdkError = null
                     viewModel.clearPaymentResponse()
                 }
             )
@@ -314,138 +373,393 @@ fun PaymentScreen(
 @Composable
 private fun MomoQrPayment(
     response: MomoPaymentResponse,
+    statusMessage: String?,
     onCancel: () -> Unit,
-    onSuccess: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val qrPayload = remember(response.qrCodeUrl, response.payUrl, response.deeplink) {
+        response.qrCodeUrl?.takeIf { it.isNotBlank() }
+            ?: response.payUrl?.takeIf { it.isNotBlank() }
+            ?: response.deeplink?.takeIf { it.isNotBlank() }
+    }
+    val qrBitmap = remember(qrPayload) {
+        qrPayload?.let { generateQrBitmap(it) }
+    }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        modifier = modifier
+            .background(Color.White)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
     ) {
-        Text(
-            text = "Quét mã MoMo",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold
-        )
-        
-        Box(
+        Column(
             modifier = Modifier
-                .size(240.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.White)
-                .padding(12.dp),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.White),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AsyncImage(
-                model = response.qrCodeUrl,
-                contentDescription = "Momo QR Code",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-        }
-
-        // Nút tải mã QR xuống
-        OutlinedButton(
-            onClick = {
-                response.qrCodeUrl?.let { url ->
-                    scope.launch {
-                        saveImageToGallery(context, url)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MomoPrimary)
+                    .padding(horizontal = 24.dp, vertical = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    MomoLogoMark()
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Thanh toán MoMo",
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "Quét QR hoặc mở ví MoMo để hoàn tất giao dịch",
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            lineHeight = 20.sp
+                        )
                     }
                 }
-            },
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, AccentGold.copy(alpha = 0.5f)),
-            modifier = Modifier.height(42.dp)
-        ) {
-            Icon(Icons.Outlined.FileDownload, contentDescription = null, tint = AccentGold, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Tải mã QR xuống", color = AccentGold, fontSize = 13.sp)
-        }
 
-        Text(
-            text = "Số tiền: ${response.amount}đ",
-            color = AccentGold,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = "Mở ứng dụng MoMo và quét mã QR để hoàn tất thanh toán.",
-            color = Color.White.copy(alpha = 0.7f),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = onCancel,
-                modifier = Modifier.weight(1f).height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text("Hủy bỏ", color = Color.White)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White.copy(alpha = 0.13f))
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Số tiền",
+                        color = Color.White.copy(alpha = 0.76f),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = formatVnd(response.amount),
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
-            
-            Button(
-                onClick = onSuccess,
-                modifier = Modifier.weight(1f).height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
-                shape = RoundedCornerShape(14.dp)
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                Text("Đã thanh toán", color = Color(0xFF060914), fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Dùng app MoMo để quét mã",
+                    color = Color(0xFF19111A),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(286.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE9DCE5), RoundedCornerShape(20.dp))
+                        .padding(18.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (qrBitmap != null) {
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "Mã QR thanh toán MoMo",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.QrCode2,
+                                contentDescription = null,
+                                tint = MomoPrimary,
+                                modifier = Modifier.size(42.dp)
+                            )
+                            Text(
+                                text = "Không có dữ liệu QR",
+                                color = Color(0xFF3D2A37),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                response.orderId?.takeIf { it.isNotBlank() }?.let { orderId ->
+                    Text(
+                        text = "Mã giao dịch: $orderId",
+                        color = Color(0xFF5A4A55),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MomoSoft)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    MomoInstructionRow("1", "Mở ứng dụng MoMo trên điện thoại")
+                    MomoInstructionRow("2", "Chọn Quét mã và đưa camera vào mã QR")
+                    MomoInstructionRow("3", "Kiểm tra số tiền rồi xác nhận thanh toán")
+                }
+
+                Button(
+                    onClick = { openMomoPayment(context, response) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MomoPrimary,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Mở ứng dụng MoMo",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFF7F1F5))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = MomoPrimary,
+                        trackColor = MomoPrimary.copy(alpha = 0.12f),
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = statusMessage ?: "Đang chờ MoMo xác nhận giao dịch",
+                        color = Color(0xFF3D2A37),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            qrBitmap?.let { bitmap ->
+                                scope.launch {
+                                    saveImageToGallery(context, bitmap)
+                                }
+                            }
+                        },
+                        enabled = qrBitmap != null,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, MomoPrimary.copy(alpha = 0.28f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.FileDownload,
+                            contentDescription = null,
+                            tint = MomoPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Lưu QR",
+                            color = MomoPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onCancel,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE5D7E1)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp)
+                    ) {
+                        Text(
+                            text = "Hủy",
+                            color = Color(0xFF45313D),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-private suspend fun saveImageToGallery(context: Context, imageUrl: String) {
+@Composable
+private fun MomoLogoMark() {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "MoMo",
+            color = MomoPrimary,
+            fontSize = 12.sp,
+            lineHeight = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun MomoInstructionRow(index: String, text: String) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(MomoPrimary),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = index,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+        Text(
+            text = text,
+            color = Color(0xFF3D2A37),
+            style = MaterialTheme.typography.bodySmall,
+            lineHeight = 18.sp,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+private fun generateQrBitmap(content: String, size: Int = 1024): Bitmap {
+    val hints = EnumMap<EncodeHintType, Any>(EncodeHintType::class.java).apply {
+        put(EncodeHintType.CHARACTER_SET, "UTF-8")
+        put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M)
+        put(EncodeHintType.MARGIN, 1)
+    }
+    val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints)
+    val pixels = IntArray(size * size)
+    val black = Color.Black.toArgb()
+    val white = Color.White.toArgb()
+
+    for (y in 0 until size) {
+        val offset = y * size
+        for (x in 0 until size) {
+            pixels[offset + x] = if (matrix[x, y]) black else white
+        }
+    }
+
+    return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).apply {
+        setPixels(pixels, 0, size, 0, 0, size, size)
+    }
+}
+
+private fun formatVnd(amount: Long?): String {
+    val formatter = NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN"))
+    return "${formatter.format(amount ?: 0L)}đ"
+}
+
+private fun openMomoPayment(context: Context, response: MomoPaymentResponse) {
+    val primaryUri = response.deeplink?.takeIf { it.isNotBlank() }
+        ?: response.payUrl?.takeIf { it.isNotBlank() }
+        ?: response.qrCodeUrl?.takeIf { it.isNotBlank() }
+
+    if (primaryUri == null) {
+        Toast.makeText(context, "Không có liên kết thanh toán MoMo", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(primaryUri)))
+    } catch (e: ActivityNotFoundException) {
+        val fallbackUrl = response.payUrl?.takeIf { it.isNotBlank() && it != primaryUri }
+        if (fallbackUrl != null) {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl)))
+        } else {
+            Toast.makeText(context, "Không mở được ứng dụng MoMo", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? {
+    return when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+}
+
+private suspend fun saveImageToGallery(context: Context, bitmap: Bitmap) {
     withContext(Dispatchers.IO) {
         try {
-            val loader = ImageLoader(context)
-            val request = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .allowHardware(false)
-                .build()
-
-            val result = (loader.execute(request) as? SuccessResult)?.drawable
-            val bitmap = (result as? BitmapDrawable)?.bitmap
-
-            if (bitmap != null) {
-                val filename = "MomoQR_${System.currentTimeMillis()}.jpg"
-                var fos: java.io.OutputStream? = null
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    context.contentResolver?.also { resolver ->
-                        val contentValues = ContentValues().apply {
-                            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
-                            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
-                        }
-                        val imageUri: Uri? = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                        fos = imageUri?.let { resolver.openOutputStream(it) }
+            val filename = "MomoQR_${System.currentTimeMillis()}.png"
+            var fos: java.io.OutputStream? = null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                context.contentResolver?.also { resolver ->
+                    val contentValues = ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                        put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
                     }
-                } else {
-                    val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                    val image = java.io.File(imagesDir, filename)
-                    fos = java.io.FileOutputStream(image)
+                    val imageUri: Uri? = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                    fos = imageUri?.let { resolver.openOutputStream(it) }
                 }
+            } else {
+                val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                imagesDir.mkdirs()
+                val image = java.io.File(imagesDir, filename)
+                fos = java.io.FileOutputStream(image)
+            }
 
-                fos?.use {
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Đã lưu mã QR vào thư viện", Toast.LENGTH_SHORT).show()
-                    }
+            fos?.use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Đã lưu mã QR vào thư viện", Toast.LENGTH_SHORT).show()
                 }
             }
         } catch (e: Exception) {
@@ -515,6 +829,12 @@ private fun rememberPaymentMethods(): List<PaymentMethodUi> {
     return remember {
         listOf(
             PaymentMethodUi(
+                id = PaymentMethodId.QR_CODE,
+                title = "Mã QR MoMo",
+                description = "Hiện mã QR để quét bằng app MoMo",
+                icon = Icons.Outlined.QrCode2
+            ),
+            PaymentMethodUi(
                 id = PaymentMethodId.WALLET,
                 title = "Ví điện tử MoMo",
                 description = "Thanh toán nhanh qua ví điện tử Momo",
@@ -543,9 +863,12 @@ private fun PaymentBackground() {
 }
 
 @Composable
-private fun PaymentTopBar(onBack: () -> Unit) {
+private fun PaymentTopBar(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(

@@ -724,25 +724,17 @@ fun MainContent(
             composable<PaymentNavRoute> {
                 PaymentScreen(
                     onBack = { navController.popBackStack() },
-                    onContinuePayment = { planName, paymentMethod ->
+                    onPaymentConfirmed = {
                         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                         if (user != null) {
                             scope.launch {
-                                val expiresAt = firestoreRepo.updateUserSubscription(
-                                    uid = user.uid,
-                                    plan = planName.lowercase(),
-                                    paymentMethod = paymentMethod
-                                )
                                 val profile = firestoreRepo.getUserProfile(user.uid)
-                                demoCurrentPlan = profile?.subscriptionPlan ?: planName.lowercase()
+                                demoCurrentPlan = profile?.subscriptionPlan
                                 demoMembershipStartedDate = formatFirestoreDate(profile?.subscriptionStartedAt)
                                 demoMembershipExpiredDate = formatFirestoreDate(profile?.subscriptionExpiresAt)
-                                    ?: formatFirestoreDate(expiresAt)
                             }
-                        } else {
-                            demoCurrentPlan = planName.lowercase()
                         }
-                        showToast("Đã nâng cấp gói $planName qua $paymentMethod")
+                        showToast("MoMo đã xác nhận thanh toán")
                     }
                 )
             }
