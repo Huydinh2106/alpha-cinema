@@ -1,6 +1,5 @@
 package com.example.alphacinema.ui.watchparty
 
-import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -33,6 +32,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -74,8 +75,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,6 +100,17 @@ import androidx.media3.ui.PlayerView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.outlined.BrightnessHigh
+import androidx.compose.material.icons.outlined.BrightnessLow
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.mutableFloatStateOf
 import com.example.alphacinema.data.model.WatchPartyChatMessage
 import com.example.alphacinema.data.model.WatchPartyMember
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
@@ -118,6 +136,8 @@ fun WatchPartyScreen(
 
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val focusManager = LocalFocusManager.current
+    val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     val isHost = viewModel.isHost
     val currentUid = viewModel.currentUid
@@ -279,7 +299,6 @@ fun WatchPartyScreen(
             exoPlayer.release()
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             val window = activity?.window ?: return@onDispose
-            WindowCompat.setDecorFitsSystemWindows(window, true)
             WindowInsetsControllerCompat(window, window.decorView)
                 .show(WindowInsetsCompat.Type.systemBars())
         }
@@ -291,7 +310,6 @@ fun WatchPartyScreen(
         if (isFullscreen) {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = activity?.window ?: return
-            WindowCompat.setDecorFitsSystemWindows(window, false)
             WindowInsetsControllerCompat(window, window.decorView).apply {
                 hide(WindowInsetsCompat.Type.systemBars())
                 systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -299,7 +317,6 @@ fun WatchPartyScreen(
         } else {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             val window = activity?.window ?: return
-            WindowCompat.setDecorFitsSystemWindows(window, true)
             WindowInsetsControllerCompat(window, window.decorView)
                 .show(WindowInsetsCompat.Type.systemBars())
         }
@@ -307,6 +324,19 @@ fun WatchPartyScreen(
 
     // Fullscreen mode
     if (isFullscreen) {
+        var brightness by remember { mutableFloatStateOf(1f) }
+        var visibleChats by remember { mutableStateOf<List<WatchPartyChatMessage>>(emptyList()) }
+        val prevMsgCount = remember { mutableStateOf(chatMessages.size) }
+        LaunchedEffect(chatMessages.size) {
+            if (chatMessages.size > prevMsgCount.value) {
+                val newMsgs = chatMessages.takeLast(chatMessages.size - prevMsgCount.value)
+                visibleChats = (visibleChats + newMsgs).takeLast(4)
+                prevMsgCount.value = chatMessages.size
+                delay(4000)
+                visibleChats = visibleChats.filterNot { it in newMsgs }
+            } else { prevMsgCount.value = chatMessages.size }
+        }
+        val overlayAlpha = (1f - brightness).coerceIn(0f, 0.85f)
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             AndroidView(
                 factory = { ctx ->
@@ -318,10 +348,10 @@ fun WatchPartyScreen(
 
                         // Force custom 10s icons
                         val applyCustomIcons = {
-                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_rew)
-                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_replay_10)
-                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_ffwd)
-                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_forward_10)
+                            val rewId = resources.getIdentifier("exo_rew", "id", context.packageName)
+                            if (rewId != 0) findViewById<android.widget.ImageButton>(rewId)?.setImageResource(com.example.alphacinema.R.drawable.ic_replay_10)
+                            val ffwdId = resources.getIdentifier("exo_ffwd", "id", context.packageName)
+                            if (ffwdId != 0) findViewById<android.widget.ImageButton>(ffwdId)?.setImageResource(com.example.alphacinema.R.drawable.ic_forward_10)
                         }
                         applyCustomIcons()
                         setControllerVisibilityListener(
@@ -339,6 +369,74 @@ fun WatchPartyScreen(
                 update = { it.player = exoPlayer },
                 modifier = Modifier.fillMaxSize()
             )
+            // Brightness dim overlay (pass-through touches)
+            if (overlayAlpha > 0.01f) {
+                Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }.background(Color.Black.copy(alpha = overlayAlpha)))
+            }
+            // Left-half gesture zone for brightness (does NOT block taps)
+            var showBrightnessIndicator by remember { mutableStateOf(false) }
+            LaunchedEffect(showBrightnessIndicator) {
+                if (showBrightnessIndicator) { delay(1500); showBrightnessIndicator = false }
+            }
+            androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val halfWidth = maxWidth / 2
+                Box(
+                    modifier = Modifier
+                        .width(halfWidth)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterStart)
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures { _, dragAmount ->
+                                val delta = -dragAmount / size.height.toFloat()
+                                brightness = (brightness + delta).coerceIn(0.05f, 1f)
+                                showBrightnessIndicator = true
+                            }
+                        }
+                )
+            }
+
+            // CENTER: Brightness indicator (Netflix-style)
+            AnimatedVisibility(
+                visible = showBrightnessIndicator,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp)
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(horizontal = 14.dp, vertical = 16.dp)
+                        .width(44.dp)
+                ) {
+                    Icon(
+                        if (brightness > 0.5f) Icons.Outlined.BrightnessHigh else Icons.Outlined.BrightnessLow,
+                        null, tint = Color.White, modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // Vertical progress bar
+                    Box(
+                        modifier = Modifier
+                            .width(4.dp)
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color.White.copy(alpha = 0.2f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(brightness)
+                                .align(Alignment.BottomCenter)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("${(brightness * 100).toInt()}%", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
             // Members overlay (top-right)
             if (room != null) {
                 Row(
@@ -349,20 +447,31 @@ fun WatchPartyScreen(
                     Text("${members.size}/5", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
+            // Guest overlays
             if (!isHost) {
                 val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
                 Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
-                
-                IconButton(
-                    onClick = { toggleFullscreen() },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.4f))
-                ) {
+                IconButton(onClick = { toggleFullscreen() }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f))) {
                     Icon(Icons.Outlined.FullscreenExit, "Thu nhỏ", tint = Color.White)
+                }
+            }
+
+            // RIGHT: Floating chat toasts
+            Column(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 56.dp).widthIn(max = 220.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End
+            ) {
+                visibleChats.forEach { msg ->
+                    androidx.compose.runtime.key(msg.id) {
+                        Row(
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.65f)).padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(msg.displayName.split(" ").lastOrNull() ?: "", color = Color(0xFFF6E29A), fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(msg.text, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
 
@@ -431,7 +540,13 @@ fun WatchPartyScreen(
 
     // Portrait mode
     Column(
-        modifier = Modifier.fillMaxSize().statusBarsPadding().background(Color(0xFF070B16))
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .background(Color(0xFF070B16))
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { focusManager.clearFocus() })
+            }
     ) {
         // Video player with built-in fullscreen button
         Box(
@@ -446,10 +561,10 @@ fun WatchPartyScreen(
 
                         // Force custom 10s icons (Media3 overrides them by default)
                         val applyCustomIcons = {
-                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_rew)
-                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_replay_10)
-                            findViewById<android.widget.ImageButton>(androidx.media3.ui.R.id.exo_ffwd)
-                                ?.setImageResource(com.example.alphacinema.R.drawable.ic_forward_10)
+                            val rewId = resources.getIdentifier("exo_rew", "id", context.packageName)
+                            if (rewId != 0) findViewById<android.widget.ImageButton>(rewId)?.setImageResource(com.example.alphacinema.R.drawable.ic_replay_10)
+                            val ffwdId = resources.getIdentifier("exo_ffwd", "id", context.packageName)
+                            if (ffwdId != 0) findViewById<android.widget.ImageButton>(ffwdId)?.setImageResource(com.example.alphacinema.R.drawable.ic_forward_10)
                         }
                         applyCustomIcons()
                         setControllerVisibilityListener(
@@ -492,121 +607,121 @@ fun WatchPartyScreen(
 
         // Room info + share
         var showInviteDialog by remember { mutableStateOf(false) }
-        if (room != null) {
-            val hasMovie = room!!.movieSlug.isNotBlank()
-            RoomInfoBar(
-                roomId = room!!.roomId,
-                movieTitle = if (hasMovie) room!!.movieTitle else "Chưa chọn phim",
-                hasMovie = hasMovie,
-                isHost = isHost,
-                isMicMuted = isMicMuted,
-                onToggleMic = {
-                    val hasPermission = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                    if (hasPermission) {
-                        viewModel.toggleMic()
-                    } else {
-                        permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+
+        if (!isImeVisible) {
+            Column {
+                if (room != null) {
+                    val hasMovie = room!!.movieSlug.isNotBlank()
+                    RoomInfoBar(
+                        roomId = room!!.roomId,
+                        movieTitle = if (hasMovie) room!!.movieTitle else "Chưa chọn phim",
+                        hasMovie = hasMovie,
+                        isHost = isHost,
+                        isMicMuted = isMicMuted,
+                        onToggleMic = {
+                            val hasPermission = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                            if (hasPermission) {
+                                viewModel.toggleMic()
+                            } else {
+                                permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        onCopyId = {
+                            clipboardManager.setText(AnnotatedString(room!!.roomId))
+                            android.widget.Toast.makeText(context, "Đã sao chép mã phòng", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        onShare = { showInviteDialog = true },
+                        onChangeMovie = onChangeMovieClick
+                    )
+
+                    // Invite popup
+                    if (showInviteDialog) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showInviteDialog = false },
+                            containerColor = Color(0xFF1A2237),
+                            title = {
+                                Text("Mời bạn bè", color = Color.White, fontWeight = FontWeight.Bold)
+                            },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    // Option 1: Copy room code
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color.White.copy(alpha = 0.08f))
+                                            .clickable {
+                                                clipboardManager.setText(AnnotatedString(room!!.roomId))
+                                                android.widget.Toast.makeText(context, "Đã sao chép mã phòng", android.widget.Toast.LENGTH_SHORT).show()
+                                                showInviteDialog = false
+                                            }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column {
+                                            Text("Sao chép mã phòng", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            Text(room!!.roomId, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                                        }
+                                    }
+
+                                    // Option 2: Share link (if you have deep links)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color.White.copy(alpha = 0.08f))
+                                            .clickable {
+                                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/plain"
+                                                    putExtra(Intent.EXTRA_TEXT, "Tham gia xem chung phim trên Alpha Cinema cùng mình! Mã phòng: ${room!!.roomId}")
+                                                }
+                                                context.startActivity(Intent.createChooser(intent, "Chia sẻ qua"))
+                                                showInviteDialog = false
+                                            }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Outlined.Share, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column {
+                                            Text("Chia sẻ qua ứng dụng", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            Text("Gửi lời mời trực tiếp", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {}
+                        )
                     }
-                },
-                onCopyId = {
-                    clipboardManager.setText(AnnotatedString(room!!.roomId))
-                    android.widget.Toast.makeText(context, "Đã sao chép mã phòng", android.widget.Toast.LENGTH_SHORT).show()
-                },
-                onShare = { showInviteDialog = true },
-                onChangeMovie = onChangeMovieClick
-            )
+                }
 
-            // Invite popup
-            if (showInviteDialog) {
-                androidx.compose.material3.AlertDialog(
-                    onDismissRequest = { showInviteDialog = false },
-                    containerColor = Color(0xFF1A2237),
-                    title = {
-                        Text("Mời bạn bè", color = Color.White, fontWeight = FontWeight.Bold)
-                    },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            // Option 1: Copy room code
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = 0.08f))
-                                    .clickable {
-                                        clipboardManager.setText(AnnotatedString(room!!.roomId))
-                                        android.widget.Toast.makeText(context, "Đã sao chép mã phòng: ${room!!.roomId}", android.widget.Toast.LENGTH_SHORT).show()
-                                        showInviteDialog = false
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.Outlined.ContentCopy, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(22.dp))
-                                Column {
-                                    Text("Sao chép mã phòng", color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                    Text(room!!.roomId, color = Color(0xFFF6E29A), style = MaterialTheme.typography.labelMedium, letterSpacing = 2.sp)
-                                }
-                            }
-                            // Option 2: Share deep link
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = 0.08f))
-                                    .clickable {
-                                        val deepLink = "alphacinema://watchparty/${room!!.roomId}"
-                                        val shareText = if (hasMovie) {
-                                            "Xem phim \"${room!!.movieTitle}\" cùng tôi trên AlphaCinema!\n$deepLink"
-                                        } else {
-                                            "Xem phim cùng tôi trên AlphaCinema!\n$deepLink"
-                                        }
-                                        val sendIntent = Intent().apply {
-                                            action = Intent.ACTION_SEND
-                                            putExtra(Intent.EXTRA_TEXT, shareText)
-                                            type = "text/plain"
-                                        }
-                                        context.startActivity(Intent.createChooser(sendIntent, "Chia sẻ link phòng"))
-                                        showInviteDialog = false
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.Outlined.Share, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(22.dp))
-                                Column {
-                                    Text("Gửi link mời", color = Color.White, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                    Text("Bạn bè bấm link tự vào phòng", color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {}
-                )
+                // Episode selector (host only, compact)
+                if (isHost && episodes.size > 1) {
+                    EpisodeSelector(
+                        episodes = episodes,
+                        currentEpisodeId = currentEpisodeId,
+                        onSelectEpisode = { ep -> viewModel.changeEpisode(ep.id, ep.name) }
+                    )
+                }
+
+                // Members
+                if (members.isNotEmpty()) {
+                    MembersList(
+                        members = members,
+                        hostId = room?.hostId ?: "",
+                        speakingUsers = speakingUsers,
+                        onAdjustVolume = { uid, vol -> viewModel.adjustUserVolume(uid, vol) }
+                    )
+                }
             }
-        }
-
-        // Episode selector (host only, compact)
-        if (isHost && episodes.size > 1) {
-            EpisodeSelector(
-                episodes = episodes,
-                currentEpisodeId = currentEpisodeId,
-                onSelectEpisode = { ep -> viewModel.changeEpisode(ep.id, ep.name) }
-            )
-        }
-
-        // Members
-        if (members.isNotEmpty()) {
-            MembersList(
-                members = members,
-                hostId = room?.hostId ?: "",
-                speakingUsers = speakingUsers,
-                onAdjustVolume = { uid, vol -> viewModel.adjustUserVolume(uid, vol) }
-            )
         }
 
         // Chat
         ChatSection(
             messages = chatMessages,
+            members = members,
             currentUid = currentUid ?: "",
             onSend = { viewModel.sendMessage(it) },
             modifier = Modifier.weight(1f)
@@ -896,12 +1011,14 @@ private fun EpisodeSelector(
 @Composable
 private fun ChatSection(
     messages: List<WatchPartyChatMessage>,
+    members: List<WatchPartyMember>,
     currentUid: String,
     onSend: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val memberMap = remember(members) { members.associateBy { it.uid } }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -912,33 +1029,71 @@ private fun ChatSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(top = 16.dp)
+            .padding(top = 12.dp)
     ) {
-        Text(
-            text = "Trò chuyện",
-            color = Color.White,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Messages — chiếm hết không gian còn lại
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            color = Color.White.copy(alpha = 0.04f),
-            shape = RoundedCornerShape(16.dp)
+        // Header
+        Row(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (messages.isEmpty()) {
+            Icon(
+                Icons.Outlined.Groups,
+                contentDescription = null,
+                tint = Color(0xFFF6E29A),
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = "Trò chuyện",
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            if (messages.isNotEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF6E29A).copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "Chưa có tin nhắn nào",
-                        color = Color.White.copy(alpha = 0.3f),
+                        "${messages.size}",
+                        color = Color(0xFFF6E29A),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Messages area
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xFF0D1520))
+        ) {
+            if (messages.isEmpty()) {
+                // Empty state
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.Send,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.12f),
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Bắt đầu trò chuyện!",
+                        color = Color.White.copy(alpha = 0.25f),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -946,105 +1101,206 @@ private fun ChatSection(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    items(messages, key = { it.id }) { msg ->
+                    items(messages.size) { index ->
+                        val msg = messages[index]
                         val isMe = msg.uid == currentUid
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
-                        ) {
-                            Column(
-                                modifier = Modifier.widthIn(max = 250.dp)
-                            ) {
-                                if (!isMe) {
-                                    Text(
-                                        text = msg.displayName,
-                                        color = Color(0xFFF6E29A).copy(alpha = 0.7f),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(bottom = 2.dp)
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .clip(
-                                            RoundedCornerShape(
-                                                topStart = 14.dp,
-                                                topEnd = 14.dp,
-                                                bottomStart = if (isMe) 14.dp else 4.dp,
-                                                bottomEnd = if (isMe) 4.dp else 14.dp
-                                            )
-                                        )
-                                        .background(
-                                            if (isMe) Color(0xFFF6E29A) else Color(0xFF17233A)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = msg.text,
-                                        color = if (isMe) Color.Black else Color.White,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
+                        val prevMsg = if (index > 0) messages[index - 1] else null
+                        val nextMsg = if (index < messages.size - 1) messages[index + 1] else null
+                        val isFirstInGroup = prevMsg == null || prevMsg.uid != msg.uid ||
+                                (msg.timestamp - prevMsg.timestamp > 60_000)
+                        val isLastInGroup = nextMsg == null || nextMsg.uid != msg.uid ||
+                                (nextMsg.timestamp - msg.timestamp > 60_000)
+                        val member = memberMap[msg.uid]
+
+                        // Add spacing between groups
+                        if (isFirstInGroup && index > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
+
+                        ChatBubble(
+                            message = msg,
+                            isMe = isMe,
+                            isFirstInGroup = isFirstInGroup,
+                            isLastInGroup = isLastInGroup,
+                            avatarUrl = member?.photoUrl ?: ""
+                        )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Input
+        // Input bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 16.dp)
                 .navigationBarsPadding()
-                .imePadding(),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .imePadding()
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color(0xFF16233B))
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
+            androidx.compose.material3.TextField(
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
                 placeholder = {
-                    Text("Nhắn gì đi...", color = Color.White.copy(alpha = 0.3f))
+                    Text("Nhắn gì đi...", color = Color.White.copy(alpha = 0.3f), style = MaterialTheme.typography.bodyMedium)
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
+                colors = androidx.compose.material3.TextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF16233B),
-                    unfocusedContainerColor = Color(0xFF10192D),
-                    focusedBorderColor = Color(0xFFF6E29A),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
                     cursorColor = Color(0xFFF6E29A)
-                )
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium
             )
 
-            Button(
-                onClick = {
-                    if (input.isNotBlank()) {
+            // Send button
+            val hasText = input.isNotBlank()
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (hasText) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.06f)
+                    )
+                    .clickable(enabled = hasText) {
                         onSend(input)
                         input = ""
-                    }
-                },
-                enabled = input.isNotBlank(),
-                shape = CircleShape,
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFF6E29A),
-                    contentColor = Color.Black,
-                    disabledContainerColor = Color.White.copy(alpha = 0.08f),
-                    disabledContentColor = Color.White.copy(alpha = 0.25f)
-                ),
-                modifier = Modifier.size(48.dp)
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = "Gửi")
+                Icon(
+                    Icons.AutoMirrored.Outlined.Send,
+                    contentDescription = "Gửi",
+                    tint = if (hasText) Color(0xFF070B16) else Color.White.copy(alpha = 0.2f),
+                    modifier = Modifier.size(18.dp)
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatBubble(
+    message: WatchPartyChatMessage,
+    isMe: Boolean,
+    isFirstInGroup: Boolean,
+    isLastInGroup: Boolean,
+    avatarUrl: String
+) {
+    val timeText = remember(message.timestamp) {
+        if (message.timestamp > 0) {
+            val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+            sdf.format(java.util.Date(message.timestamp))
+        } else ""
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        // Avatar for others (only show on last message in group)
+        if (!isMe) {
+            if (isLastInGroup) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1A2237)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (avatarUrl.isNotBlank()) {
+                        coil.compose.AsyncImage(
+                            model = avatarUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            message.displayName.firstOrNull()?.uppercase() ?: "?",
+                            color = Color(0xFFF6E29A),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.size(28.dp))
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+
+        Column(
+            modifier = Modifier.widthIn(max = 240.dp),
+            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+        ) {
+            // Name (only first in group, only for others)
+            if (!isMe && isFirstInGroup) {
+                Text(
+                    text = message.displayName,
+                    color = Color(0xFFF6E29A).copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 3.dp)
+                )
+            }
+
+            // Bubble
+            val bubbleShape = RoundedCornerShape(
+                topStart = if (!isMe && isFirstInGroup) 18.dp else if (!isMe) 6.dp else 18.dp,
+                topEnd = if (isMe && isFirstInGroup) 18.dp else if (isMe) 6.dp else 18.dp,
+                bottomStart = if (!isMe && isLastInGroup) 4.dp else if (!isMe) 6.dp else 18.dp,
+                bottomEnd = if (isMe && isLastInGroup) 4.dp else if (isMe) 6.dp else 18.dp
+            )
+
+            Box(
+                modifier = Modifier
+                    .clip(bubbleShape)
+                    .background(
+                        if (isMe) Color(0xFFF6E29A) else Color(0xFF1A2840)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Column {
+                    Text(
+                        text = message.text,
+                        color = if (isMe) Color(0xFF070B16) else Color.White,
+                        style = MaterialTheme.typography.bodySmall,
+                        lineHeight = 18.sp
+                    )
+                    // Timestamp on last message of group
+                    if (isLastInGroup && timeText.isNotEmpty()) {
+                        Text(
+                            text = timeText,
+                            color = if (isMe) Color(0xFF070B16).copy(alpha = 0.45f) else Color.White.copy(alpha = 0.35f),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(top = 2.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Right spacer for others to balance layout
+        if (!isMe) {
+            Spacer(modifier = Modifier.weight(1f, fill = false))
         }
     }
 }

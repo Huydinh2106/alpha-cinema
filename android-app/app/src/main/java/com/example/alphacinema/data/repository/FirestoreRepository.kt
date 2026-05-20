@@ -4,16 +4,18 @@ import com.example.alphacinema.data.model.Comment
 import com.example.alphacinema.data.model.FavoriteItem
 import com.example.alphacinema.data.model.MovieStats
 import com.example.alphacinema.data.model.Rating
-import com.example.alphacinema.data.model.UserProfile
 import com.example.alphacinema.data.model.WatchHistoryItem
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import java.util.Calendar
 
 class FirestoreRepository {
     private val db = FirebaseFirestore.getInstance()
@@ -68,38 +70,84 @@ class FirestoreRepository {
     }
 
     suspend fun saveUser(firebaseUser: FirebaseUser) {
+        if (firebaseUser.uid.isBlank()) return
         val userRef = db.collection("users").document(firebaseUser.uid)
-        
-        // We only create the user document if it doesn't exist, to avoid overwriting createdAt
-        val snapshot = userRef.get().await()
-        if (!snapshot.exists()) {
-            val userProfile = UserProfile(
-                uid = firebaseUser.uid,
-                email = firebaseUser.email ?: "",
-                displayName = firebaseUser.displayName ?: "",
-                photoUrl = firebaseUser.photoUrl?.toString() ?: ""
-                // createdAt and updatedAt will be automatically set by @ServerTimestamp
+        try {
+            val snapshot = userRef.get().await()
+            val existingData = snapshot.data.orEmpty()
+            val userData = mutableMapOf<String, Any>(
+                "uid" to firebaseUser.uid,
+                "email" to (firebaseUser.email ?: ""),
+                "displayName" to (firebaseUser.displayName ?: ""),
+                "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
+                "updatedAt" to FieldValue.serverTimestamp()
             )
-            userRef.set(userProfile).await()
-        } else {
-            // Update displayName and photoUrl if needed
-            userRef.update(
-                mapOf(
-                    "displayName" to (firebaseUser.displayName ?: ""),
-                    "photoUrl" to (firebaseUser.photoUrl?.toString() ?: "")
-                )
-            ).await()
+
+            if (!snapshot.exists() || !existingData.containsKey("createdAt")) {
+                userData["createdAt"] = FieldValue.serverTimestamp()
+            }
+            if (!existingData.containsKey("subscriptionPlan")) {
+                userData["subscriptionPlan"] = "free"
+            }
+            if (!existingData.containsKey("subscriptionStatus")) {
+                userData["subscriptionStatus"] = "inactive"
+            }
+
+            userRef.set(userData, SetOptions.merge()).await()
+        } catch (e: Exception) {
+            android.util.Log.e("FirestoreRepository", "saveUser failed", e)
         }
     }
 
-    suspend fun updateUserSubscription(uid: String, plan: String) {
-        if (uid.isBlank()) return
-        try {
-            db.collection("users").document(uid)
-                .set(mapOf("subscriptionPlan" to plan), com.google.firebase.firestore.SetOptions.merge()).await()
+    suspend fun updateUserSubscription(
+        uid: String,
+        plan: String,
+        paymentMethod: String? = null,
+        durationMonths: Int = 1
+    ): Timestamp? {
+        if (uid.isBlank()) return null
+        return try {
+            val userRef = db.collection("users").document(uid)
+            val snapshot = userRef.get().await()
+            val existingData = snapshot.data.orEmpty()
+            val normalizedPlan = plan.trim().lowercase().ifBlank { "free" }
+            val isPaidPlan = normalizedPlan != "free"
+            val startedAt = Timestamp.now()
+            val expiresAt = if (isPaidPlan) calculateSubscriptionExpiry(durationMonths) else null
+            val updates = mutableMapOf<String, Any>(
+                "uid" to uid,
+                "subscriptionPlan" to normalizedPlan,
+                "subscriptionStatus" to if (isPaidPlan) "active" else "inactive",
+                "subscriptionUpdatedAt" to startedAt,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            if (!snapshot.exists() || !existingData.containsKey("createdAt")) {
+                updates["createdAt"] = FieldValue.serverTimestamp()
+            }
+            if (isPaidPlan && expiresAt != null) {
+                updates["subscriptionStartedAt"] = startedAt
+                updates["subscriptionExpiresAt"] = expiresAt
+            } else {
+                updates["subscriptionStartedAt"] = FieldValue.delete()
+                updates["subscriptionExpiresAt"] = FieldValue.delete()
+            }
+            if (!paymentMethod.isNullOrBlank()) {
+                updates["subscriptionPaymentMethod"] = paymentMethod
+            }
+
+            userRef.set(updates, SetOptions.merge()).await()
+            expiresAt
         } catch (e: Exception) {
             android.util.Log.e("FirestoreRepository", "updateUserSubscription failed", e)
+            null
         }
+    }
+
+    private fun calculateSubscriptionExpiry(durationMonths: Int): Timestamp {
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.MONTH, durationMonths.coerceAtLeast(1))
+        return Timestamp(calendar.time)
     }
 
     suspend fun updateUserDisplayName(uid: String, displayName: String) {

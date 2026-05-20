@@ -2,6 +2,8 @@ package com.example.alphacinema.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.alphacinema.data.api.RetrofitClient
+import com.example.alphacinema.data.model.TmdbVideo
 import com.example.alphacinema.data.repository.FirestoreRepository
 import com.example.alphacinema.data.model.MovieItem
 import com.example.alphacinema.data.repository.MovieRepository
@@ -14,6 +16,8 @@ import kotlinx.coroutines.launch
 class HomeViewModel : ViewModel() {
     private val repository = MovieRepository()
     private val firestoreRepo = FirestoreRepository()
+    private val phimApi = RetrofitClient.instance
+    private val tmdbApi = RetrofitClient.tmdbApi
 
     // Loading states
     private val _isLoading = MutableStateFlow(true)
@@ -32,6 +36,12 @@ class HomeViewModel : ViewModel() {
     // Hero movie descriptions from TMDB (slug -> overview)
     private val _heroDescriptions = MutableStateFlow<Map<String, String>>(emptyMap())
     val heroDescriptions: StateFlow<Map<String, String>> = _heroDescriptions.asStateFlow()
+
+    private val _previewTrailerKeys = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val previewTrailerKeys: StateFlow<Map<String, List<String>>> = _previewTrailerKeys.asStateFlow()
+
+    private val _previewTrailerLoading = MutableStateFlow<Set<String>>(emptySet())
+    val previewTrailerLoading: StateFlow<Set<String>> = _previewTrailerLoading.asStateFlow()
 
     private val _phimBoMoi = MutableStateFlow<List<MovieItem>>(emptyList())
     val phimBoMoi: StateFlow<List<MovieItem>> = _phimBoMoi.asStateFlow()
@@ -131,18 +141,20 @@ class HomeViewModel : ViewModel() {
                     android.util.Log.e("HomeViewModel", "Hero load failed", e)
                     emptyList()
                 }
-                _heroMovies.value = latest.take(10)
+                val visibleLatest = latest.filterNot { it.isPlaceholderMovie() }
+                _heroMovies.value = visibleLatest.take(10)
 
                 // Fetch descriptions from TMDB for hero movies
-                fetchHeroDescriptions(latest.take(10))
+                fetchHeroDescriptions(visibleLatest.take(10))
 
                 // Collect slugs used so far for dedup
-                val heroSlugs = latest.take(10).map { it.slug }.toSet()
+                val heroSlugs = visibleLatest.take(10).map { it.slug }.toSet()
 
                 // Load remaining sections in parallel using curated categories
                 val safeRun = { block: suspend () -> List<MovieItem> -> async { try { block() } catch(e:Exception){ emptyList() } } }
                 val heroSet = heroSlugs.toSet()
-                fun dedup(list: List<MovieItem>): List<MovieItem> = list.filter { it.slug !in heroSet }
+                fun dedup(list: List<MovieItem>): List<MovieItem> =
+                    list.filter { it.slug !in heroSet && !it.isPlaceholderMovie() }
                 
                 if (_isKidsMode.value) {
                     val hoatHinhDef = safeRun { repository.getMoviesByHomeCategory("kids-hoat-hinh", limit = 15) }
@@ -195,4 +207,84 @@ class HomeViewModel : ViewModel() {
     fun setCategory(category: String) {
         _selectedChip.value = category
     }
+
+    private fun MovieItem.isPlaceholderMovie(): Boolean {
+        return name.trim().equals("hehe", ignoreCase = true) ||
+            slug.trim().equals("hehe", ignoreCase = true)
+    }
+
+    fun loadPreviewTrailer(slug: String, tmdbId: String?, tmdbType: String?) {
+        if (slug.isBlank()) return
+        if (_previewTrailerKeys.value.containsKey(slug) || slug in _previewTrailerLoading.value) return
+
+        viewModelScope.launch {
+            _previewTrailerLoading.value = _previewTrailerLoading.value + slug
+            try {
+                val resolvedTmdb = resolveTmdbForPreview(slug, tmdbId, tmdbType)
+                if (resolvedTmdb == null) {
+                    _previewTrailerKeys.value = _previewTrailerKeys.value + (slug to emptyList())
+                    return@launch
+                }
+
+                val videos = fetchTmdbVideos(resolvedTmdb.id, resolvedTmdb.type, language = "vi-VN")
+                    .ifEmpty { fetchTmdbVideos(resolvedTmdb.id, resolvedTmdb.type, language = "en-US") }
+                val youtubeKeys = selectPreviewVideos(videos).mapNotNull { it.key }.distinct()
+                _previewTrailerKeys.value = _previewTrailerKeys.value + (slug to youtubeKeys)
+            } catch (e: Exception) {
+                android.util.Log.w("HomeViewModel", "Preview trailer load failed for $slug", e)
+                _previewTrailerKeys.value = _previewTrailerKeys.value + (slug to emptyList())
+            } finally {
+                _previewTrailerLoading.value = _previewTrailerLoading.value - slug
+            }
+        }
+    }
+
+    private suspend fun resolveTmdbForPreview(
+        slug: String,
+        tmdbId: String?,
+        tmdbType: String?
+    ): PreviewTmdbRef? {
+        if (!tmdbId.isNullOrBlank()) {
+            return PreviewTmdbRef(tmdbId, tmdbType)
+        }
+
+        val detailMovie = phimApi.getMovieDetail(slug).movie ?: return null
+        val detailTmdbId = detailMovie.tmdb?.id ?: return null
+        val detailTmdbType = detailMovie.tmdb.type
+            ?: when (detailMovie.type) {
+                "series", "tvshows" -> "tv"
+                else -> "movie"
+            }
+        return PreviewTmdbRef(detailTmdbId, detailTmdbType)
+    }
+
+    private suspend fun fetchTmdbVideos(
+        tmdbId: String,
+        tmdbType: String?,
+        language: String
+    ): List<TmdbVideo> {
+        return if (tmdbType == "tv") {
+            tmdbApi.getTvVideos(tmdbId, language = language).results.orEmpty()
+        } else {
+            tmdbApi.getMovieVideos(tmdbId, language = language).results.orEmpty()
+        }
+    }
+
+    private fun selectPreviewVideos(videos: List<TmdbVideo>): List<TmdbVideo> {
+        val youtubeVideos = videos.filter { video ->
+            video.site.equals("YouTube", ignoreCase = true) && !video.key.isNullOrBlank()
+        }
+        return youtubeVideos.sortedWith(
+            compareBy<TmdbVideo>(
+                { if (it.type.equals("Trailer", ignoreCase = true) && it.official == true) 0 else 1 },
+                { if (it.type.equals("Trailer", ignoreCase = true)) 0 else 1 },
+                { if (it.type.equals("Teaser", ignoreCase = true)) 0 else 1 }
+            )
+        )
+    }
+
+    private data class PreviewTmdbRef(
+        val id: String,
+        val type: String?
+    )
 }

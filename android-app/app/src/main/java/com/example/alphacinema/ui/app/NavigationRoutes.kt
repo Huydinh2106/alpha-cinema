@@ -15,6 +15,9 @@ data class PlayerNavRoute(val slug: String, val episodeId: String? = null)
 data class MovieListNavRoute(val title: String, val filterKindName: String, val slug: String)
 
 @Serializable
+data class MovieTypeNavRoute(val type: String, val title: String) // type = "phim-bo" or "phim-le"
+
+@Serializable
 data object AdminNavRoute
 
 @Serializable
