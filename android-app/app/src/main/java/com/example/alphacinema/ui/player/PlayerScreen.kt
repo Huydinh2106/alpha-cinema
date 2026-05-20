@@ -77,6 +77,7 @@ fun PlayerScreen(
     onBack: () -> Unit,
     videoUrl: String = "",
     episodeVideoUrls: Map<String, String> = emptyMap(),
+    startPositionMs: Long = 0L,
     onSelectEpisode: (EpisodeUi) -> Unit = {},
     viewModel: PlayerViewModel = viewModel()
 ) {
@@ -138,7 +139,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(movie.episodes, episodeVideoUrls) {
+    LaunchedEffect(movie.episodes, episodeVideoUrls, episode?.id, startPositionMs) {
         val mediaItems = viewModel.buildEpisodeMediaItems(
             movie = movie,
             episodeVideoUrls = episodeVideoUrls
@@ -152,7 +153,7 @@ fun PlayerScreen(
             episode = episode
         )
 
-        exoPlayer.seekTo(targetIndex, 0L)
+        exoPlayer.seekTo(targetIndex, startPositionMs.coerceAtLeast(0L))
         exoPlayer.playWhenReady = true
     }
 
@@ -173,6 +174,7 @@ fun PlayerScreen(
     LaunchedEffect(exoPlayer, movie.id, episode?.id, videoUrl) {
         if (videoUrl.isBlank()) return@LaunchedEffect
 
+        delay(1_000)
         viewModel.saveWatchProgress(
             movie = currentMovie,
             episode = currentEpisode,

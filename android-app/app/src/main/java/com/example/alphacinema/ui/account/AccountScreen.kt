@@ -98,6 +98,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.example.alphacinema.util.formatFirestoreDate
+import com.example.alphacinema.data.model.WatchHistoryItem
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import com.example.alphacinema.data.api.EmailVerificationHelper
@@ -160,6 +161,7 @@ private data class DemoUserProfileUi(
 fun AccountScreen(
     onOpenAdminPanel: () -> Unit = {},
     onOpenMovieDetail: (String) -> Unit = {},
+    onContinueWatching: (movieSlug: String, episodeId: String?, progress: Long) -> Unit = { _, _, _ -> },
     onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> },
     onWatchTogether: () -> Unit = {},
     onOpenPayment: () -> Unit = {},
@@ -621,6 +623,14 @@ fun AccountScreen(
                 onOpenMovieDetail = { slug ->
                     activePanel = null
                     onOpenMovieDetail(slug)
+                },
+                onContinueWatching = { item ->
+                    activePanel = null
+                    onContinueWatching(
+                        item.movieId,
+                        item.episodeId.takeIf { it.isNotBlank() },
+                        item.resumePositionMs()
+                    )
                 },
                 onOpenMovieList = { title, filterKind, slug ->
                     activePanel = null
@@ -1707,13 +1717,14 @@ internal fun PlanInfoRow(
 @Composable
 private fun AccountPanelBottomSheet(
     panel: AccountPanelType,
-    watchHistory: List<com.example.alphacinema.data.model.WatchHistoryItem>,
+    watchHistory: List<WatchHistoryItem>,
     favorites: List<com.example.alphacinema.data.model.FavoriteItem>,
     feedbackInput: String,
     onDismiss: () -> Unit,
     onFeedbackChange: (String) -> Unit,
     onSubmitFeedback: () -> Unit,
     onOpenMovieDetail: (String) -> Unit,
+    onContinueWatching: (WatchHistoryItem) -> Unit,
     onOpenMovieList: (String, FilterKind, String) -> Unit
 ) {
     val sheetTitle = when (panel) {
@@ -1773,20 +1784,18 @@ private fun AccountPanelBottomSheet(
 
             when (panel) {
                 AccountPanelType.WATCHING -> {
-                    if (watchHistory.isEmpty()) {
-                        AccountEmptyState("Bạn chưa có lịch sử xem nào.")
+                    val continueItems = watchHistory.filter { it.isContinueWatchingCandidate() }
+                    if (continueItems.isEmpty()) {
+                        AccountEmptyState("Bạn chưa có nội dung đang xem dở.")
                     } else {
-                        watchHistory.forEach { item ->
+                        continueItems.forEach { item ->
                             AccountMediaRow(
                                 title = item.movieName,
                                 subtitle = item.episodeName.ifBlank { "Tiếp tục xem" },
-                                meta = if (item.duration > 0) {
-                                    "${(item.progress * 100 / item.duration).coerceIn(0, 100)}% đã xem"
-                                } else {
-                                    "Tiếp tục xem"
-                                },
+                                meta = item.resumeLabel(),
                                 posterUrl = item.posterUrl,
-                                onClick = { onOpenMovieDetail(item.movieId) }
+                                progressFraction = item.progressFraction(),
+                                onClick = { onContinueWatching(item) }
                             )
                         }
                     }
@@ -1877,12 +1886,61 @@ private fun AccountPanelBottomSheet(
     }
 }
 
+private const val WATCH_COMPLETE_THRESHOLD_MS = 30_000L
+
+private fun WatchHistoryItem.isContinueWatchingCandidate(): Boolean {
+    if (movieId.isBlank() || movieName.isBlank()) return false
+    val safeDuration = duration.coerceAtLeast(0L)
+    if (safeDuration == 0L) return true
+
+    val safeProgress = progress.coerceAtLeast(0L)
+    val completionCutoff = (safeDuration - WATCH_COMPLETE_THRESHOLD_MS)
+        .coerceAtLeast((safeDuration * 9L) / 10L)
+    return safeProgress < completionCutoff
+}
+
+private fun WatchHistoryItem.progressFraction(): Float? {
+    val safeDuration = duration.coerceAtLeast(0L)
+    if (safeDuration == 0L) return null
+    return (progress.coerceAtLeast(0L).toFloat() / safeDuration.toFloat())
+        .coerceIn(0f, 1f)
+}
+
+private fun WatchHistoryItem.resumePositionMs(): Long {
+    return (progress.coerceAtLeast(0L) - 3_000L).coerceAtLeast(0L)
+}
+
+private fun WatchHistoryItem.resumeLabel(): String {
+    val safeDuration = duration.coerceAtLeast(0L)
+    if (safeDuration == 0L) return "Tiếp tục xem"
+
+    val percent = ((progress.coerceAtLeast(0L) * 100L) / safeDuration)
+        .coerceIn(0L, 100L)
+    val timeLabel = formatWatchPosition(resumePositionMs())
+    return "$timeLabel - $percent% đã xem"
+}
+
+private fun formatWatchPosition(positionMs: Long): String {
+    val totalSeconds = (positionMs.coerceAtLeast(0L) / 1000L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    val secondsText = seconds.toString().padStart(2, '0')
+    return if (hours > 0L) {
+        val minutesText = minutes.toString().padStart(2, '0')
+        "$hours:$minutesText:$secondsText"
+    } else {
+        "$minutes:$secondsText"
+    }
+}
+
 @Composable
 private fun AccountMediaRow(
     title: String,
     subtitle: String,
     meta: String,
     posterUrl: String,
+    progressFraction: Float? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -1908,9 +1966,45 @@ private fun AccountMediaRow(
                 .weight(1f)
                 .padding(start = 12.dp)
         ) {
-            Text(title, color = Color.White, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = Color.White.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
-            Text(meta, color = Color(0xFFF6E29A), style = MaterialTheme.typography.labelMedium)
+            Text(
+                title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                subtitle,
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                meta,
+                color = Color(0xFFF6E29A),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (progressFraction != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.16f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFFF6E29A))
+                    )
+                }
+            }
         }
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
