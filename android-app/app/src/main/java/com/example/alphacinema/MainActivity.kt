@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.example.alphacinema.payment.MomoSdkCoordinator
 import com.example.alphacinema.ui.app.AppScreen
 import com.example.alphacinema.ui.theme.AlphaCinemaTheme
 import com.google.firebase.messaging.FirebaseMessaging
@@ -112,6 +113,14 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (MomoSdkCoordinator.handleActivityResult(requestCode, resultCode, data)) {
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     private fun handleFCMIntent(intent: Intent) {
