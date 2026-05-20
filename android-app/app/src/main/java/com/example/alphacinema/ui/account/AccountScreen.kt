@@ -99,16 +99,11 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.example.alphacinema.util.formatFirestoreDate
-import com.example.alphacinema.data.model.WatchHistoryItem
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import com.example.alphacinema.data.api.EmailVerificationHelper
 import com.example.alphacinema.data.api.OtpVerifyResult
 import kotlinx.coroutines.tasks.await
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 private const val WEB_CLIENT_ID = "1013232588133-86fl74ls04r8fkarnahh2b9pvie5g7kn.apps.googleusercontent.com"
 
@@ -131,7 +126,6 @@ private enum class AccountMenuAction {
 }
 
 private enum class AccountPanelType {
-    WATCH_HISTORY,
     MOVIE_LIBRARY,
     FAVORITES,
     POLICY,
@@ -166,7 +160,7 @@ private data class DemoUserProfileUi(
 fun AccountScreen(
     onOpenAdminPanel: () -> Unit = {},
     onOpenMovieDetail: (String) -> Unit = {},
-    onOpenWatchHistoryItem: (movieSlug: String, episodeId: String?, startPositionMs: Long) -> Unit = { _, _, _ -> },
+    onOpenWatchHistoryPage: () -> Unit = {},
     onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> },
     onWatchTogether: () -> Unit = {},
     onOpenPayment: () -> Unit = {},
@@ -312,10 +306,6 @@ fun AccountScreen(
 
     val settingsManager = remember { SettingsManager.getInstance() }
     val isKidsModeEnabled by settingsManager.isKidsModeEnabled.collectAsState()
-    val watchHistoryFlow = remember(currentUser?.uid) {
-        currentUser?.uid?.let(firestoreRepository::getWatchHistory) ?: flowOf(emptyList())
-    }
-    val watchHistory by watchHistoryFlow.collectAsState(initial = emptyList())
     val favoritesFlow = remember(currentUser?.uid) {
         currentUser?.uid?.let(firestoreRepository::getFavorites) ?: flowOf(emptyList())
     }
@@ -402,7 +392,9 @@ fun AccountScreen(
 
     fun handleMenuAction(action: AccountMenuAction) {
         when (action) {
-            AccountMenuAction.WATCH_HISTORY -> openPanel(AccountPanelType.WATCH_HISTORY, requiresLogin = true)
+            AccountMenuAction.WATCH_HISTORY -> {
+                if (isLoggedIn) onOpenWatchHistoryPage() else showLoginRequiredDialog = true
+            }
             AccountMenuAction.MOVIE_LIBRARY -> {
                 if (isLoggedIn) openPanel(AccountPanelType.MOVIE_LIBRARY) else showLoginRequiredDialog = true
             }
@@ -610,7 +602,6 @@ fun AccountScreen(
         if (activePanel != null) {
             AccountPanelBottomSheet(
                 panel = activePanel!!,
-                watchHistory = watchHistory,
                 favorites = favorites,
                 feedbackInput = feedbackInput,
                 onDismiss = { activePanel = null },
@@ -628,14 +619,6 @@ fun AccountScreen(
                 onOpenMovieDetail = { slug ->
                     activePanel = null
                     onOpenMovieDetail(slug)
-                },
-                onOpenWatchHistoryItem = { item ->
-                    activePanel = null
-                    onOpenWatchHistoryItem(
-                        item.movieId,
-                        item.episodeId.takeIf { it.isNotBlank() },
-                        item.playbackStartPositionMs()
-                    )
                 },
                 onOpenMovieList = { title, filterKind, slug ->
                     activePanel = null
@@ -1722,18 +1705,15 @@ internal fun PlanInfoRow(
 @Composable
 private fun AccountPanelBottomSheet(
     panel: AccountPanelType,
-    watchHistory: List<WatchHistoryItem>,
     favorites: List<com.example.alphacinema.data.model.FavoriteItem>,
     feedbackInput: String,
     onDismiss: () -> Unit,
     onFeedbackChange: (String) -> Unit,
     onSubmitFeedback: () -> Unit,
     onOpenMovieDetail: (String) -> Unit,
-    onOpenWatchHistoryItem: (WatchHistoryItem) -> Unit,
     onOpenMovieList: (String, FilterKind, String) -> Unit
 ) {
     val sheetTitle = when (panel) {
-        AccountPanelType.WATCH_HISTORY -> "Lịch sử xem"
         AccountPanelType.MOVIE_LIBRARY -> "Danh sách phim"
         AccountPanelType.FAVORITES -> "Yêu thích"
         AccountPanelType.POLICY -> "Chính sách"
@@ -1768,7 +1748,6 @@ private fun AccountPanelBottomSheet(
                     )
                     Text(
                         text = when (panel) {
-                            AccountPanelType.WATCH_HISTORY -> "Các nội dung đã xem và đang xem, sắp xếp theo ngày"
                             AccountPanelType.MOVIE_LIBRARY -> "Mở nhanh các danh sách phim phổ biến"
                             AccountPanelType.FAVORITES -> "Những phim bạn đã lưu yêu thích"
                             AccountPanelType.POLICY -> "Thông tin sử dụng và quyền riêng tư"
@@ -1788,21 +1767,6 @@ private fun AccountPanelBottomSheet(
             }
 
             when (panel) {
-                AccountPanelType.WATCH_HISTORY -> {
-                    val dateGroups = watchHistory.groupByWatchDate()
-                    if (dateGroups.isEmpty()) {
-                        AccountEmptyState("Bạn chưa có lịch sử xem nào.")
-                    } else {
-                        dateGroups.forEach { group ->
-                            WatchHistoryDateSection(
-                                title = group.label,
-                                items = group.items,
-                                onOpenItem = onOpenWatchHistoryItem
-                            )
-                        }
-                    }
-                }
-
                 AccountPanelType.MOVIE_LIBRARY -> {
                     LibraryShortcutRow(
                         title = "Phim bộ",
@@ -1884,144 +1848,6 @@ private fun AccountPanelBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
-        }
-    }
-}
-
-private data class WatchHistoryDateGroup(
-    val label: String,
-    val items: List<WatchHistoryItem>
-)
-
-private const val WATCH_COMPLETE_THRESHOLD_MS = 30_000L
-private const val UNKNOWN_WATCH_DAY_KEY = Long.MIN_VALUE
-private val VIETNAMESE_LOCALE: Locale = Locale.forLanguageTag("vi-VN")
-
-private fun List<WatchHistoryItem>.groupByWatchDate(): List<WatchHistoryDateGroup> {
-    return filter { it.movieId.isNotBlank() && it.movieName.isNotBlank() }
-        .groupBy { item -> item.watchDayKey() }
-        .map { (dayKey, items) ->
-            WatchHistoryDateGroup(
-                label = formatWatchHistoryDay(dayKey),
-                items = items
-            )
-        }
-}
-
-private fun WatchHistoryItem.watchDayKey(): Long {
-    val watchedAt = lastWatchedAt?.toDate() ?: return UNKNOWN_WATCH_DAY_KEY
-    return startOfDayMillis(watchedAt.time)
-}
-
-private fun WatchHistoryItem.isCompleted(): Boolean {
-    val safeDuration = duration.coerceAtLeast(0L)
-    if (safeDuration == 0L) return false
-
-    val safeProgress = progress.coerceAtLeast(0L)
-    val completionCutoff = (safeDuration - WATCH_COMPLETE_THRESHOLD_MS)
-        .coerceAtMost((safeDuration * 9L) / 10L)
-        .coerceAtLeast(0L)
-    return safeProgress >= completionCutoff
-}
-
-private fun WatchHistoryItem.progressFraction(): Float? {
-    val safeDuration = duration.coerceAtLeast(0L)
-    if (safeDuration == 0L) return null
-    return (progress.coerceAtLeast(0L).toFloat() / safeDuration.toFloat())
-        .coerceIn(0f, 1f)
-}
-
-private fun WatchHistoryItem.playbackStartPositionMs(): Long {
-    if (isCompleted()) return 0L
-    return (progress.coerceAtLeast(0L) - 3_000L).coerceAtLeast(0L)
-}
-
-private fun WatchHistoryItem.historySubtitle(): String {
-    val episodeLabel = episodeName.ifBlank { "Nội dung đã xem" }
-    return if (isCompleted()) "$episodeLabel - Đã xem xong" else episodeLabel
-}
-
-private fun WatchHistoryItem.historyMetaLabel(): String {
-    if (isCompleted()) return "Phát lại từ đầu"
-
-    val safeDuration = duration.coerceAtLeast(0L)
-    if (safeDuration == 0L) return "Đang xem"
-
-    val percent = ((progress.coerceAtLeast(0L) * 100L) / safeDuration)
-        .coerceIn(0L, 100L)
-    val timeLabel = formatWatchPosition(playbackStartPositionMs())
-    return "$timeLabel - $percent% đã xem"
-}
-
-private fun formatWatchHistoryDay(dayKey: Long): String {
-    if (dayKey == UNKNOWN_WATCH_DAY_KEY) return "Chưa rõ ngày"
-
-    val today = startOfDayMillis(System.currentTimeMillis())
-    val yesterday = Calendar.getInstance().apply {
-        timeInMillis = today
-        add(Calendar.DATE, -1)
-    }.timeInMillis
-
-    return when (dayKey) {
-        today -> "Hôm nay"
-        yesterday -> "Hôm qua"
-        else -> SimpleDateFormat("EEEE, dd/MM/yyyy", VIETNAMESE_LOCALE)
-            .format(Date(dayKey))
-            .replaceFirstChar { char ->
-                if (char.isLowerCase()) char.titlecase(VIETNAMESE_LOCALE) else char.toString()
-            }
-    }
-}
-
-private fun startOfDayMillis(timeMillis: Long): Long {
-    return Calendar.getInstance().apply {
-        timeInMillis = timeMillis
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-}
-
-private fun formatWatchPosition(positionMs: Long): String {
-    val totalSeconds = (positionMs.coerceAtLeast(0L) / 1000L)
-    val hours = totalSeconds / 3600L
-    val minutes = (totalSeconds % 3600L) / 60L
-    val seconds = totalSeconds % 60L
-    val secondsText = seconds.toString().padStart(2, '0')
-    return if (hours > 0L) {
-        val minutesText = minutes.toString().padStart(2, '0')
-        "$hours:$minutesText:$secondsText"
-    } else {
-        "$minutes:$secondsText"
-    }
-}
-
-@Composable
-private fun WatchHistoryDateSection(
-    title: String,
-    items: List<WatchHistoryItem>,
-    onOpenItem: (WatchHistoryItem) -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text(
-            text = title,
-            color = Color.White.copy(alpha = 0.58f),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold
-        )
-        items.forEach { item ->
-            AccountMediaRow(
-                title = item.movieName,
-                subtitle = item.historySubtitle(),
-                meta = item.historyMetaLabel(),
-                posterUrl = item.posterUrl,
-                progressFraction = item.progressFraction(),
-                onClick = { onOpenItem(item) }
-            )
         }
     }
 }
