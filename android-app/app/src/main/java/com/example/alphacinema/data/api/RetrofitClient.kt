@@ -12,6 +12,7 @@ object RetrofitClient {
     private const val TMDB_BASE_URL = "https://api.themoviedb.org/3/"
     private const val EMAILJS_BASE_URL = "https://api.emailjs.com/"
     private const val FUNCTIONS_BASE_URL = "https://asia-southeast1-alpha-cinema-39dfb.cloudfunctions.net/"
+    // MoMo payments go through Cloud Functions (no direct MoMo calls from app)
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -50,6 +51,10 @@ object RetrofitClient {
 
     val functionsApi: FunctionsService by lazy {
         createRetrofit(FUNCTIONS_BASE_URL).create(FunctionsService::class.java)
+    }
+
+    val momoApi: MomoApiService by lazy {
+        createRetrofit(FUNCTIONS_BASE_URL).create(MomoApiService::class.java)
     }
 }
 
