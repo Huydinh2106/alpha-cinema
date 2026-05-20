@@ -64,26 +64,10 @@ Supported `intent` values:
 - `mixed`
 - `music_request`
 
-## Spotify music search
+## Music and external links
 
-Music requests such as `Mo giao dien album nhac phim Interstellar` are handled locally first so the chatbot can render a Spotify card immediately.
-
-Flow:
-
-1. Android extracts the target title and builds a query like `Interstellar soundtrack`.
-2. `SpotifyRepository` requests a Client Credentials access token from `https://accounts.spotify.com/api/token`.
-3. It calls `GET https://api.spotify.com/v1/search?q={query}&type=album&limit=1`.
-4. The first album result is rendered as a chatbot link card with `id`, `uri`, album art, and `external_urls.spotify`.
-5. If credentials are missing or Spotify fails, the app returns no Spotify link card and tells the user the album could not be resolved through Spotify API.
-
-Configure these values through Gradle properties, environment variables, or `local.properties`:
-
-```properties
-SPOTIFY_CLIENT_ID=...
-SPOTIFY_CLIENT_SECRET=...
-```
-
-For production, keep the Spotify client secret on the backend and return the resolved album payload to Android instead of shipping the secret in the APK.
+Music requests such as `Mo giao dien album nhac phim Interstellar` must go through `POST /ask`.
+If the assistant should render a music or external link card, the backend should return the link payload in the chat response. Android should not answer music requests locally before `/ask`.
 
 ## `POST /recommend`
 
@@ -116,6 +100,7 @@ Response:
 - `SupportViewModel` sends the current message as `question`.
 - Previous turns are sent as `chat_history`.
 - The app keeps a session id in `SettingsManager` and sends it to `/ask`.
-- `SupportRepository` calls `POST /ask` through Retrofit and falls back to local suggestions if the server is unavailable.
+- `SupportRepository` calls `POST /ask` through Retrofit for every user message.
+- If `/ask` is unavailable, Android shows only the generic unavailable message and does not generate a local answer.
 - `SupportChatResponseParser` reads `answer`, `intent`, `session_id`, `history_message_count`, and movie items from `recommendations`.
-- The app renders movie cards only when recommendations exist or when the request is clearly recommendation-like.
+- The app renders movie cards only from recommendations returned by the backend.
