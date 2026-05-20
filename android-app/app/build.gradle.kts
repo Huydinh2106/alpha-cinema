@@ -80,6 +80,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-svg:2.7.0")
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.github.momo-wallet:mobile-sdk:1.0.5") {
+        exclude(group = "com.android.support")
+    }
 
     // Lottie Animation
     implementation("com.airbnb.android:lottie-compose:6.6.2")
@@ -114,6 +118,12 @@ dependencies {
 
     // Agora Voice SDK
     implementation("io.agora.rtc:voice-rtc-basic:4.6.3")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Media
+    implementation("androidx.media:media:1.7.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -18,3 +18,17 @@ data class TmdbDetailResponse(
     val id: Int?,
     val overview: String?
 )
+
+data class TmdbVideosResponse(
+    val id: Int?,
+    val results: List<TmdbVideo>?
+)
+
+data class TmdbVideo(
+    val id: String?,
+    val key: String?,
+    val site: String?,
+    val type: String?,
+    val official: Boolean?,
+    val name: String?
+)

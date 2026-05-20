@@ -29,45 +29,56 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         sendTokenToServer(token)
     }
 
-    /**
-     * Called when a message is received from FCM.
-     */
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
         Log.d(TAG, "Message received from: ${message.from}")
 
-        // Handle data payload
-        if (message.data.isNotEmpty()) {
-            Log.d(TAG, "Message data: ${message.data}")
-            handleDataMessage(message.data)
-        }
+        // FCM gửi tin nhắn có thể chứa 'notification' payload, 'data' payload, hoặc CẢ HAI.
+        // Để tránh hiển thị 2 lần thông báo (1 cái trống, 1 cái có chữ), ta gom chung logic lại:
+        val title = message.notification?.title ?: message.data["title"] ?: "Alpha Cinema"
+        val body = message.notification?.body ?: message.data["body"] ?: ""
+        val type = message.data["type"] ?: "system"
 
-        // Handle notification payload (only received when app is in foreground)
-        message.notification?.let { notification ->
-            Log.d(TAG, "Notification title: ${notification.title}")
-            Log.d(TAG, "Notification body: ${notification.body}")
-            showNotification(
-                title = notification.title ?: "Alpha Cinema",
-                body = notification.body ?: ""
+        Log.d(TAG, "Notification title: $title, body: $body, type: $type")
+
+        // Lưu vào DB (nếu app đang mở)
+        saveNotificationToFirestore(title, body, type, message.data)
+        
+        // Hiển thị thông báo lên thanh trạng thái
+        showNotification(title, body, type, message.data)
+    }
+
+    private fun saveNotificationToFirestore(title: String, body: String, type: String, extraData: Map<String, String>) {
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val notificationData = hashMapOf<String, Any>(
+                "title" to title,
+                "body" to body,
+                "type" to type,
+                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "isRead" to false
             )
+            // Thêm các trường dữ liệu tùy chọn (như movieId, plan)
+            extraData.forEach { (key, value) ->
+                if (key != "title" && key != "body" && key != "type") {
+                    notificationData[key] = value
+                }
+            }
+            db.collection("users").document(currentUser.uid)
+                .collection("notifications").add(notificationData)
         }
     }
 
-    private fun handleDataMessage(data: Map<String, String>) {
-        // TODO: Process data messages from your backend
-        val title = data["title"] ?: "Alpha Cinema"
-        val body = data["body"] ?: ""
-        showNotification(title, body)
-    }
-
-    private fun showNotification(title: String, body: String) {
+    private fun showNotification(title: String, body: String, type: String, data: Map<String, String>) {
+        Log.d(TAG, "Attempting to show notification: $title")
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         // Create notification channel for Android O+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                CHANNEL_NAME,
+                com.example.alphacinema.notification.NotificationHelper.CHANNEL_PUSH,
+                "Push Notifications",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Thông báo từ Alpha Cinema"
@@ -76,21 +87,23 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Intent to open app when notification is tapped
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        // Create an Intent for the activity you want to start
+        val intent = android.content.Intent(this, MainActivity::class.java).apply {
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("open_notifications", true)
+            putExtra("notification_type", type)
+            data.forEach { (key, value) -> putExtra(key, value) }
         }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val pendingIntent: android.app.PendingIntent = android.app.PendingIntent.getActivity(
+            this, 0, intent, android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+        val notification = NotificationCompat.Builder(this, com.example.alphacinema.notification.NotificationHelper.CHANNEL_PUSH)
+            .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: Update to app logo
             .setContentTitle(title)
             .setContentText(body)
-            .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .build()
 
@@ -98,8 +111,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun sendTokenToServer(token: String) {
-        // TODO: Implement sending the FCM token to your backend API
-        // Example: Use Retrofit to POST the token
-        Log.d(TAG, "Token should be sent to server: $token")
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            db.collection("users").document(currentUser.uid)
+                .update("fcmTokens", com.google.firebase.firestore.FieldValue.arrayUnion(token))
+                .addOnSuccessListener { Log.d(TAG, "Token updated in Firestore") }
+                .addOnFailureListener { e -> Log.w(TAG, "Error updating token", e) }
+        }
     }
 }

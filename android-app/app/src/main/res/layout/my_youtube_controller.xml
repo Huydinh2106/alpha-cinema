@@ -14,7 +14,7 @@
         android:orientation="horizontal">
 
         <ImageButton
-            android:id="@id/exo_rew"
+            android:id="@+id/exo_rew"
             android:layout_width="54dp"
             android:layout_height="54dp"
             android:layout_marginEnd="32dp"
@@ -24,7 +24,7 @@
             android:src="@drawable/ic_replay_10" />
 
         <ImageButton
-            android:id="@id/exo_play_pause"
+            android:id="@+id/exo_play_pause"
             android:layout_width="52dp"
             android:layout_height="52dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
@@ -33,7 +33,7 @@
             android:tint="@android:color/white" />
 
         <ImageButton
-            android:id="@id/exo_ffwd"
+            android:id="@+id/exo_ffwd"
             android:layout_width="54dp"
             android:layout_height="54dp"
             android:layout_marginStart="32dp"
@@ -60,7 +60,7 @@
             android:paddingHorizontal="16dp">
 
             <TextView
-                android:id="@id/exo_position"
+                android:id="@+id/exo_position"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@android:color/white"
@@ -76,7 +76,7 @@
                 android:textSize="13sp" />
 
             <TextView
-                android:id="@id/exo_duration"
+                android:id="@+id/exo_duration"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#B3FFFFFF"
@@ -98,7 +98,7 @@
                 android:visibility="gone" />
 
             <ImageButton
-                android:id="@id/exo_settings"
+                android:id="@+id/exo_settings"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:padding="6dp"
@@ -108,7 +108,7 @@
                 android:tint="@android:color/white" />
 
             <ImageButton
-                android:id="@id/exo_fullscreen"
+                android:id="@+id/exo_fullscreen"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:padding="6dp"
@@ -120,7 +120,7 @@
 
         <!-- Progress Bar at the absolute bottom — App primary color (gold) -->
         <androidx.media3.ui.DefaultTimeBar
-            android:id="@id/exo_progress"
+            android:id="@+id/exo_progress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_alignParentBottom="true"
