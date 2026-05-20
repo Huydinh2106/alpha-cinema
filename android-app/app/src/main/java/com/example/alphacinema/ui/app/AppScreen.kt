@@ -496,11 +496,11 @@ fun MainContent(
                         ScreenType.ACCOUNT -> AccountScreen(
                             onOpenAdminPanel = { navController.navigate(AdminNavRoute) },
                             onOpenMovieDetail = ::openMovieDetail,
-                            onContinueWatching = { slug, episodeId, progress ->
+                            onOpenWatchHistoryItem = { slug, episodeId, startPositionMs ->
                                 openPlayer(
                                     slug = slug,
                                     episodeId = episodeId,
-                                    startPositionMs = progress
+                                    startPositionMs = startPositionMs
                                 )
                             },
                             onOpenMovieList = { title, filterKind, slug ->
