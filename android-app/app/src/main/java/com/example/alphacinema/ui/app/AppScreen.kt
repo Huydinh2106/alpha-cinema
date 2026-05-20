@@ -321,7 +321,11 @@ fun MainContent(
         navController.navigate(MovieDetailNavRoute(slug = slug))
     }
 
-    fun openPlayer(slug: String, episodeId: String? = null) {
+    fun openPlayer(
+        slug: String,
+        episodeId: String? = null,
+        startPositionMs: Long = 0L
+    ) {
         if (slug.isBlank()) {
             showToast("Phim này hiện chưa thể mở để xem.")
             return
@@ -329,7 +333,13 @@ fun MainContent(
         if (movieDetail?.id != slug) {
             movieDetailViewModel.loadMovieDetail(slug)
         }
-        navController.navigate(PlayerNavRoute(slug = slug, episodeId = episodeId))
+        navController.navigate(
+            PlayerNavRoute(
+                slug = slug,
+                episodeId = episodeId,
+                startPositionMs = startPositionMs.coerceAtLeast(0L)
+            )
+        )
     }
 
     fun openPlayerFromHome(movieUi: MovieUi) {
@@ -486,6 +496,13 @@ fun MainContent(
                         ScreenType.ACCOUNT -> AccountScreen(
                             onOpenAdminPanel = { navController.navigate(AdminNavRoute) },
                             onOpenMovieDetail = ::openMovieDetail,
+                            onContinueWatching = { slug, episodeId, progress ->
+                                openPlayer(
+                                    slug = slug,
+                                    episodeId = episodeId,
+                                    startPositionMs = progress
+                                )
+                            },
                             onOpenMovieList = { title, filterKind, slug ->
                                 navController.navigate(
                                     MovieListNavRoute(
@@ -665,6 +682,7 @@ fun MainContent(
                             onBack = { navController.popBackStack() },
                             videoUrl = videoUrl,
                             episodeVideoUrls = episodeVideoUrls,
+                            startPositionMs = route.startPositionMs,
                             onSelectEpisode = { ep ->
                                 // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
                                 navController.navigate(
