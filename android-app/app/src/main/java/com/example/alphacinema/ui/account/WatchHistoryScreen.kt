@@ -1,7 +1,6 @@
 package com.example.alphacinema.ui.account
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +22,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,22 +66,8 @@ fun WatchHistoryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF101A31),
-                            Color(0xFF070B16)
-                        )
-                    )
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -90,7 +76,7 @@ fun WatchHistoryScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(top = 8.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -98,37 +84,23 @@ fun WatchHistoryScreen(
             ) {
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                         contentDescription = "Quay lại",
-                        tint = Color.White
+                        tint = Color.White.copy(alpha = 0.9f)
                     )
                 }
-                Column(
+                Text(
+                    text = "Lịch sử xem",
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier
                         .weight(1f)
-                        .padding(start = 12.dp)
-                ) {
-                    Text(
-                        text = "Lịch sử xem",
-                        color = Color.White,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "Các nội dung đã xem và đang xem, sắp xếp theo ngày",
-                        color = Color.White.copy(alpha = 0.66f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                        .padding(start = 6.dp)
+                )
             }
 
             if (dateGroups.isEmpty()) {
@@ -269,15 +241,15 @@ private fun WatchHistoryDateSection(
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = title,
-            color = Color.White.copy(alpha = 0.58f),
+            color = Color.White.copy(alpha = 0.5f),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold
         )
-        items.forEach { item ->
+        items.forEachIndexed { index, item ->
             WatchHistoryMediaRow(
                 title = item.movieName,
                 subtitle = item.historySubtitle(),
@@ -286,6 +258,13 @@ private fun WatchHistoryDateSection(
                 progressFraction = item.progressFraction(),
                 onClick = { onOpenItem(item) }
             )
+            if (index != items.lastIndex) {
+                HorizontalDivider(
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(start = 72.dp)
+                )
+            }
         }
     }
 }
@@ -302,19 +281,16 @@ private fun WatchHistoryMediaRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(12.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AlphaCinemaImage(
             model = posterUrl,
             contentDescription = title,
             modifier = Modifier
-                .size(58.dp)
-                .clip(RoundedCornerShape(12.dp)),
+                .size(56.dp)
+                .clip(RoundedCornerShape(10.dp)),
             contentScale = ContentScale.Crop
         )
         Column(
@@ -366,7 +342,7 @@ private fun WatchHistoryMediaRow(
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.55f),
+            tint = Color.White.copy(alpha = 0.35f),
             modifier = Modifier.size(14.dp)
         )
     }
@@ -377,15 +353,12 @@ private fun WatchHistoryEmptyState() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
-            .padding(20.dp),
+            .padding(top = 28.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = "Bạn chưa có lịch sử xem nào.",
-            color = Color.White.copy(alpha = 0.72f),
+            color = Color.White.copy(alpha = 0.58f),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
         )

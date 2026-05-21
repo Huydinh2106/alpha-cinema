@@ -76,7 +76,7 @@ fun AdminScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = Color(0xFF070B16)
+        containerColor = Color.Black
     ) { padding ->
         Column(
             modifier = Modifier
@@ -212,7 +212,7 @@ fun ManageCategoriesTab(viewModel: AdminViewModel) {
                             editingCategory = cat
                             showDialog = true
                         },
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1627)),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -287,7 +287,7 @@ fun CategoryEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF0F1627),
+        containerColor = Color(0xFF141414),
         titleContentColor = Color.White,
         title = { Text(if (isNew) "Thêm Danh Mục" else "Sửa Danh Mục") },
         text = {
@@ -425,7 +425,7 @@ fun AdminMovieItemCard(movie: MovieItem, onAdd: () -> Unit) {
             .fillMaxWidth()
             .height(120.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1627))
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF141414))
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
             com.example.alphacinema.ui.components.AlphaCinemaImage(

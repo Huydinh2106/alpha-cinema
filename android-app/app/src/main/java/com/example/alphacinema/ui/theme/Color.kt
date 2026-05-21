@@ -2,10 +2,14 @@ package com.example.alphacinema.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+val NetflixBlack = Color.Black
+val NetflixSurface = Color(0xFF141414)
+val NetflixSurfaceHigh = Color(0xFF1F1F1F)
+val NetflixSurfaceHighest = Color(0xFF2A2A2A)
+val NetflixBorder = Color(0xFF333333)
+val AlphaGold = Color(0xFFF6E29A)
+val AlphaMutedText = Color(0xFFB3B3B3)
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val NetflixLightBackground = Color(0xFFF5F5F5)
+val NetflixLightSurface = Color(0xFFFFFFFF)
+val NetflixLightOnSurface = Color(0xFF141414)

@@ -424,23 +424,8 @@ fun AccountScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1D2540),
-                            Color(0xFF101726),
-                            Color(0xFF070B16)
-                        )
-                    )
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -464,13 +449,6 @@ fun AccountScreen(
                     demoUser = demoUser,
                     onClick = onOpenProfileSettings
                 )
-                if (demoMembershipPlan.key == DemoMembershipPlanKey.FREE) {
-                    MembershipUpgradeCard(
-                        plan = demoMembershipPlan,
-                        onUpgradeClick = onOpenPayment,
-                        onManageClick = { showPlanManagement = true }
-                    )
-                }
             } else {
                 GuestProfileCard(
                     onLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
@@ -538,7 +516,7 @@ fun AccountScreen(
             if (showPinDialog) {
                 AlertDialog(
                     onDismissRequest = { showPinDialog = false },
-                    containerColor = Color(0xFF10192E),
+                    containerColor = Color(0xFF141414),
                     titleContentColor = Color.White,
                     textContentColor = Color.White.copy(alpha = 0.8f),
                     title = {
@@ -634,25 +612,6 @@ fun AccountScreen(
                 onChangePlan = {
                     showPlanManagement = false
                     onOpenPayment()
-                },
-                onCancelRenew = { showCancelRenewDialog = true }
-            )
-        }
-
-        if (showCancelRenewDialog) {
-            AlertDialog(
-                onDismissRequest = { showCancelRenewDialog = false },
-                containerColor = Color(0xFF10192E),
-                titleContentColor = Color.White,
-                textContentColor = Color.White.copy(alpha = 0.78f),
-                title = { Text("Hủy gia hạn") },
-                text = {
-                    Text("Bạn đã hủy gia hạn tự động. Gói hiện tại vẫn còn hiệu lực đến ngày hết hạn.")
-                },
-                confirmButton = {
-                    TextButton(onClick = { showCancelRenewDialog = false }) {
-                        Text("Đã hiểu", color = Color(0xFFF6E29A), fontWeight = FontWeight.Bold)
-                    }
                 }
             )
         }
@@ -660,7 +619,7 @@ fun AccountScreen(
         if (showLoginRequiredDialog) {
             AlertDialog(
                 onDismissRequest = { showLoginRequiredDialog = false },
-                containerColor = Color(0xFF10192E),
+                containerColor = Color(0xFF141414),
                 titleContentColor = Color.White,
                 textContentColor = Color.White.copy(alpha = 0.78f),
                 title = { Text("Cần đăng nhập") },
@@ -865,7 +824,7 @@ private fun KidsModeCard(
                 checkedThumbColor = Color.Black,
                 checkedTrackColor = Color(0xFFF6E29A),
                 uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = Color(0xFF2A344A)
+                uncheckedTrackColor = Color(0xFF333333)
             )
         )
     }
@@ -887,7 +846,7 @@ private fun WatchTogetherHighlightCard(
         Box(
             modifier = Modifier
                 .size(42.dp)
-                .background(Color(0xFF1A2237), CircleShape),
+                .background(Color(0xFF1F1F1F), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1006,22 +965,46 @@ private fun LoggedInProfileCard(
     val isPaid = plan.key != DemoMembershipPlanKey.FREE
     val shape = RoundedCornerShape(24.dp)
     val background = when (plan.key) {
-        DemoMembershipPlanKey.FREE -> Brush.linearGradient(listOf(Color(0xFF10192E), Color(0xFF0C1424)))
-        DemoMembershipPlanKey.BASIC -> Brush.linearGradient(listOf(Color(0xFF0E2033), Color(0xFF0C1424)))
-        DemoMembershipPlanKey.COUPLE -> Brush.linearGradient(listOf(Color(0xFF1B1832), Color(0xFF2A1A34), Color(0xFF0C1424)))
-        DemoMembershipPlanKey.PREMIUM -> Brush.linearGradient(listOf(Color(0xFF121B30), Color(0xFF211934), Color(0xFF0C1425)))
+        DemoMembershipPlanKey.FREE -> Brush.linearGradient(listOf(Color(0xFF141414), Color(0xFF0D0D0D)))
+        DemoMembershipPlanKey.BASIC -> Brush.linearGradient(
+            listOf(
+                Color(0xFF2A2D31),
+                Color(0xFF151515),
+                Color(0xFF0D0D0D)
+            )
+        )
+        DemoMembershipPlanKey.COUPLE -> Brush.linearGradient(
+            listOf(
+                Color(0xFF2D1724),
+                Color(0xFF171214),
+                Color(0xFF0D0D0D)
+            )
+        )
+        DemoMembershipPlanKey.PREMIUM -> Brush.linearGradient(
+            listOf(
+                Color(0xFF302817),
+                Color(0xFF181511),
+                Color(0xFF0D0D0D)
+            )
+        )
     }
     val border = when (plan.key) {
         DemoMembershipPlanKey.FREE -> Brush.linearGradient(listOf(Color(0xFF8A93A7).copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f)))
-        DemoMembershipPlanKey.BASIC -> Brush.linearGradient(listOf(Color(0xFF66D9FF).copy(alpha = 0.46f), Color.White.copy(alpha = 0.08f)))
-        DemoMembershipPlanKey.COUPLE -> Brush.linearGradient(listOf(Color(0xFFE8A0FF).copy(alpha = 0.42f), Color(0xFFFF8AB8).copy(alpha = 0.30f), Color.White.copy(alpha = 0.08f)))
-        DemoMembershipPlanKey.PREMIUM -> Brush.linearGradient(listOf(Color(0xFFF6E29A).copy(alpha = 0.62f), Color(0xFF8A7CFF).copy(alpha = 0.18f), Color.White.copy(alpha = 0.08f)))
+        DemoMembershipPlanKey.BASIC -> Brush.linearGradient(listOf(Color(0xFFF2F4F8).copy(alpha = 0.72f), Color(0xFF9CA3AF).copy(alpha = 0.28f), Color.White.copy(alpha = 0.08f)))
+        DemoMembershipPlanKey.COUPLE -> Brush.linearGradient(listOf(Color(0xFFFFC2D8).copy(alpha = 0.72f), Color(0xFFFF6FA8).copy(alpha = 0.34f), Color.White.copy(alpha = 0.08f)))
+        DemoMembershipPlanKey.PREMIUM -> Brush.linearGradient(listOf(Color(0xFFFFE2A8).copy(alpha = 0.76f), Color(0xFFF6E29A).copy(alpha = 0.42f), Color.White.copy(alpha = 0.08f)))
     }
     val glowColor = when (plan.key) {
         DemoMembershipPlanKey.FREE -> Color.Transparent
-        DemoMembershipPlanKey.BASIC -> Color(0xFF66D9FF).copy(alpha = 0.08f)
-        DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8).copy(alpha = 0.09f)
-        DemoMembershipPlanKey.PREMIUM -> Color(0xFFF6E29A).copy(alpha = 0.11f)
+        DemoMembershipPlanKey.BASIC -> Color(0xFFF2F4F8).copy(alpha = 0.18f)
+        DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8).copy(alpha = 0.18f)
+        DemoMembershipPlanKey.PREMIUM -> Color(0xFFFFD76A).copy(alpha = 0.20f)
+    }
+    val sheen = when (plan.key) {
+        DemoMembershipPlanKey.FREE -> Color.Transparent
+        DemoMembershipPlanKey.BASIC -> Color(0xFFF2F4F8).copy(alpha = 0.12f)
+        DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8).copy(alpha = 0.12f)
+        DemoMembershipPlanKey.PREMIUM -> Color(0xFFFFD76A).copy(alpha = 0.14f)
     }
     val planStatus = if (isPaid) {
         if (plan.expiredDate.isNotBlank()) {
@@ -1050,6 +1033,21 @@ private fun LoggedInProfileCard(
                         Brush.radialGradient(
                             colors = listOf(glowColor, Color.Transparent),
                             radius = 520f
+                        )
+                    )
+            )
+        }
+        if (sheen != Color.Transparent) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                sheen,
+                                Color.Transparent,
+                                sheen.copy(alpha = 0.04f)
+                            )
                         )
                     )
             )
@@ -1104,7 +1102,7 @@ private fun GuestProfileCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF10192E), Color(0xFF0C1424))))
+            .background(Brush.linearGradient(listOf(Color(0xFF141414), Color(0xFF0D0D0D))))
             .border(1.dp, Color(0xFF8A93A7).copy(alpha = 0.20f), RoundedCornerShape(24.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -1158,7 +1156,7 @@ private fun GuestProfileCard(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFE6EDF7),
-                    contentColor = Color(0xFF070B16)
+                    contentColor = Color.Black
                 )
             ) {
                 Text("Đăng nhập", fontWeight = FontWeight.Bold)
@@ -1202,15 +1200,15 @@ private fun MembershipUpgradeCard(
             .background(
                 Brush.linearGradient(
                     listOf(
-                        Color(0xFF121B30),
-                        if (isPremium) Color(0xFF221D34) else Color(0xFF10243A),
-                        Color(0xFF0C1424)
+                        Color(0xFF171717),
+                        if (isPremium) Color(0xFF242424) else Color(0xFF1F1F1F),
+                        Color(0xFF0D0D0D)
                     )
                 )
             )
             .border(
                 1.dp,
-                if (isPremium) Color(0xFFF6E29A).copy(alpha = 0.22f) else Color(0xFF66D9FF).copy(alpha = 0.18f),
+                if (isPremium) Color(0xFFF6E29A).copy(alpha = 0.22f) else Color(0xFFD8DEE9).copy(alpha = 0.18f),
                 RoundedCornerShape(18.dp)
             )
             .clickable(onClick = onClick)
@@ -1223,14 +1221,14 @@ private fun MembershipUpgradeCard(
                 .size(42.dp)
                 .clip(CircleShape)
                 .background(
-                    if (isPremium) Color(0xFFF6E29A).copy(alpha = 0.13f) else Color(0xFF66D9FF).copy(alpha = 0.12f)
+                    if (isPremium) Color(0xFFF6E29A).copy(alpha = 0.13f) else Color(0xFFD8DEE9).copy(alpha = 0.12f)
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = if (isPremium) Icons.Outlined.WorkspacePremium else Icons.Outlined.PlayArrow,
                 contentDescription = null,
-                tint = if (isPremium) Color(0xFFF6E29A) else Color(0xFF66D9FF),
+                tint = if (isPremium) Color(0xFFF6E29A) else Color(0xFFD8DEE9),
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -1261,7 +1259,7 @@ private fun MembershipUpgradeCard(
             shape = RoundedCornerShape(13.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (isPremium) Color(0xFFF6E29A) else Color(0xFFE6EDF7),
-                contentColor = Color(0xFF070B16)
+                contentColor = Color.Black
             )
         ) {
             Text(
@@ -1296,7 +1294,7 @@ private fun AccountMenuList(
             Box(
                 modifier = Modifier
                     .size(34.dp)
-                    .background(Color(0xFF1A2237), CircleShape),
+                    .background(Color(0xFF1F1F1F), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 androidx.compose.runtime.CompositionLocalProvider(
@@ -1379,7 +1377,7 @@ private fun ProfileAvatar(demoUser: DemoUserProfileUi) {
         ) {
             Text(
                 text = (demoUser.name.firstOrNull() ?: 'A').uppercase(),
-                color = Color(0xFF070B16),
+                color = Color.Black,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold
             )
@@ -1394,19 +1392,19 @@ private fun MembershipBadge(
 ) {
     val textColor = when (plan.key) {
         DemoMembershipPlanKey.FREE -> Color(0xFFD8DEE9)
-        DemoMembershipPlanKey.BASIC -> Color(0xFF8BE7FF)
+        DemoMembershipPlanKey.BASIC -> Color(0xFFD8DEE9)
         DemoMembershipPlanKey.COUPLE -> Color(0xFFFFB2D2)
-        DemoMembershipPlanKey.PREMIUM -> Color(0xFF070B16)
+        DemoMembershipPlanKey.PREMIUM -> Color.Black
     }
     val badgeBrush = when (plan.key) {
         DemoMembershipPlanKey.FREE -> Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.05f)))
-        DemoMembershipPlanKey.BASIC -> Brush.horizontalGradient(listOf(Color(0xFF66D9FF).copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f)))
+        DemoMembershipPlanKey.BASIC -> Brush.horizontalGradient(listOf(Color(0xFFD8DEE9).copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f)))
         DemoMembershipPlanKey.COUPLE -> Brush.horizontalGradient(listOf(Color(0xFFE8A0FF).copy(alpha = 0.18f), Color(0xFFFF8AB8).copy(alpha = 0.12f)))
         DemoMembershipPlanKey.PREMIUM -> Brush.horizontalGradient(listOf(Color(0xFFF6E29A), Color(0xFFFFD8A8)))
     }
     val borderColor = when (plan.key) {
         DemoMembershipPlanKey.FREE -> Color(0xFF8A93A7).copy(alpha = 0.28f)
-        DemoMembershipPlanKey.BASIC -> Color(0xFF66D9FF).copy(alpha = 0.34f)
+        DemoMembershipPlanKey.BASIC -> Color(0xFFD8DEE9).copy(alpha = 0.34f)
         DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8).copy(alpha = 0.32f)
         DemoMembershipPlanKey.PREMIUM -> Color.Transparent
     }
@@ -1438,7 +1436,7 @@ private fun ProfilePlanIcon(plan: DemoMembershipPlanUi) {
     }
     val tint = when (plan.key) {
         DemoMembershipPlanKey.FREE -> Color.White.copy(alpha = 0.72f)
-        DemoMembershipPlanKey.BASIC -> Color(0xFF66D9FF)
+        DemoMembershipPlanKey.BASIC -> Color(0xFFD8DEE9)
         DemoMembershipPlanKey.COUPLE -> Color(0xFFFF8AB8)
         DemoMembershipPlanKey.PREMIUM -> Color(0xFFF6E29A)
     }
@@ -1492,13 +1490,12 @@ internal fun MembershipBenefitRow(text: String) {
 internal fun PlanManagementSheet(
     plan: DemoMembershipPlanUi,
     onDismiss: () -> Unit,
-    onChangePlan: () -> Unit,
-    onCancelRenew: () -> Unit
+    onChangePlan: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF0B1222),
+        containerColor = Color(0xFF0D0D0D),
         scrimColor = Color.Black.copy(alpha = 0.62f),
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         dragHandle = null
@@ -1629,25 +1626,10 @@ internal fun PlanManagementSheet(
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFF6E29A),
-                    contentColor = Color(0xFF070B16)
+                    contentColor = Color.Black
                 )
             ) {
                 Text("Đổi gói", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
-            }
-
-            OutlinedButton(
-                onClick = onCancelRenew,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color.White.copy(alpha = 0.78f),
-                    containerColor = Color.White.copy(alpha = 0.035f)
-                )
-            ) {
-                Text("Hủy gia hạn", fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1723,7 +1705,7 @@ private fun AccountPanelBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF10192E),
+        containerColor = Color(0xFF141414),
         scrimColor = Color.Black.copy(alpha = 0.62f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -2013,7 +1995,7 @@ internal fun AuthBottomSheet(
     ModalBottomSheet(
         onDismissRequest = { onEvent(AccountAuthEvent.CloseDialog) },
         sheetState = sheetState,
-        containerColor = Color(0xFF10192E),
+        containerColor = Color(0xFF141414),
         scrimColor = Color.Black.copy(alpha = 0.62f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -2167,9 +2149,9 @@ internal fun AuthBottomSheet(
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = Color.White,
-                    containerColor = Color(0xFF18233F),
+                    containerColor = Color(0xFF1F1F1F),
                     disabledContentColor = Color.White.copy(alpha = 0.5f),
-                    disabledContainerColor = Color(0xFF18233F).copy(alpha = 0.5f)
+                    disabledContainerColor = Color(0xFF1F1F1F).copy(alpha = 0.5f)
                 ),
                 enabled = !isLoading
             ) {
@@ -2312,8 +2294,8 @@ internal fun authTextFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedLabelColor = Color.White.copy(alpha = 0.65f),
     focusedBorderColor = Color(0xFFF6E29A),
     unfocusedBorderColor = Color.White.copy(alpha = 0.28f),
-    focusedContainerColor = Color(0xFF1A2542),
-    unfocusedContainerColor = Color(0xFF172039),
+    focusedContainerColor = Color(0xFF1F1F1F),
+    unfocusedContainerColor = Color(0xFF1A1A1A),
     cursorColor = Color(0xFFF6E29A),
     errorBorderColor = Color(0xFFFF7A7A),
     errorLabelColor = Color(0xFFFFA7A7),
