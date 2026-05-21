@@ -7,18 +7,26 @@ import android.content.pm.ActivityInfo
 import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -26,6 +34,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.BrightnessHigh
+import androidx.compose.material.icons.outlined.BrightnessLow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,6 +63,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -76,6 +89,7 @@ fun PlayerScreen(
     onBack: () -> Unit,
     videoUrl: String = "",
     episodeVideoUrls: Map<String, String> = emptyMap(),
+    startPositionMs: Long = 0L,
     onSelectEpisode: (EpisodeUi) -> Unit = {},
     viewModel: PlayerViewModel = viewModel()
 ) {
@@ -84,6 +98,7 @@ fun PlayerScreen(
 
     val currentEpisode by rememberUpdatedState(episode)
     val currentMovie by rememberUpdatedState(movie)
+    val currentVideoUrl by rememberUpdatedState(videoUrl)
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
@@ -136,7 +151,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(movie.episodes, episodeVideoUrls) {
+    LaunchedEffect(movie.episodes, episodeVideoUrls, episode?.id, startPositionMs) {
         val mediaItems = viewModel.buildEpisodeMediaItems(
             movie = movie,
             episodeVideoUrls = episodeVideoUrls
@@ -150,7 +165,7 @@ fun PlayerScreen(
             episode = episode
         )
 
-        exoPlayer.seekTo(targetIndex, 0L)
+        exoPlayer.seekTo(targetIndex, startPositionMs.coerceAtLeast(0L))
         exoPlayer.playWhenReady = true
     }
 
@@ -165,6 +180,28 @@ fun PlayerScreen(
             targetIndex != exoPlayer.currentMediaItemIndex
         ) {
             exoPlayer.seekTo(targetIndex, 0L)
+        }
+    }
+
+    LaunchedEffect(exoPlayer, movie.id, episode?.id, videoUrl) {
+        if (videoUrl.isBlank()) return@LaunchedEffect
+
+        delay(1_000)
+        viewModel.saveWatchProgress(
+            movie = currentMovie,
+            episode = currentEpisode,
+            progress = exoPlayer.currentPosition,
+            duration = normalizedDurationMs(exoPlayer.duration)
+        )
+
+        while (true) {
+            delay(10_000)
+            viewModel.saveWatchProgress(
+                movie = currentMovie,
+                episode = currentEpisode,
+                progress = exoPlayer.currentPosition,
+                duration = normalizedDurationMs(exoPlayer.duration)
+            )
         }
     }
 
@@ -185,11 +222,31 @@ fun PlayerScreen(
 
             showSystemBars(activity)
 
+            if (currentVideoUrl.isNotBlank()) {
+                viewModel.saveWatchProgress(
+                    movie = currentMovie,
+                    episode = currentEpisode,
+                    progress = exoPlayer.currentPosition,
+                    duration = normalizedDurationMs(exoPlayer.duration)
+                )
+            }
+
             exoPlayer.release()
         }
     }
 
     var showEpisodeDialog by remember { mutableStateOf(false) }
+    var brightness by remember { mutableFloatStateOf(1f) }
+    var showBrightnessIndicator by remember { mutableStateOf(false) }
+    var showPlayerChrome by remember { mutableStateOf(true) }
+    val overlayAlpha = (1f - brightness).coerceIn(0f, 0.85f)
+
+    LaunchedEffect(showBrightnessIndicator) {
+        if (showBrightnessIndicator) {
+            delay(1500)
+            showBrightnessIndicator = false
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -218,7 +275,8 @@ fun PlayerScreen(
                     setControllerVisibilityListener(
                         androidx.media3.ui.PlayerView.ControllerVisibilityListener { visibility ->
                             applyCustomIcons()
-                            if (visibility == android.view.View.GONE) {
+                            showPlayerChrome = visibility == View.VISIBLE
+                            if (visibility == View.GONE) {
                                 post {
                                     post {
                                         hideSystemBars(activity)
@@ -244,35 +302,124 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.8f),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .align(Alignment.TopCenter)
-        )
-
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .statusBarsPadding()
-                .padding(top = 8.dp, start = 16.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.15f))
-                .align(Alignment.TopStart)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Quay lại",
-                tint = Color.White
+        if (overlayAlpha > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = overlayAlpha))
             )
+        }
+
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val halfWidth = maxWidth / 2
+            Box(
+                modifier = Modifier
+                    .width(halfWidth)
+                    .fillMaxHeight()
+                    .align(Alignment.CenterStart)
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures { _, dragAmount ->
+                            val delta = -dragAmount / size.height.toFloat()
+                            brightness = (brightness + delta).coerceIn(0.05f, 1f)
+                            showBrightnessIndicator = true
+                        }
+                    }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = showBrightnessIndicator,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 24.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .padding(horizontal = 14.dp, vertical = 16.dp)
+                    .width(44.dp)
+            ) {
+                Icon(
+                    imageVector = if (brightness > 0.5f) {
+                        Icons.Outlined.BrightnessHigh
+                    } else {
+                        Icons.Outlined.BrightnessLow
+                    },
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .height(100.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.2f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(brightness)
+                            .align(Alignment.BottomCenter)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color.White)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "${(brightness * 100).toInt()}%",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showPlayerChrome,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.8f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, start = 16.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.15f))
+                        .align(Alignment.TopStart)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Quay lại",
+                        tint = Color.White
+                    )
+                }
+            }
         }
 
         // Episode picker dialog overlay
@@ -289,7 +436,7 @@ fun PlayerScreen(
                         .padding(end = 48.dp, bottom = 56.dp)
                         .widthIn(max = 280.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF1A2237).copy(alpha = 0.75f))
+                        .background(Color(0xFF1F1F1F).copy(alpha = 0.75f))
                         .padding(16.dp)
                         .clickable(enabled = false) {}
                 ) {
@@ -356,4 +503,8 @@ private fun showSystemBars(activity: Activity?) {
 
     WindowInsetsControllerCompat(window, window.decorView)
         .show(WindowInsetsCompat.Type.systemBars())
+}
+
+private fun normalizedDurationMs(duration: Long): Long {
+    return if (duration > 0L && duration != C.TIME_UNSET) duration else 0L
 }

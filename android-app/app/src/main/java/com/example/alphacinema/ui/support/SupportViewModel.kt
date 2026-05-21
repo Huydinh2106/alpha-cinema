@@ -4,24 +4,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.local.SettingsManager
 import com.example.alphacinema.data.model.SupportChatHistoryMessage
-import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportChatMemoryContext
+import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportChatMetadata
 import com.example.alphacinema.data.model.SupportChatReply
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.mergeWith
 import com.example.alphacinema.data.repository.SupportRepository
-import com.example.alphacinema.data.repository.SupportSuggestionPolicy
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.text.Normalizer
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
 
 class SupportViewModel(
     private val repository: SupportRepository,
@@ -54,12 +52,13 @@ class SupportViewModel(
         val question = userInput.trim()
         if (question.isBlank()) return
 
+        val previousMessages = _messages.value
         val userMessage = createMessage(
             text = question,
             sender = SupportMessageSender.USER
         )
-        val conversationHistory = buildConversationHistory(_messages.value + userMessage)
-        val requestMemory = buildMemoryContext(_messages.value + userMessage)
+        val conversationHistory = buildConversationHistory(previousMessages)
+        val requestMemory = buildMemoryContext(previousMessages + userMessage)
         val loadingMessage = createMessage(
             text = "\u0110ang tr\u1ea3 l\u1eddi...",
             sender = SupportMessageSender.LOADING
@@ -132,10 +131,6 @@ class SupportViewModel(
     ): SupportChatMemoryContext {
         val recentMessages = conversationMessages(messages)
             .takeLast(MAX_HISTORY_TURNS)
-        val latestUserQuestion = recentMessages
-            .lastOrNull { it.sender == SupportMessageSender.USER }
-            ?.text
-            .orEmpty()
         val referencedMovies = recentMessages
             .flatMap { it.metadata?.movieItems.orEmpty() }
         val summary = recentMessages
@@ -150,16 +145,6 @@ class SupportViewModel(
 
         val localMemory = SupportChatMemoryContext(
             summary = summary,
-            lastIntent = when {
-                latestUserQuestion.isBlank() -> baseMemory.lastIntent
-                SupportSuggestionPolicy.analyzeRecommendationRequest(
-                    question = latestUserQuestion,
-                    memory = baseMemory
-                ).shouldSuggestMovies -> "movie_recommendation"
-                else -> "general_support"
-            },
-            topics = extractTopics(recentMessages),
-            genres = extractGenres(recentMessages),
             referencedMovieSlugs = referencedMovies.mapNotNull { it.slug }.distinct().take(MAX_MEMORY_MOVIES),
             referencedMovieTitles = referencedMovies.map { it.title }.distinct().take(MAX_MEMORY_MOVIES)
         )
@@ -181,7 +166,7 @@ class SupportViewModel(
                 role?.let {
                     SupportChatHistoryMessage(
                         role = it,
-                        content = message.text.trim()
+                        content = message.toHistoryContent()
                     )
                 }
             }
@@ -190,27 +175,24 @@ class SupportViewModel(
             .takeLast(MAX_HISTORY_TURNS)
     }
 
-    private fun extractTopics(messages: List<SupportChatMessage>): List<String> {
-        val normalizedText = normalizeForLookup(messages.joinToString(" ") { it.text })
-        val topics = buildList {
-            if (normalizedText.contains("noi quy") || normalizedText.contains("dieu khoan")) add("app_policy")
-            if (normalizedText.contains("tai khoan") || normalizedText.contains("dang nhap")) add("account")
-            if (normalizedText.contains("loi") || normalizedText.contains("bug") || normalizedText.contains("khong xem duoc")) add("troubleshooting")
-            if (normalizedText.contains("phim")) add("movies")
+    private fun SupportChatMessage.toHistoryContent(): String {
+        val base = text.trim()
+        val movieContext = metadata?.movieItems
+            .orEmpty()
+            .take(MAX_MOVIE_CONTEXT_ITEMS)
+            .joinToString("; ") { movie ->
+                buildString {
+                    append(movie.title)
+                    if (movie.year.isNotBlank()) append(" (${movie.year})")
+                    if (!movie.slug.isNullOrBlank()) append(" - ${movie.slug}")
+                }
+            }
+
+        return if (movieContext.isBlank()) {
+            base
+        } else {
+            "$base\nCác phim đã gợi ý: $movieContext"
         }
-        return topics.distinct()
-    }
-
-    private fun extractGenres(messages: List<SupportChatMessage>): List<String> {
-        val normalizedText = normalizeForLookup(
-            messages
-            .filter { it.sender == SupportMessageSender.USER }
-            .joinToString(" ") { it.text.lowercase(Locale.ROOT) }
-        )
-
-        return GENRE_KEYWORDS.filter { (keyword, _) ->
-            normalizedText.contains(keyword)
-        }.map { it.second }
     }
 
     private fun conversationMessages(messages: List<SupportChatMessage>): List<SupportChatMessage> {
@@ -222,19 +204,10 @@ class SupportViewModel(
     private fun persistConversation() {
         settingsManager.saveSupportChatConversation(
             sessionId = currentSessionId,
-            messages = _messages.value.filterNot { it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID }
+            messages = _messages.value.filterNot {
+                it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID
+            }
         )
-    }
-
-    private fun normalizeForLookup(value: String): String {
-        if (value.isBlank()) return ""
-        val normalized = Normalizer.normalize(value, Normalizer.Form.NFD)
-        return normalized
-            .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
-            .replace("\u0111", "d")
-            .replace("\u0110", "D")
-            .lowercase(Locale.ROOT)
-            .trim()
     }
 
     companion object {
@@ -244,17 +217,8 @@ class SupportViewModel(
         private const val MAX_MEMORY_SUMMARY_MESSAGES = MIN_REMEMBERED_QA_PAIRS * MESSAGES_PER_QA_PAIR
         private const val MAX_MEMORY_SUMMARY_CHARS = 500
         private const val MAX_MEMORY_MOVIES = 5
+        private const val MAX_MOVIE_CONTEXT_ITEMS = 5
         private const val WELCOME_MESSAGE_ID = "welcome"
-
-        private val GENRE_KEYWORDS = listOf(
-            "kinh di" to "Kinh di",
-            "hanh dong" to "Hanh dong",
-            "tinh cam" to "Tinh cam",
-            "tam ly" to "Tam ly",
-            "vien tuong" to "Vien tuong",
-            "hai" to "Hai huoc",
-            "anime" to "Anime"
-        )
 
         private fun currentTimeLabel(): String {
             return SimpleDateFormat("HH:mm", Locale.forLanguageTag("vi-VN")).format(Date())

@@ -51,6 +51,7 @@ import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.ui.account.AccountScreen
 import com.example.alphacinema.ui.account.ProfileSettingsScreen
+import com.example.alphacinema.ui.account.WatchHistoryScreen
 import com.example.alphacinema.ui.admin.AdminScreen
 import com.example.alphacinema.ui.admin.AdminViewModel
 import com.example.alphacinema.ui.home.GlassBottomBar
@@ -321,7 +322,11 @@ fun MainContent(
         navController.navigate(MovieDetailNavRoute(slug = slug))
     }
 
-    fun openPlayer(slug: String, episodeId: String? = null) {
+    fun openPlayer(
+        slug: String,
+        episodeId: String? = null,
+        startPositionMs: Long = 0L
+    ) {
         if (slug.isBlank()) {
             showToast("Phim này hiện chưa thể mở để xem.")
             return
@@ -329,7 +334,13 @@ fun MainContent(
         if (movieDetail?.id != slug) {
             movieDetailViewModel.loadMovieDetail(slug)
         }
-        navController.navigate(PlayerNavRoute(slug = slug, episodeId = episodeId))
+        navController.navigate(
+            PlayerNavRoute(
+                slug = slug,
+                episodeId = episodeId,
+                startPositionMs = startPositionMs.coerceAtLeast(0L)
+            )
+        )
     }
 
     fun openPlayerFromHome(movieUi: MovieUi) {
@@ -396,7 +407,7 @@ fun MainContent(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
         NavHost(
             navController = navController,
@@ -477,6 +488,13 @@ fun MainContent(
                                 navController.navigate(
                                     MovieTypeNavRoute(type = type, title = title)
                                 )
+                            },
+                            onContinueWatchingMovie = { slug, episodeId, startPositionMs ->
+                                openPlayer(
+                                    slug = slug,
+                                    episodeId = episodeId,
+                                    startPositionMs = startPositionMs
+                                )
                             }
                         )
                         ScreenType.SEARCH -> SearchScreen(onOpenMovieDetail = ::openMovieDetail)
@@ -486,6 +504,7 @@ fun MainContent(
                         ScreenType.ACCOUNT -> AccountScreen(
                             onOpenAdminPanel = { navController.navigate(AdminNavRoute) },
                             onOpenMovieDetail = ::openMovieDetail,
+                            onOpenWatchHistoryPage = { navController.navigate(WatchHistoryNavRoute) },
                             onOpenMovieList = { title, filterKind, slug ->
                                 navController.navigate(
                                     MovieListNavRoute(
@@ -665,6 +684,7 @@ fun MainContent(
                             onBack = { navController.popBackStack() },
                             videoUrl = videoUrl,
                             episodeVideoUrls = episodeVideoUrls,
+                            startPositionMs = route.startPositionMs,
                             onSelectEpisode = { ep ->
                                 // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
                                 navController.navigate(
@@ -749,6 +769,19 @@ fun MainContent(
                         demoMembershipStartedDate = null
                         demoMembershipExpiredDate = null
                         navController.popBackStack()
+                    }
+                )
+            }
+
+            composable<WatchHistoryNavRoute> {
+                WatchHistoryScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenWatchHistoryItem = { slug, episodeId, startPositionMs ->
+                        openPlayer(
+                            slug = slug,
+                            episodeId = episodeId,
+                            startPositionMs = startPositionMs
+                        )
                     }
                 )
             }
@@ -962,7 +995,7 @@ private fun RouteLoadingState(message: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -987,7 +1020,7 @@ private fun RouteErrorState(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1014,7 +1047,7 @@ private fun RouteErrorState(
                         .height(48.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFF6E29A),
-                        contentColor = Color(0xFF070B16)
+                        contentColor = Color.Black
                     )
                 ) {
                     Text(

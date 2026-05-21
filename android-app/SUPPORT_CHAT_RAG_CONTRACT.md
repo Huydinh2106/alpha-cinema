@@ -1,134 +1,106 @@
 # Support Chat RAG Contract
 
-This app now sends a backend-ready payload for short-term conversation memory.
+Backend:
 
-## Endpoint
+- Base URL: `https://vankhoa2110-rag-alphacinema.hf.space`
+- Health check: `GET /`
+- Chat: `POST /ask`
+- Recommendation shortcut: `POST /recommend`
+- Clear session: `DELETE /sessions/{session_id}`
 
-- `POST /ask`
+## `POST /ask`
 
-## Request shape
+Request:
 
 ```json
 {
-  "question": "Gợi ý cho tôi một bộ phim kinh dị đi",
-  "top_k": 4,
-  "session_id": "8fcbdb49-3d83-4aa2-9a5c-24d6e9800f7b",
-  "history": [
-    {
-      "role": "assistant",
-      "content": "Xin chào, tôi là trợ lý AlphaCinema.",
-      "timestamp": "20:10"
-    },
+  "question": "Goi y cho toi vai phim hanh dong dang xem.",
+  "top_k": 6,
+  "top_n_recommendations": 5,
+  "generation_model": "gpt-4o-mini",
+  "session_id": "session-123",
+  "remember_history": true,
+  "chat_history": [
     {
       "role": "user",
-      "content": "Gợi ý cho tôi một bộ phim kinh dị đi",
-      "timestamp": "20:11"
-    }
-  ],
-  "memory": {
-    "summary": "User is asking for horror movie suggestions.",
-    "last_intent": "movie_recommendation",
-    "topics": ["movies"],
-    "genres": ["Kinh dị"],
-    "referenced_movie_slugs": [],
-    "referenced_movie_titles": [],
-    "kids_mode_enabled": false,
-    "surface": "support_chat"
-  },
-  "response_contract": {
-    "version": "2026-04-12",
-    "include_intent": true,
-    "structured_movies_only_for_recommendation": true,
-    "required_movie_fields": ["id", "title", "slug", "actions"],
-    "supported_action_types": [
-      "play_movie",
-      "view_detail",
-      "save_to_list",
-      "watch_trailer"
-    ],
-    "rules": [
-      "Return movies only when the user explicitly asks for movie recommendations or what-to-watch suggestions.",
-      "For app policy, account, troubleshooting, or general support questions return text-only with no movies array.",
-      "When intent is movie_recommendation include intent and structured movie actions so the app can render CTA buttons."
-    ]
-  }
-}
-```
-
-## Response shape
-
-### Non-recommendation response
-
-```json
-{
-  "intent": "general_support",
-  "answer": "AlphaCinema không cho phép chia sẻ tài khoản cho nhiều người cùng lúc.",
-  "memory": {
-    "summary": "User asked about app rules and account usage.",
-    "last_intent": "general_support",
-    "topics": ["app_policy", "account"],
-    "genres": [],
-    "referenced_movie_slugs": [],
-    "referenced_movie_titles": [],
-    "surface": "support_chat"
-  }
-}
-```
-
-### Recommendation response
-
-```json
-{
-  "intent": "movie_recommendation",
-  "answer": "Bạn có thể xem: Úng Kính Ma Quái (2026)",
-  "movies": [
+      "content": "Toi muon xem phim hanh dong."
+    },
     {
-      "id": "ung-kinh-ma-quai-2026",
-      "title": "Úng Kính Ma Quái",
-      "subtitle": "Haunted Lens",
-      "year": 2026,
-      "poster_url": "https://phimimg.com/poster.jpg",
-      "slug": "ung-kinh-ma-quai-2026",
-      "playable": true,
-      "actions": [
-        {
-          "type": "play_movie",
-          "label": "Xem phim",
-          "route": {
-            "destination": "player",
-            "slug": "ung-kinh-ma-quai-2026"
-          },
-          "fallback_route": {
-            "destination": "detail",
-            "slug": "ung-kinh-ma-quai-2026"
-          }
-        }
-      ]
+      "role": "assistant",
+      "content": "Ban co the xem mot so phim hanh dong noi bat."
     }
-  ],
-  "memory": {
-    "summary": "User prefers horror suggestions.",
-    "last_intent": "movie_recommendation",
-    "topics": ["movies"],
-    "genres": ["Kinh dị"],
-    "referenced_movie_slugs": ["ung-kinh-ma-quai-2026"],
-    "referenced_movie_titles": ["Úng Kính Ma Quái"],
-    "surface": "support_chat"
-  }
+  ]
 }
 ```
 
-## Backend rules
+Notes:
 
-1. Always read `session_id`, `history`, and `memory` together.
-2. `memory.summary` should be a compact rolling summary for the session.
-3. For non-recommendation intents, return text-only and omit `movies`.
-4. For recommendation intents, return `intent = "movie_recommendation"` and structured `movies`.
-5. If playback is not available, set the movie or action so the app can fall back to detail.
+- `question` is required.
+- `top_k` defaults to `6` on the backend and must stay between `1` and `20`.
+- `top_n_recommendations` defaults to `5` on the backend and must stay between `1` and `10`.
+- `generation_model` defaults to `gpt-4o-mini`.
+- `session_id` is optional for the backend, but the Android app sends one for multi-turn memory.
+- `chat_history` is optional and should contain previous turns only; the current user message is sent in `question`.
 
-## Current app behavior
+Response:
 
-- The app keeps a per-session `session_id`.
-- The app sends the last 8 turns in `history`.
-- The app merges local memory cues with any `memory` object returned by backend.
-- The app only renders `Xem phim` CTA if the question is recommendation-like or backend sets `intent = movie_recommendation`.
+```json
+{
+  "intent": "policy",
+  "mode": "answer",
+  "answer": "Noi dung tra loi cua tro ly.",
+  "sources": [],
+  "recommendations": [],
+  "session_id": "session-123",
+  "history_message_count": 2
+}
+```
+
+Supported `intent` values:
+
+- `policy`
+- `movie`
+- `recommendation`
+- `mixed`
+- `music_request`
+
+## Music and external links
+
+Music requests such as `Mo giao dien album nhac phim Interstellar` must go through `POST /ask`.
+If the assistant should render a music or external link card, the backend should return the link payload in the chat response. Android should not answer music requests locally before `/ask`.
+
+## `POST /recommend`
+
+Request:
+
+```json
+{
+  "query": "phim kinh di hoac giat gan cho buoi toi",
+  "top_n": 5
+}
+```
+
+Response:
+
+```json
+{
+  "recommendations": [
+    {
+      "title": "Movie title",
+      "slug": "movie-slug",
+      "year": 2026,
+      "poster_url": "https://example.com/poster.jpg"
+    }
+  ]
+}
+```
+
+## Current Android Behavior
+
+- `SupportViewModel` sends the current message as `question`.
+- Previous turns are sent as `chat_history`.
+- The app keeps a session id in `SettingsManager` and sends it to `/ask`.
+- `SupportRepository` calls `POST /ask` through Retrofit for every user message.
+- If `/ask` is unavailable, Android shows only the generic unavailable message and does not generate a local answer.
+- `SupportChatResponseParser` reads `answer`, `intent`, `session_id`, `history_message_count`, and movie items from `recommendations`.
+- The app renders movie cards only from recommendations returned by the backend.

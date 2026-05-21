@@ -78,9 +78,9 @@ import kotlinx.coroutines.delay
 
 // ── Color constants (consistent with AccountScreen) ──────────────────────────
 private val GoldAccent = Color(0xFFF6E29A)
-private val DarkBackground = Color(0xFF070B16)
-private val CardBackground = Color(0xFF10192E)
-private val CardBorder = Color(0xFF1E2A48)
+private val DarkBackground = Color.Black
+private val CardBackground = Color(0xFF141414)
+private val CardBorder = Color(0xFF333333)
 private val TextPrimary = Color.White
 private val TextSecondary = Color.White.copy(alpha = 0.68f)
 private val TextMuted = Color.White.copy(alpha = 0.45f)
@@ -168,22 +168,6 @@ fun EmailVerificationScreen(
                 interactionSource = remember { MutableInteractionSource() }
             ) { focusManager.clearFocus() }
     ) {
-        // ── Gradient overlay phía trên ───────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(320.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1D2540),
-                            Color(0xFF101726),
-                            DarkBackground
-                        )
-                    )
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -226,7 +210,7 @@ fun EmailVerificationScreen(
                             Brush.linearGradient(
                                 colors = listOf(
                                     GoldAccent.copy(alpha = 0.15f),
-                                    Color(0xFF1A2542).copy(alpha = 0.8f)
+                                    Color(0xFF1F1F1F).copy(alpha = 0.8f)
                                 )
                             )
                         )
@@ -260,7 +244,7 @@ fun EmailVerificationScreen(
                             Brush.linearGradient(
                                 colors = listOf(
                                     SuccessGreen.copy(alpha = 0.15f),
-                                    Color(0xFF1A2542).copy(alpha = 0.8f)
+                                    Color(0xFF1F1F1F).copy(alpha = 0.8f)
                                 )
                             )
                         )
@@ -493,8 +477,8 @@ private fun OtpDigitBox(
     }
 
     val bgColor = when {
-        isFilled -> Color(0xFF1A2542)
-        isCurrent -> Color(0xFF142038)
+        isFilled -> Color(0xFF1F1F1F)
+        isCurrent -> Color(0xFF1A1A1A)
         else -> CardBackground.copy(alpha = 0.7f)
     }
 

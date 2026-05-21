@@ -40,7 +40,7 @@ class SupportChatResponseParserTest {
         )
 
         assertEquals("Ban co the xem: Ung Kinh Ma Quai (2026)", payload.text)
-        assertEquals(ParsedSupportChatIntent.MOVIE_RECOMMENDATION, payload.intent)
+        assertEquals(ParsedSupportChatIntent.RECOMMENDATION, payload.intent)
         assertEquals("User prefers horror suggestions.", payload.memory?.summary)
         assertEquals(listOf("Kinh di"), payload.memory?.genres)
         assertEquals("session-123", payload.sessionId)
@@ -48,6 +48,38 @@ class SupportChatResponseParserTest {
         assertEquals(1, payload.movieSuggestions.size)
         assertEquals("Ung Kinh Ma Quai", payload.movieSuggestions.first().title)
         assertEquals("ung-kinh-ma-quai-2026", payload.movieSuggestions.first().slug)
+    }
+
+    @Test
+    fun parseUpdatedAskResponse_recognizesBackendIntentAndRecommendations() {
+        val payload = SupportChatResponseParser.parse(
+            """
+            {
+              "intent": "recommendation",
+              "mode": "answer",
+              "answer": "Mình gợi ý vài phim hợp tâm trạng của bạn.",
+              "sources": [],
+              "recommendations": [
+                {
+                  "title": "Lat Mat 7",
+                  "slug": "lat-mat-7",
+                  "poster_url": "https://phimimg.com/lat-mat-7.jpg",
+                  "year": 2024
+                }
+              ],
+              "session_id": "alpha-session",
+              "history_message_count": 2
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(ParsedSupportChatIntent.RECOMMENDATION, payload.intent)
+        assertEquals("Mình gợi ý vài phim hợp tâm trạng của bạn.", payload.text)
+        assertEquals("alpha-session", payload.sessionId)
+        assertEquals(2, payload.historyMessageCount)
+        assertEquals(1, payload.movieSuggestions.size)
+        assertEquals("Lat Mat 7", payload.movieSuggestions.first().title)
+        assertEquals("lat-mat-7", payload.movieSuggestions.first().slug)
     }
 
     @Test
@@ -65,6 +97,24 @@ class SupportChatResponseParserTest {
     }
 
     @Test
+    fun parseTextOnlyReply_cleansMarkdownAndImageReferences() {
+        val payload = SupportChatResponseParser.parse(
+            """
+            {
+              "answer": "[Image #1]. - **Bac Si Watson** – Kich tinh, bi an. – **Nu than tinh yeu** – Lang man sau sac."
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(
+            "Bac Si Watson - Kich tinh, bi an.\n\nNu than tinh yeu - Lang man sau sac.",
+            payload.text
+        )
+        assertFalse(payload.text.contains("**"))
+        assertFalse(payload.text.contains("[Image"))
+    }
+
+    @Test
     fun watchActionFactory_fallsBackToDetailWhenPlaybackUnavailable() {
         val action = SupportChatActionFactory.createWatchMovieAction(
             slug = "ung-kinh-ma-quai-2026",
@@ -77,23 +127,4 @@ class SupportChatResponseParserTest {
         assertEquals("ung-kinh-ma-quai-2026", action.primaryRoute?.slug)
     }
 
-    @Test
-    fun supportRepository_doesNotExposeMovieSuggestionsForAppPolicyQuestion() {
-        assertFalse(
-            SupportSuggestionPolicy.shouldExposeMovieSuggestions(
-                question = "Noi quy cua app la gi?",
-                parsedIntent = ParsedSupportChatIntent.UNKNOWN
-            )
-        )
-    }
-
-    @Test
-    fun supportRepository_exposesMovieSuggestionsForRecommendationQuestion() {
-        assertTrue(
-            SupportSuggestionPolicy.shouldExposeMovieSuggestions(
-                question = "Goi y cho toi mot bo phim kinh di di",
-                parsedIntent = ParsedSupportChatIntent.UNKNOWN
-            )
-        )
-    }
 }

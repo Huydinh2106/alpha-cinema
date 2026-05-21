@@ -78,20 +78,8 @@ fun MovieTypeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
-        // Top gradient decoration
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF1A2240).copy(alpha = 0.5f), Color(0xFF070B16))
-                    )
-                )
-        )
-
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(3),
@@ -432,7 +420,7 @@ fun MovieTypeCard(movie: MovieItem, onClick: () -> Unit = {}) {
                 .clip(RoundedCornerShape(12.dp))
                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
                 .background(
-                    Brush.verticalGradient(listOf(Color(0xFF2A3354), Color(0xFF131A2F)))
+                    Brush.verticalGradient(listOf(Color(0xFF2F2F2F), Color(0xFF1A1A1A)))
                 )
         ) {
             val posterUrl = movie.getFullPosterUrl()
