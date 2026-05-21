@@ -33,9 +33,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.BrightnessHigh
-import androidx.compose.material.icons.outlined.BrightnessLow
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.BrightnessHigh
+import androidx.compose.material.icons.rounded.BrightnessLow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -345,9 +345,9 @@ fun PlayerScreen(
             ) {
                 Icon(
                     imageVector = if (brightness > 0.5f) {
-                        Icons.Outlined.BrightnessHigh
+                        Icons.Rounded.BrightnessHigh
                     } else {
-                        Icons.Outlined.BrightnessLow
+                        Icons.Rounded.BrightnessLow
                     },
                     contentDescription = null,
                     tint = Color.White,
@@ -414,7 +414,7 @@ fun PlayerScreen(
                         .align(Alignment.TopStart)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Quay lại",
                         tint = Color.White
                     )

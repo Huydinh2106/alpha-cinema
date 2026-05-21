@@ -19,7 +19,7 @@ class StorageReminderWorker(
         
         if (pendingMoviesCount > 0) {
             val notification = NotificationCompat.Builder(applicationContext, NotificationHelper.CHANNEL_LOCAL)
-                .setSmallIcon(android.R.drawable.ic_dialog_info) // Đảm bảo có icon này trong drawable
+                .setSmallIcon(R.drawable.ic_notification_alpha)
                 .setContentTitle("Bạn có $pendingMoviesCount phim chưa xem")
                 .setContentText("Mở Alpha Cinema để xem ngay những bộ phim đã tải về!")
                 .setAutoCancel(true)

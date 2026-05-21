@@ -30,19 +30,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.VideoLibrary
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.VideoLibrary
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -306,7 +306,7 @@ private fun DetailTopBanner(
                 .align(Alignment.TopStart)
         ) {
             Icon(
-                imageVector = Icons.Outlined.ArrowBack,
+                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                 contentDescription = "Back",
                 tint = Color.White
             )
@@ -458,7 +458,7 @@ private fun ActionRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isFavActive) Icons.Filled.Favorite else actionIcon(action),
+                        imageVector = if (isFavActive) Icons.Rounded.Favorite else actionIcon(action),
                         contentDescription = action.label,
                         tint = if (isFavActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.85f)
                     )
@@ -529,9 +529,9 @@ private fun EpisodeTab(
             }
             Icon(
                 imageVector = if (expanded) {
-                    Icons.Outlined.KeyboardArrowUp
+                    Icons.Rounded.KeyboardArrowUp
                 } else {
-                    Icons.Outlined.KeyboardArrowDown
+                    Icons.Rounded.KeyboardArrowDown
                 },
                 contentDescription = null,
                 tint = Color(0xFFF6E29A)
@@ -564,7 +564,7 @@ private fun EpisodeTab(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.PlayArrow,
+                            imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = null,
                             tint = if (isCurrent) Color(0xFFF6E29A) else Color.White
                         )
@@ -684,7 +684,7 @@ private fun EpisodeTabModern(
                     )
                 }
                 Icon(
-                    imageVector = if (seasonsExpanded) androidx.compose.material.icons.Icons.Outlined.KeyboardArrowUp else androidx.compose.material.icons.Icons.Outlined.KeyboardArrowDown,
+                    imageVector = if (seasonsExpanded) androidx.compose.material.icons.Icons.Rounded.KeyboardArrowUp else androidx.compose.material.icons.Icons.Rounded.KeyboardArrowDown,
                     contentDescription = null,
                     tint = Color.White
                 )
@@ -972,7 +972,7 @@ private fun RecommendationTab(
                     )
                 }
                 Icon(
-                    imageVector = Icons.Outlined.PlayArrow,
+                    imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = null,
                     tint = Color(0xFFF6E29A)
                 )
@@ -982,10 +982,10 @@ private fun RecommendationTab(
 }
 
 private fun actionIcon(action: MovieDetailAction) = when (action) {
-    MovieDetailAction.FAVORITE -> Icons.Outlined.FavoriteBorder
-    MovieDetailAction.ADD_TO_LIST -> Icons.Outlined.Add
-    MovieDetailAction.SHARE -> Icons.Outlined.Share
-    MovieDetailAction.WATCH_TOGETHER -> Icons.Outlined.Groups
+    MovieDetailAction.FAVORITE -> Icons.Rounded.FavoriteBorder
+    MovieDetailAction.ADD_TO_LIST -> Icons.Rounded.Add
+    MovieDetailAction.SHARE -> Icons.Rounded.Share
+    MovieDetailAction.WATCH_TOGETHER -> Icons.Rounded.Groups
 }
 
 @Composable
@@ -1133,7 +1133,7 @@ private fun RatingsTab(
             // 10 stars in a row might be too dense, but we can fit it.
             for (i in 1..10) {
                 Icon(
-                    imageVector = if (i <= selectedScore) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    imageVector = if (i <= selectedScore) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                     contentDescription = "$i sao",
                     tint = if (i <= selectedScore) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.3f),
                     modifier = Modifier

@@ -33,12 +33,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.NotificationsNone
-import androidx.compose.material.icons.outlined.Payment
-import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.NotificationsNone
+import androidx.compose.material.icons.rounded.Payment
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 
@@ -90,30 +90,30 @@ enum class NotificationType(
 ) {
     MARKETING(
         label = "Khuyến mãi",
-        icon = Icons.Outlined.Movie,
+        icon = Icons.Rounded.Movie,
         color = Color(0xFFF6E29A)
 
     ),
     TRANSACTION(
         label = "Giao dịch",
-        icon = Icons.Outlined.Payment,
+        icon = Icons.Rounded.Payment,
         color = Color(0xFF4ADE80)
     ),
     SOCIAL(
         label = "Xã hội",
-        icon = Icons.Outlined.Movie,
+        icon = Icons.Rounded.Movie,
         color = Color(0xFF60A5FA)
 
     ),
     SYSTEM(
         label = "Hệ thống",
-        icon = Icons.Outlined.SystemUpdate,
+        icon = Icons.Rounded.SystemUpdate,
         color = Color(0xFFA78BFA)
 
     ),
     NEW_MOVIE(
         label = "Phim mới",
-        icon = Icons.Outlined.Movie,
+        icon = Icons.Rounded.Movie,
         color = Color(0xFFFB7185)
 
     )
@@ -268,7 +268,7 @@ fun NotificationScreen(
             ) {
                 IconButton(onClick = onClose) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Quay lại",
                         tint = TextPrimary
                     )
@@ -482,7 +482,7 @@ private fun NotificationRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Delete,
+                        imageVector = Icons.Rounded.Delete,
                         contentDescription = "Xóa thông báo",
                         tint = Color(0xFFEF4444),
                         modifier = Modifier.size(18.dp)
@@ -515,7 +515,7 @@ private fun NotificationEmptyState(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = Icons.Outlined.NotificationsNone,
+                imageVector = Icons.Rounded.NotificationsNone,
                 contentDescription = null,
                 tint = TextMuted,
                 modifier = Modifier.size(56.dp)

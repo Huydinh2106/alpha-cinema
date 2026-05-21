@@ -38,15 +38,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.AccountBalanceWallet
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.FileDownload
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.QrCode2
-import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.QrCode2
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -490,7 +490,7 @@ private fun MomoQrPayment(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.QrCode2,
+                                imageVector = Icons.Rounded.QrCode2,
                                 contentDescription = null,
                                 tint = MomoPrimary,
                                 modifier = Modifier.size(42.dp)
@@ -592,7 +592,7 @@ private fun MomoQrPayment(
                             .height(50.dp)
                     ) {
                         Icon(
-                            Icons.Outlined.FileDownload,
+                            Icons.Rounded.FileDownload,
                             contentDescription = null,
                             tint = MomoPrimary,
                             modifier = Modifier.size(18.dp)
@@ -832,13 +832,13 @@ private fun rememberPaymentMethods(): List<PaymentMethodUi> {
                 id = PaymentMethodId.QR_CODE,
                 title = "Mã QR MoMo",
                 description = "Hiện mã QR để quét bằng app MoMo",
-                icon = Icons.Outlined.QrCode2
+                icon = Icons.Rounded.QrCode2
             ),
             PaymentMethodUi(
                 id = PaymentMethodId.WALLET,
                 title = "Ví điện tử MoMo",
                 description = "Thanh toán nhanh qua ví điện tử Momo",
-                icon = Icons.Outlined.AccountBalanceWallet
+                icon = Icons.Rounded.AccountBalanceWallet
             )
         )
     }
@@ -873,7 +873,7 @@ private fun PaymentTopBar(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                 contentDescription = "Quay lại",
                 tint = Color.White
             )
@@ -923,7 +923,7 @@ private fun CurrentPackageState(currentPackage: PaymentPackageUi?) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Outlined.WorkspacePremium,
+            imageVector = Icons.Rounded.WorkspacePremium,
             contentDescription = null,
             tint = if (currentPackage == null) Color.White.copy(alpha = 0.55f) else AccentGold,
             modifier = Modifier.size(22.dp)
@@ -1183,7 +1183,7 @@ private fun PaymentMethodCard(
             )
         }
         Icon(
-            imageVector = if (selected) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            imageVector = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
             contentDescription = null,
             tint = if (selected) AccentGold else Color.White.copy(alpha = 0.45f),
             modifier = Modifier.size(20.dp)
@@ -1323,7 +1323,7 @@ private fun PaymentSuccessModal(
 ) {
     ResultModalShell {
         Icon(
-            imageVector = Icons.Outlined.CheckCircle,
+            imageVector = Icons.Rounded.CheckCircle,
             contentDescription = null,
             tint = AccentTeal,
             modifier = Modifier.size(58.dp)
@@ -1365,7 +1365,7 @@ private fun PaymentFailedModal(
 ) {
     ResultModalShell {
         Icon(
-            imageVector = Icons.Outlined.ErrorOutline,
+            imageVector = Icons.Rounded.ErrorOutline,
             contentDescription = null,
             tint = ErrorRed,
             modifier = Modifier.size(58.dp)
@@ -1440,7 +1440,7 @@ private fun PremiumIcon() {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Outlined.WorkspacePremium,
+            imageVector = Icons.Rounded.WorkspacePremium,
             contentDescription = null,
             tint = AccentGold,
             modifier = Modifier.size(21.dp)
@@ -1487,7 +1487,7 @@ private fun FeatureRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(
-            imageVector = Icons.Outlined.CheckCircle,
+            imageVector = Icons.Rounded.CheckCircle,
             contentDescription = null,
             tint = if (highlighted) AccentTeal else AccentGold,
             modifier = Modifier
@@ -1514,7 +1514,7 @@ private fun PaymentPolicyNotice() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Outlined.Info,
+            imageVector = Icons.Rounded.Info,
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.62f),
             modifier = Modifier.size(18.dp)

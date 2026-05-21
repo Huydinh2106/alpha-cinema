@@ -41,10 +41,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -188,7 +188,7 @@ fun EmailVerificationScreen(
             ) {
                 IconButton(onClick = onBackToLogin) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Quay lại",
                         tint = TextPrimary
                     )
@@ -223,7 +223,7 @@ fun EmailVerificationScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Email,
+                        imageVector = Icons.Rounded.Email,
                         contentDescription = null,
                         tint = GoldAccent.copy(alpha = pulseAlpha),
                         modifier = Modifier.size(38.dp)
@@ -257,7 +257,7 @@ fun EmailVerificationScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.CheckCircle,
+                        imageVector = Icons.Rounded.CheckCircle,
                         contentDescription = null,
                         tint = SuccessGreen,
                         modifier = Modifier.size(38.dp)
@@ -547,7 +547,7 @@ private fun ResendCodeSection(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Refresh,
+                    imageVector = Icons.Rounded.Refresh,
                     contentDescription = null,
                     tint = GoldAccent,
                     modifier = Modifier.size(18.dp)
@@ -571,7 +571,7 @@ private fun ResendCodeSection(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Refresh,
+                    imageVector = Icons.Rounded.Refresh,
                     contentDescription = null,
                     tint = TextMuted,
                     modifier = Modifier.size(18.dp)

@@ -7,10 +7,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -64,7 +64,7 @@ fun AdminScreen(
                 title = { Text("Quản trị hệ thống", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -135,7 +135,7 @@ fun AddMovieTab(viewModel: AdminViewModel) {
             onValueChange = { searchQuery = it },
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Tìm kiếm phim từ PhimAPI...", color = Color.Gray) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
+            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.Gray) },
             trailingIcon = {
                 Button(
                     onClick = { viewModel.searchMovies(searchQuery) },
@@ -241,7 +241,7 @@ fun ManageCategoriesTab(viewModel: AdminViewModel) {
                 .padding(24.dp),
             containerColor = Color(0xFFF6E29A)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Thêm Danh Mục", tint = Color.Black)
+            Icon(Icons.Rounded.Add, contentDescription = "Thêm Danh Mục", tint = Color.Black)
         }
     }
 
@@ -407,7 +407,7 @@ fun CategoryEditorDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!isNew) {
                     IconButton(onClick = { onDelete(id) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color.Red)
+                        Icon(Icons.Rounded.Delete, contentDescription = "Xóa", tint = Color.Red)
                     }
                 }
                 TextButton(onClick = onDismiss) {
@@ -483,7 +483,7 @@ fun AdminMovieItemCard(movie: MovieItem, onAdd: () -> Unit) {
                     onClick = onAdd,
                     modifier = Modifier.background(Color(0xFFF6E29A).copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add", tint = Color(0xFFF6E29A))
+                    Icon(Icons.Rounded.Add, contentDescription = "Add", tint = Color(0xFFF6E29A))
                 }
             }
         }

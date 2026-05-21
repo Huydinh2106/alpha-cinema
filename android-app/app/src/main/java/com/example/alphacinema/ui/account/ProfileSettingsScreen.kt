@@ -21,10 +21,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
-import androidx.compose.material.icons.automirrored.outlined.ExitToApp
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.ExitToApp
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -317,7 +317,7 @@ private fun ProfileMainPage(
                     .background(Color.White.copy(alpha = 0.08f))
             ) {
                 Icon(
-                    Icons.AutoMirrored.Outlined.ArrowBack, null,
+                    Icons.AutoMirrored.Rounded.ArrowBack, null,
                     tint = Color.White, modifier = Modifier.size(20.dp)
                 )
             }
@@ -353,7 +353,7 @@ private fun ProfileMainPage(
 
         // Menu
         SettingsMenuItem(
-            icon = Icons.Outlined.Edit,
+            icon = Icons.Rounded.Edit,
             iconTint = Color(0xFFF6E29A),
             title = "Hồ sơ cá nhân",
             subtitle = "Đổi tên hiển thị, ảnh đại diện",
@@ -362,7 +362,7 @@ private fun ProfileMainPage(
         Spacer(modifier = Modifier.height(10.dp))
 
         SettingsMenuItem(
-            icon = Icons.Outlined.Lock,
+            icon = Icons.Rounded.Lock,
             iconTint = Color(0xFFF6E29A),
             title = "Đổi mật khẩu",
             subtitle = if (isGoogleUser) "Không khả dụng cho tài khoản Google" else "Thay đổi mật khẩu đăng nhập",
@@ -372,7 +372,7 @@ private fun ProfileMainPage(
         Spacer(modifier = Modifier.height(10.dp))
 
         SettingsMenuItem(
-            icon = Icons.Outlined.WorkspacePremium,
+            icon = Icons.Rounded.WorkspacePremium,
             iconTint = Color(0xFFF6E29A),
             title = "Quản lý gói đăng ký",
             subtitle = if (plan.lowercase() == "free") "Nâng cấp để mở khóa tính năng cao cấp" else "$planLabel đang hoạt động",
@@ -393,7 +393,7 @@ private fun ProfileMainPage(
                 containerColor = Color(0xFFFF6B6B).copy(alpha = 0.05f)
             )
         ) {
-            Icon(Icons.AutoMirrored.Outlined.ExitToApp, null, tint = Color(0xFFFFA0A0), modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Rounded.ExitToApp, null, tint = Color(0xFFFFA0A0), modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.size(8.dp))
             Text("Đăng xuất", fontWeight = FontWeight.SemiBold)
         }
@@ -474,7 +474,7 @@ private fun EditProfilePage(
                 onClick = onBack,
                 modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Text(
                 "Hồ sơ cá nhân",
@@ -521,7 +521,7 @@ private fun EditProfilePage(
                         .background(Color(0xFFF6E29A)).border(2.dp, Color.Black, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.CameraAlt, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.CameraAlt, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -589,7 +589,7 @@ private fun EditProfilePage(
                     style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
 
                 ImageSourceOption(
-                    icon = Icons.Outlined.PhotoLibrary, iconTint = Color(0xFFD8DEE9),
+                    icon = Icons.Rounded.PhotoLibrary, iconTint = Color(0xFFD8DEE9),
                     label = "Thư viện ảnh"
                 ) {
                     showPickerSheet = false
@@ -597,7 +597,7 @@ private fun EditProfilePage(
                 }
 
                 ImageSourceOption(
-                    icon = Icons.Outlined.CameraAlt, iconTint = Color(0xFFF6E29A),
+                    icon = Icons.Rounded.CameraAlt, iconTint = Color(0xFFF6E29A),
                     label = "Chụp ảnh"
                 ) {
                     showPickerSheet = false
@@ -605,7 +605,7 @@ private fun EditProfilePage(
                 }
 
                 ImageSourceOption(
-                    icon = Icons.Outlined.Folder, iconTint = Color(0xFFE8A0FF),
+                    icon = Icons.Rounded.Folder, iconTint = Color(0xFFE8A0FF),
                     label = "Chọn từ tệp"
                 ) {
                     showPickerSheet = false
@@ -678,7 +678,7 @@ private fun ChangePasswordPage(
                 onClick = onBack,
                 modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f))
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
             }
             Text(
                 "Đổi mật khẩu",
@@ -697,7 +697,7 @@ private fun ChangePasswordPage(
                 .background(Color(0xFFE8A0FF).copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.Lock, null, tint = Color(0xFFE8A0FF), modifier = Modifier.size(34.dp))
+            Icon(Icons.Rounded.Lock, null, tint = Color(0xFFE8A0FF), modifier = Modifier.size(34.dp))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -818,7 +818,7 @@ private fun SettingsMenuItem(
             Text(subtitle, color = if (enabled) Color.White.copy(alpha = 0.58f) else Color.White.copy(alpha = 0.35f),
                 style = MaterialTheme.typography.bodySmall, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        Icon(Icons.AutoMirrored.Outlined.ArrowForwardIos, null,
+        Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, null,
             tint = if (enabled) Color.White.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.15f), modifier = Modifier.size(14.dp))
     }
 }
@@ -857,7 +857,7 @@ private fun SubscriptionManagementPage(
                 modifier = Modifier.size(40.dp)
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Quay lại",
                     tint = Color.White
                 )
@@ -903,7 +903,7 @@ private fun SubscriptionManagementPage(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Outlined.WorkspacePremium, null,
+                                Icons.Rounded.WorkspacePremium, null,
                                 tint = Color(0xFFF6E29A),
                                 modifier = Modifier.size(26.dp)
                             )
@@ -926,7 +926,7 @@ private fun SubscriptionManagementPage(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     PlanInfoRow(
-                        icon = Icons.Outlined.CheckCircle,
+                        icon = Icons.Rounded.CheckCircle,
                         label = "Ngày đăng ký",
                         value = if (membershipPlan.key == DemoMembershipPlanKey.FREE) {
                             "Không áp dụng"
@@ -935,7 +935,7 @@ private fun SubscriptionManagementPage(
                         }
                     )
                     PlanInfoRow(
-                        icon = Icons.Outlined.WatchLater,
+                        icon = Icons.Rounded.WatchLater,
                         label = "Ngày hết hạn",
                         value = if (membershipPlan.key == DemoMembershipPlanKey.FREE) {
                             "Không áp dụng"
@@ -944,7 +944,7 @@ private fun SubscriptionManagementPage(
                         }
                     )
                     PlanInfoRow(
-                        icon = Icons.Outlined.CheckCircle,
+                        icon = Icons.Rounded.CheckCircle,
                         label = "Trạng thái",
                         value = "Đang hoạt động"
                     )

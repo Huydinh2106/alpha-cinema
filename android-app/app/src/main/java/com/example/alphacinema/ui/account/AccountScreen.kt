@@ -31,22 +31,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
-import androidx.compose.material.icons.automirrored.outlined.ExitToApp
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.PersonOutline
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.RemoveRedEye
-import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.WatchLater
-import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.ExitToApp
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.RemoveRedEye
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.WatchLater
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
@@ -384,14 +384,14 @@ fun AccountScreen(
     }
 
     val menuItems = mutableListOf(
-        AccountMenuItemUi("Lịch sử xem", { Icon(Icons.Outlined.History, contentDescription = null) }),
-        AccountMenuItemUi("Yêu thích", { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null) }),
-        AccountMenuItemUi("Chính sách", { Icon(Icons.Outlined.Info, contentDescription = null) }),
-        AccountMenuItemUi("Góp ý", { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) })
+        AccountMenuItemUi("Lịch sử xem", { Icon(Icons.Rounded.History, contentDescription = null) }),
+        AccountMenuItemUi("Yêu thích", { Icon(Icons.Rounded.FavoriteBorder, contentDescription = null) }),
+        AccountMenuItemUi("Chính sách", { Icon(Icons.Rounded.Info, contentDescription = null) }),
+        AccountMenuItemUi("Góp ý", { Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null) })
     ).apply {
         val isAdminUser = userProfile?.isAdmin == true || currentUser?.email == "admin@alphacinema.com"
         if (isAdminUser) {
-            add(0, AccountMenuItemUi("Quản trị phim", { Icon(Icons.Filled.Settings, contentDescription = null, tint = Color(0xFFF6E29A)) }))
+            add(0, AccountMenuItemUi("Quản trị phim", { Icon(Icons.Rounded.Settings, contentDescription = null, tint = Color(0xFFF6E29A)) }))
         }
     }
     
@@ -872,7 +872,7 @@ private fun WatchTogetherHighlightCard(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Outlined.Groups,
+                imageVector = Icons.Rounded.Groups,
                 contentDescription = null,
                 tint = Color(0xFFF6E29A)
             )
@@ -900,7 +900,7 @@ private fun WatchTogetherHighlightCard(
         }
 
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.62f),
             modifier = Modifier.size(14.dp)
@@ -1105,7 +1105,7 @@ private fun LoggedInProfileCard(
                     )
                 }
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.46f),
                     modifier = Modifier.size(15.dp)
@@ -1150,7 +1150,7 @@ private fun FreePlanUpgradeBanner(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Outlined.WorkspacePremium,
+                imageVector = Icons.Rounded.WorkspacePremium,
                 contentDescription = null,
                 tint = Color(0xFFF6E29A),
                 modifier = Modifier.size(22.dp)
@@ -1224,7 +1224,7 @@ private fun GuestProfileCard(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.PersonOutline,
+                    imageVector = Icons.Rounded.PersonOutline,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.72f),
                     modifier = Modifier.size(30.dp)
@@ -1329,7 +1329,7 @@ private fun MembershipUpgradeCard(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isPremium) Icons.Outlined.WorkspacePremium else Icons.Outlined.PlayArrow,
+                imageVector = if (isPremium) Icons.Rounded.WorkspacePremium else Icons.Rounded.PlayArrow,
                 contentDescription = null,
                 tint = if (isPremium) Color(0xFFF6E29A) else Color(0xFFD8DEE9),
                 modifier = Modifier.size(22.dp)
@@ -1417,7 +1417,7 @@ private fun AccountMenuList(
             )
 
             Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.55f),
                 modifier = Modifier.size(14.dp)
@@ -1441,7 +1441,7 @@ private fun LogoutButton(onLogout: () -> Unit) {
         )
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
+            imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
             contentDescription = null,
             tint = Color(0xFFFFA0A0),
             modifier = Modifier.size(18.dp)
@@ -1532,10 +1532,10 @@ private fun MembershipBadge(
 @Composable
 private fun ProfilePlanIcon(plan: DemoMembershipPlanUi) {
     val icon = when (plan.key) {
-        DemoMembershipPlanKey.FREE -> Icons.Outlined.PersonOutline
-        DemoMembershipPlanKey.BASIC -> Icons.Outlined.PlayArrow
-        DemoMembershipPlanKey.COUPLE -> Icons.Outlined.Groups
-        DemoMembershipPlanKey.PREMIUM -> Icons.Outlined.WorkspacePremium
+        DemoMembershipPlanKey.FREE -> Icons.Rounded.PersonOutline
+        DemoMembershipPlanKey.BASIC -> Icons.Rounded.PlayArrow
+        DemoMembershipPlanKey.COUPLE -> Icons.Rounded.Groups
+        DemoMembershipPlanKey.PREMIUM -> Icons.Rounded.WorkspacePremium
     }
     val tint = when (plan.key) {
         DemoMembershipPlanKey.FREE -> Color.White.copy(alpha = 0.72f)
@@ -1574,7 +1574,7 @@ internal fun MembershipBenefitRow(text: String) {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Outlined.CheckCircle,
+                imageVector = Icons.Rounded.CheckCircle,
                 contentDescription = null,
                 tint = Color(0xFF63E6D8),
                 modifier = Modifier.size(15.dp)
@@ -1645,7 +1645,7 @@ internal fun PlanManagementSheet(
                         .background(Color.White.copy(alpha = 0.06f))
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.Close,
+                        imageVector = Icons.Rounded.Close,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(19.dp)
@@ -1667,17 +1667,17 @@ internal fun PlanManagementSheet(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 PlanInfoRow(
-                    icon = Icons.Outlined.WorkspacePremium,
+                    icon = Icons.Rounded.WorkspacePremium,
                     label = "Gói hiện tại",
                     value = plan.badge
                 )
                 PlanInfoRow(
-                    icon = Icons.Outlined.Info,
+                    icon = Icons.Rounded.Info,
                     label = "Giá gói",
                     value = plan.price
                 )
                 PlanInfoRow(
-                    icon = Icons.Outlined.CheckCircle,
+                    icon = Icons.Rounded.CheckCircle,
                     label = "Ngày đăng ký",
                     value = if (plan.key == DemoMembershipPlanKey.FREE) {
                         "Không áp dụng"
@@ -1686,7 +1686,7 @@ internal fun PlanManagementSheet(
                     }
                 )
                 PlanInfoRow(
-                    icon = Icons.Outlined.WatchLater,
+                    icon = Icons.Rounded.WatchLater,
                     label = "Ngày hết hạn",
                     value = if (plan.key == DemoMembershipPlanKey.FREE) {
                         "Không áp dụng"
@@ -1695,7 +1695,7 @@ internal fun PlanManagementSheet(
                     }
                 )
                 PlanInfoRow(
-                    icon = Icons.Outlined.CheckCircle,
+                    icon = Icons.Rounded.CheckCircle,
                     label = "Trạng thái",
                     value = if (plan.key == DemoMembershipPlanKey.FREE) "Miễn phí" else "Đang hoạt động"
                 )
@@ -1844,7 +1844,7 @@ private fun AccountPanelBottomSheet(
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(
-                        imageVector = Icons.Outlined.Close,
+                        imageVector = Icons.Rounded.Close,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.76f)
                     )
@@ -2010,7 +2010,7 @@ private fun AccountMediaRow(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.55f),
             modifier = Modifier.size(14.dp)
@@ -2039,7 +2039,7 @@ private fun LibraryShortcutRow(
             Text(description, color = Color.White.copy(alpha = 0.68f), style = MaterialTheme.typography.bodySmall)
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
             contentDescription = null,
             tint = Color(0xFFF6E29A),
             modifier = Modifier.size(14.dp)
@@ -2135,7 +2135,7 @@ internal fun AuthBottomSheet(
 
                 IconButton(onClick = { onEvent(AccountAuthEvent.CloseDialog) }) {
                     Icon(
-                        imageVector = Icons.Outlined.Close,
+                        imageVector = Icons.Rounded.Close,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.76f)
                     )
@@ -2374,7 +2374,7 @@ internal fun AuthPasswordField(
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
             Icon(
-                imageVector = if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.RemoveRedEye,
+                imageVector = if (visible) Icons.Rounded.VisibilityOff else Icons.Rounded.RemoveRedEye,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.clickable(onClick = onToggleVisibility)

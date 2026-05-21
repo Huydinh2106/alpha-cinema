@@ -92,7 +92,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         val builder = NotificationCompat.Builder(this, com.example.alphacinema.notification.NotificationHelper.CHANNEL_PUSH)
 
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: Update to app logo
+            .setSmallIcon(R.drawable.ic_notification_alpha)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

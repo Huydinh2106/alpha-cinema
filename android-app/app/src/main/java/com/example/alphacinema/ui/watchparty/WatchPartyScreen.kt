@@ -42,16 +42,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Fullscreen
-import androidx.compose.material.icons.outlined.FullscreenExit
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.MicOff
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MicOff
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -106,8 +106,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.material.icons.outlined.BrightnessHigh
-import androidx.compose.material.icons.outlined.BrightnessLow
+import androidx.compose.material.icons.rounded.BrightnessHigh
+import androidx.compose.material.icons.rounded.BrightnessLow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.mutableFloatStateOf
@@ -411,7 +411,7 @@ fun WatchPartyScreen(
                         .width(44.dp)
                 ) {
                     Icon(
-                        if (brightness > 0.5f) Icons.Outlined.BrightnessHigh else Icons.Outlined.BrightnessLow,
+                        if (brightness > 0.5f) Icons.Rounded.BrightnessHigh else Icons.Rounded.BrightnessLow,
                         null, tint = Color.White, modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -443,7 +443,7 @@ fun WatchPartyScreen(
                     modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 8.dp).align(Alignment.TopEnd),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Outlined.Groups, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Groups, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(16.dp))
                     Text("${members.size}/5", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
@@ -453,7 +453,7 @@ fun WatchPartyScreen(
                 Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
                 IconButton(onClick = { toggleFullscreen() }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f))) {
-                    Icon(Icons.Outlined.FullscreenExit, "Thu nhỏ", tint = Color.White)
+                    Icon(Icons.Rounded.FullscreenExit, "Thu nhỏ", tint = Color.White)
                 }
             }
 
@@ -589,7 +589,7 @@ fun WatchPartyScreen(
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.4f))
                 ) {
-                    Icon(Icons.Outlined.Fullscreen, "Toàn màn hình", tint = Color.White)
+                    Icon(Icons.Rounded.Fullscreen, "Toàn màn hình", tint = Color.White)
                 }
             }
             // Back button
@@ -601,7 +601,7 @@ fun WatchPartyScreen(
                     .background(Color.Black.copy(alpha = 0.4f))
                     .align(Alignment.TopStart)
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Quay lại", tint = Color.White)
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Quay lại", tint = Color.White)
             }
         }
 
@@ -658,7 +658,7 @@ fun WatchPartyScreen(
                                             .padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        Icon(Icons.Rounded.ContentCopy, contentDescription = null, tint = Color(0xFFF6E29A))
                                         Spacer(modifier = Modifier.width(16.dp))
                                         Column {
                                             Text("Sao chép mã phòng", color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -683,7 +683,7 @@ fun WatchPartyScreen(
                                             .padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Outlined.Share, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        Icon(Icons.Rounded.Share, contentDescription = null, tint = Color(0xFFF6E29A))
                                         Spacer(modifier = Modifier.width(16.dp))
                                         Column {
                                             Text("Chia sẻ qua ứng dụng", color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -774,7 +774,7 @@ private fun RoomInfoBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    if (isMicMuted) Icons.Outlined.MicOff else Icons.Outlined.Mic,
+                    if (isMicMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
                     contentDescription = "Mic",
                     tint = if (isMicMuted) Color.Red else Color(0xFFF6E29A),
                     modifier = Modifier.size(22.dp)
@@ -793,7 +793,7 @@ private fun RoomInfoBar(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    Icons.Outlined.Share,
+                    Icons.Rounded.Share,
                     contentDescription = "Mời bạn bè",
                     tint = Color(0xFFF6E29A),
                     modifier = Modifier.size(18.dp)
@@ -825,7 +825,7 @@ private fun RoomInfoBar(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        Icons.Outlined.Movie,
+                        Icons.Rounded.Movie,
                         contentDescription = btnLabel,
                         tint = btnTint,
                         modifier = Modifier.size(18.dp)
@@ -1038,7 +1038,7 @@ private fun ChatSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
-                Icons.Outlined.Groups,
+                Icons.Rounded.Groups,
                 contentDescription = null,
                 tint = Color(0xFFF6E29A),
                 modifier = Modifier.size(18.dp)
@@ -1085,7 +1085,7 @@ private fun ChatSection(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Outlined.Send,
+                        Icons.AutoMirrored.Rounded.Send,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.12f),
                         modifier = Modifier.size(36.dp)
@@ -1182,7 +1182,7 @@ private fun ChatSection(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.AutoMirrored.Outlined.Send,
+                    Icons.AutoMirrored.Rounded.Send,
                     contentDescription = "Gửi",
                     tint = if (hasText) Color.Black else Color.White.copy(alpha = 0.2f),
                     modifier = Modifier.size(18.dp)

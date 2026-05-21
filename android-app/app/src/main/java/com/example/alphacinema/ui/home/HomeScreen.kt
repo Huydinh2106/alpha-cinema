@@ -19,20 +19,17 @@ package com.example.alphacinema.ui.home
     import androidx.compose.foundation.shape.CircleShape
     import androidx.compose.foundation.shape.RoundedCornerShape
     import androidx.compose.material.icons.Icons
-    import androidx.compose.material.icons.outlined.HeadsetMic
-    import androidx.compose.material.icons.outlined.Home
-    import androidx.compose.material.icons.outlined.NotificationsNone
-    import androidx.compose.material.icons.outlined.PersonOutline
-    import androidx.compose.material.icons.outlined.PlayArrow
-    import androidx.compose.material.icons.outlined.KeyboardArrowDown
-    import androidx.compose.material.icons.outlined.Search
-    import androidx.compose.material.icons.outlined.Settings
-    import androidx.compose.material.icons.outlined.Info
-    import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
-    import androidx.compose.material.icons.filled.Home
-    import androidx.compose.material.icons.filled.Search
-    import androidx.compose.material.icons.filled.HeadsetMic
-    import androidx.compose.material.icons.filled.Person
+    import androidx.compose.material.icons.rounded.HeadsetMic
+    import androidx.compose.material.icons.rounded.Home
+    import androidx.compose.material.icons.rounded.NotificationsNone
+    import androidx.compose.material.icons.rounded.Person
+    import androidx.compose.material.icons.rounded.PersonOutline
+    import androidx.compose.material.icons.rounded.PlayArrow
+    import androidx.compose.material.icons.rounded.KeyboardArrowDown
+    import androidx.compose.material.icons.rounded.Search
+    import androidx.compose.material.icons.rounded.Settings
+    import androidx.compose.material.icons.rounded.Info
+    import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
     import androidx.compose.material3.*
     import androidx.compose.animation.core.animateFloatAsState
     import androidx.compose.animation.core.tween
@@ -797,7 +794,7 @@ package com.example.alphacinema.ui.home
                 IconButton(onClick = onNotificationClick) {
                     Box {
                         Icon(
-                            imageVector = Icons.Outlined.NotificationsNone,
+                            imageVector = Icons.Rounded.NotificationsNone,
                             contentDescription = "Thông báo",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
@@ -829,7 +826,7 @@ package com.example.alphacinema.ui.home
 
                 IconButton(onClick = {}) {
                     Icon(
-                        imageVector = Icons.Outlined.Settings,
+                        imageVector = Icons.Rounded.Settings,
                         contentDescription = null,
                         tint = Color.White
                     )
@@ -921,7 +918,7 @@ package com.example.alphacinema.ui.home
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
-                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    imageVector = Icons.Rounded.KeyboardArrowDown,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
@@ -993,7 +990,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Outlined.PlayArrow,
+                        imageVector = Icons.Rounded.PlayArrow,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = if (isCenter) 0.6f else 0.1f),
                         modifier = Modifier.size(56.dp)
@@ -1061,7 +1058,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     )
                 ) {
                     Icon(
-                        Icons.Outlined.Info,
+                        Icons.Rounded.Info,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
@@ -1233,7 +1230,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Outlined.PlayArrow,
+                        imageVector = Icons.Rounded.PlayArrow,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.16f),
                         modifier = Modifier
@@ -1377,7 +1374,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Outlined.ArrowForwardIos,
+                        imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Rounded.ArrowForwardIos,
                         contentDescription = "Xem thêm",
                         tint = Color(0xFFF6E29A),
                         modifier = Modifier.size(14.dp)
@@ -1442,7 +1439,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Outlined.PlayArrow,
+                        imageVector = Icons.Rounded.PlayArrow,
                         contentDescription = null,
                         tint = Color.White.copy(alpha = 0.16f),
                         modifier = Modifier
@@ -1512,7 +1509,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                 onClick = { onNavigate(ScreenType.HOME) },
                 icon = {
                     Icon(
-                        imageVector = if (currentScreen == ScreenType.HOME) Icons.Filled.Home else Icons.Outlined.Home,
+                        imageVector = Icons.Rounded.Home,
                         contentDescription = "Trang chủ"
                     )
                 },
@@ -1531,7 +1528,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                 onClick = { onNavigate(ScreenType.SEARCH) },
                 icon = {
                     Icon(
-                        imageVector = if (currentScreen == ScreenType.SEARCH) Icons.Filled.Search else Icons.Outlined.Search,
+                        imageVector = Icons.Rounded.Search,
                         contentDescription = "Tìm kiếm"
                     )
                 },
@@ -1550,7 +1547,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                 onClick = { onNavigate(ScreenType.SUPPORT) },
                 icon = {
                     Icon(
-                        imageVector = if (currentScreen == ScreenType.SUPPORT) Icons.Filled.HeadsetMic else Icons.Outlined.HeadsetMic,
+                        imageVector = Icons.Rounded.HeadsetMic,
                         contentDescription = "Hỗ trợ"
                     )
                 },
@@ -1569,7 +1566,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                 onClick = { onNavigate(ScreenType.ACCOUNT) },
                 icon = {
                     Icon(
-                        imageVector = if (currentScreen == ScreenType.ACCOUNT) Icons.Filled.Person else Icons.Outlined.PersonOutline,
+                        imageVector = if (currentScreen == ScreenType.ACCOUNT) Icons.Rounded.Person else Icons.Rounded.PersonOutline,
                         contentDescription = "Tài khoản"
                     )
                 },
@@ -1668,7 +1665,7 @@ fun MoviePreviewDialog(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.PlayArrow,
+                                    imageVector = Icons.Rounded.PlayArrow,
                                     contentDescription = "Preview Play",
                                     tint = Color.White.copy(alpha = 0.4f),
                                     modifier = Modifier
@@ -1776,7 +1773,7 @@ fun MoviePreviewDialog(
                                 contentColor = Color.Black
                             )
                         ) {
-                            Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Chi tiết", fontWeight = FontWeight.Bold)
                         }
@@ -1932,7 +1929,7 @@ private fun TrailerPreviewWebView(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.PlayArrow,
+                            imageVector = Icons.Rounded.PlayArrow,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.6f),
                             modifier = Modifier
