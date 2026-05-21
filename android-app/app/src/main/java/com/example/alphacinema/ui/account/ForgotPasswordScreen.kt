@@ -193,22 +193,11 @@ fun ForgotPasswordScreen(
                         modifier = Modifier.focusRequester(focusRequester).fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         decorationBox = {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-                            ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
                                 repeat(6) { i ->
                                     val ch = otpValue.text.getOrNull(i)?.toString() ?: ""
                                     val isFocused = otpValue.text.length == i
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(CardBg)
-                                            .border(1.5.dp, if (otpError != null) ErrorRed else if (isFocused) GoldAccent else CardBorder, RoundedCornerShape(12.dp)), 
-                                        contentAlignment = Alignment.Center
-                                    ) {
+                                    Box(modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)).background(CardBg).border(1.5.dp, if (otpError != null) ErrorRed else if (isFocused) GoldAccent else CardBorder, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
                                         Text(ch, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }

@@ -92,16 +92,6 @@ class FirestoreRepository {
             if (!existingData.containsKey("subscriptionStatus")) {
                 userData["subscriptionStatus"] = "inactive"
             }
-            if (!existingData.containsKey("notified3Days")) {
-                userData["notified3Days"] = false
-            }
-            if (!existingData.containsKey("notified1Day")) {
-                userData["notified1Day"] = false
-            }
-            if (!existingData.containsKey("notifiedExpired")) {
-                userData["notifiedExpired"] = false
-            }
-
 
             userRef.set(userData, SetOptions.merge()).await()
         } catch (e: Exception) {
@@ -138,16 +128,9 @@ class FirestoreRepository {
             if (isPaidPlan && expiresAt != null) {
                 updates["subscriptionStartedAt"] = startedAt
                 updates["subscriptionExpiresAt"] = expiresAt
-                updates["notified3Days"] = false
-                updates["notified1Day"] = false
-                updates["notifiedExpired"] = false
             } else {
                 updates["subscriptionStartedAt"] = FieldValue.delete()
                 updates["subscriptionExpiresAt"] = FieldValue.delete()
-                updates["notified3Days"] = false
-                updates["notified1Day"] = false
-                updates["notifiedExpired"] = false
-
             }
             if (!paymentMethod.isNullOrBlank()) {
                 updates["subscriptionPaymentMethod"] = paymentMethod

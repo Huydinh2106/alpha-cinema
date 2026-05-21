@@ -4,17 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import java.net.HttpURLConnection
-import java.net.URL
-
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -40,23 +34,41 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         Log.d(TAG, "Message received from: ${message.from}")
 
         // FCM gửi tin nhắn có thể chứa 'notification' payload, 'data' payload, hoặc CẢ HAI.
-
+        // Để tránh hiển thị 2 lần thông báo (1 cái trống, 1 cái có chữ), ta gom chung logic lại:
         val title = message.notification?.title ?: message.data["title"] ?: "Alpha Cinema"
         val body = message.notification?.body ?: message.data["body"] ?: ""
         val type = message.data["type"] ?: "system"
 
         Log.d(TAG, "Notification title: $title, body: $body, type: $type")
 
-        // QUAN TRỌNG: KHÔNG lưu thông báo vào Firestore ở đây.
-        // Cloud Functions (onNewMovieAdded, checkExpiringSubscriptions, ...) đã lưu document
-        // vào users/{uid}/notifications với đầy đủ trường (bao gồm imageUrl/poster).
-        // Nếu lưu lại ở client sẽ tạo document trùng lặp KHÔNG có imageUrl
-        // → trông giống 1 "thông báo lỗi" thiếu poster bên cạnh thông báo gốc.
-
-        // Hiển thị thông báo lên thanh trạng thái (chỉ áp dụng khi app foreground).
+        // Lưu vào DB (nếu app đang mở)
+        saveNotificationToFirestore(title, body, type, message.data)
+        
+        // Hiển thị thông báo lên thanh trạng thái
         showNotification(title, body, type, message.data)
     }
 
+    private fun saveNotificationToFirestore(title: String, body: String, type: String, extraData: Map<String, String>) {
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val notificationData = hashMapOf<String, Any>(
+                "title" to title,
+                "body" to body,
+                "type" to type,
+                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "isRead" to false
+            )
+            // Thêm các trường dữ liệu tùy chọn (như movieId, plan)
+            extraData.forEach { (key, value) ->
+                if (key != "title" && key != "body" && key != "type") {
+                    notificationData[key] = value
+                }
+            }
+            db.collection("users").document(currentUser.uid)
+                .collection("notifications").add(notificationData)
+        }
+    }
 
     private fun showNotification(title: String, body: String, type: String, data: Map<String, String>) {
         Log.d(TAG, "Attempting to show notification: $title")
@@ -86,53 +98,16 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             this, 0, intent, android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Lấy URL ảnh poster từ data payload (server gửi kèm khi có phim mới)
-        val imageUrl = data["imageUrl"]?.takeIf { it.isNotBlank() }
-        val bitmap: Bitmap? = imageUrl?.let { loadBitmapFromUrl(it) }
-
-        val builder = NotificationCompat.Builder(this, com.example.alphacinema.notification.NotificationHelper.CHANNEL_PUSH)
-
+        val notification = NotificationCompat.Builder(this, com.example.alphacinema.notification.NotificationHelper.CHANNEL_PUSH)
             .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: Update to app logo
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .build()
 
-        if (bitmap != null) {
-            builder
-                .setLargeIcon(bitmap)
-                .setStyle(
-                    NotificationCompat.BigPictureStyle()
-                        .bigPicture(bitmap)
-                        .bigLargeIcon(null as Bitmap?) // Ẩn large icon khi mở rộng để tránh trùng
-                )
-        }
-
-        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
-    }
-
-    /**
-     * Tải ảnh đồng bộ trong FCM service.
-     * FCM service được phép thực thi tối đa ~10s nên việc tải đồng bộ là an toàn.
-     */
-    private fun loadBitmapFromUrl(url: String): Bitmap? {
-        return try {
-            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                doInput = true
-                connectTimeout = 5_000
-                readTimeout = 5_000
-                instanceFollowRedirects = true
-                connect()
-            }
-            connection.inputStream.use { input ->
-                BitmapFactory.decodeStream(input)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to load notification image: $url", e)
-            null
-        }
-
+        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
     private fun sendTokenToServer(token: String) {
