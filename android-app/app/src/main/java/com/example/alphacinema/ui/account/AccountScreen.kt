@@ -63,6 +63,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -177,13 +178,28 @@ fun AccountScreen(
 
     val firestoreRepository = remember { com.example.alphacinema.data.repository.FirestoreRepository() }
     var userProfile by remember { mutableStateOf<com.example.alphacinema.data.model.UserProfile?>(null) }
+    var loadedProfileUid by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(currentUser) {
-        currentUser?.let {
-            firestoreRepository.saveUser(it)
-            userProfile = firestoreRepository.getUserProfile(it.uid)
-        } ?: run {
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentUser = firebaseAuth.currentUser
+        }
+        auth.addAuthStateListener(listener)
+        onDispose {
+            auth.removeAuthStateListener(listener)
+        }
+    }
+
+    LaunchedEffect(currentUser?.uid) {
+        val user = currentUser
+        if (user != null) {
+            loadedProfileUid = null
+            firestoreRepository.saveUser(user)
+            userProfile = firestoreRepository.getUserProfile(user.uid)
+            loadedProfileUid = user.uid
+        } else {
             userProfile = null
+            loadedProfileUid = null
         }
     }
 
@@ -449,6 +465,12 @@ fun AccountScreen(
                     demoUser = demoUser,
                     onClick = onOpenProfileSettings
                 )
+                if (
+                    demoMembershipPlan.key == DemoMembershipPlanKey.FREE &&
+                    loadedProfileUid == currentUser?.uid
+                ) {
+                    FreePlanUpgradeBanner(onClick = onOpenPayment)
+                }
             } else {
                 GuestProfileCard(
                     onLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
@@ -1089,6 +1111,87 @@ private fun LoggedInProfileCard(
                     modifier = Modifier.size(15.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun FreePlanUpgradeBanner(
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF1D1A12),
+                        Color(0xFF141414),
+                        Color(0xFF101010)
+                    )
+                )
+            )
+            .border(
+                1.dp,
+                Color(0xFFF6E29A).copy(alpha = 0.24f),
+                RoundedCornerShape(18.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFF6E29A).copy(alpha = 0.13f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.WorkspacePremium,
+                contentDescription = null,
+                tint = Color(0xFFF6E29A),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Bạn đang dùng gói Free",
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Đăng ký gói trả phí để mở khóa trải nghiệm cao cấp.",
+                color = Color.White.copy(alpha = 0.64f),
+                style = MaterialTheme.typography.bodySmall,
+                lineHeight = 18.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+
+        Button(
+            onClick = onClick,
+            modifier = Modifier.height(40.dp),
+            shape = RoundedCornerShape(13.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF6E29A),
+                contentColor = Color.Black
+            )
+        ) {
+            Text(
+                text = "Đăng ký",
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1
+            )
         }
     }
 }

@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
@@ -32,6 +33,8 @@ class FirestoreRepository {
         return try {
             val snapshot = db.collection("users").document(uid).get().await()
             snapshot.toObject(com.example.alphacinema.data.model.UserProfile::class.java)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("FirestoreRepository", "getUserProfile failed", e)
             null
@@ -104,6 +107,8 @@ class FirestoreRepository {
 
 
             userRef.set(userData, SetOptions.merge()).await()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("FirestoreRepository", "saveUser failed", e)
         }
