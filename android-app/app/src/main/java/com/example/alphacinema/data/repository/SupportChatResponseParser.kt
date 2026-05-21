@@ -31,11 +31,18 @@ internal data class ParsedSupportChatPayload(
 )
 
 internal enum class ParsedSupportChatIntent {
-    MOVIE_RECOMMENDATION,
+    POLICY,
+    MOVIE,
+    RECOMMENDATION,
+    MIXED,
     UNKNOWN
 }
 
 internal object SupportChatResponseParser {
+    fun cleanDisplayText(raw: String): String {
+        return cleanReplyText(raw)
+    }
+
     fun parse(raw: String): ParsedSupportChatPayload {
         val trimmed = raw.trim()
         if (trimmed.isBlank()) {
@@ -114,7 +121,11 @@ internal object SupportChatResponseParser {
         val slug = stringValue(jsonObject, SLUG_KEYS)
         val movieId = stringValue(jsonObject, MOVIE_ID_KEYS)
         val posterUrl = normalizePosterUrl(stringValue(jsonObject, POSTER_KEYS))
-        val subtitle = stringValue(jsonObject, SUBTITLE_KEYS).orEmpty()
+        val subtitle = stringValue(jsonObject, SUBTITLE_KEYS).orEmpty().ifBlank {
+            stringList(jsonObject, REASON_KEYS + CATEGORY_KEYS)
+                .take(2)
+                .joinToString(" • ")
+        }
         val year = stringValue(jsonObject, YEAR_KEYS).orEmpty()
         val deeplink = stringValue(jsonObject, DEEPLINK_KEYS)
         val episodeId = stringValue(jsonObject, EPISODE_KEYS)
@@ -190,12 +201,21 @@ internal object SupportChatResponseParser {
 
         val intentValue = stringValue(element.asJsonObject, INTENT_KEYS).normalizeForMatching()
         return when {
+            intentValue == "policy" || intentValue.contains("app_policy") -> {
+                ParsedSupportChatIntent.POLICY
+            }
+            intentValue == "movie" -> {
+                ParsedSupportChatIntent.MOVIE
+            }
+            intentValue == "mixed" -> {
+                ParsedSupportChatIntent.MIXED
+            }
             intentValue.contains("recommend")
                 || intentValue.contains("suggest")
                 || intentValue.contains("movie_recommendation")
                 || intentValue.contains("goi y")
                 || intentValue.contains("de xuat") -> {
-                ParsedSupportChatIntent.MOVIE_RECOMMENDATION
+                ParsedSupportChatIntent.RECOMMENDATION
             }
             else -> ParsedSupportChatIntent.UNKNOWN
         }
@@ -246,9 +266,22 @@ internal object SupportChatResponseParser {
             .replace("\\n", "\n")
             .replace("\\t", "\t")
             .replace("\\\"", "\"")
+            .replace(Regex("""!\[[^\]]*]\([^)]*\)"""), "")
+            .replace(Regex("""\[(?:Image|Ảnh)\s*#?\d+[^\]]*]""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\[([^\]]+)]\([^)]*\)"""), "$1")
             .replace(Regex("^(answer|response|reply|message)\\s*:\\s*", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""(?<=[.!?])\s+[-*–—•]\s+(?=(?:\*\*)?\p{L})"""), "\n\n")
+            .replace(Regex("""(?<=[.!?])\s+(?=\d+[.)]\s+)"""), "\n\n")
+            .replace(Regex("""(?m)^\s*[-*–—•]\s+"""), "")
+            .replace("**", "")
+            .replace("__", "")
+            .replace("`", "")
             .lines()
-            .joinToString("\n") { it.trimEnd() }
+            .joinToString("\n") { it.trim() }
+            .replace(Regex("""\s+[–—]\s+"""), " - ")
+            .replace(Regex("""[ \t]{2,}"""), " ")
+            .replace(Regex("""(?m)^\s*[.:;]\s*"""), "")
+            .replace(Regex("""(?m)^\s*[-*–—•]\s+"""), "")
             .replace(Regex("\n{3,}"), "\n\n")
             .trim()
     }
@@ -397,7 +430,9 @@ internal object SupportChatResponseParser {
 
     private val IDENTIFIER_KEYS = listOf("id", "_id", "movieId", "movie_id")
     private val TITLE_KEYS = listOf("title", "name", "movieTitle", "movie_name")
-    private val SUBTITLE_KEYS = listOf("subtitle", "originName", "origin_name")
+    private val SUBTITLE_KEYS = listOf("subtitle", "originName", "origin_name", "reason")
+    private val REASON_KEYS = listOf("reasons", "why_recommended", "whyRecommended")
+    private val CATEGORY_KEYS = listOf("categories", "category", "genres", "genre")
     private val POSTER_KEYS = listOf("poster", "posterUrl", "poster_url", "thumbUrl", "thumb_url", "image")
     private val YEAR_KEYS = listOf("year", "releaseYear", "release_year")
     private val SLUG_KEYS = listOf("slug", "movieSlug", "movie_slug")

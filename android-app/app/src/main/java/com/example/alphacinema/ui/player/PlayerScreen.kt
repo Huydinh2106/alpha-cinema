@@ -51,6 +51,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -76,6 +77,7 @@ fun PlayerScreen(
     onBack: () -> Unit,
     videoUrl: String = "",
     episodeVideoUrls: Map<String, String> = emptyMap(),
+    startPositionMs: Long = 0L,
     onSelectEpisode: (EpisodeUi) -> Unit = {},
     viewModel: PlayerViewModel = viewModel()
 ) {
@@ -84,6 +86,7 @@ fun PlayerScreen(
 
     val currentEpisode by rememberUpdatedState(episode)
     val currentMovie by rememberUpdatedState(movie)
+    val currentVideoUrl by rememberUpdatedState(videoUrl)
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
@@ -136,7 +139,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(movie.episodes, episodeVideoUrls) {
+    LaunchedEffect(movie.episodes, episodeVideoUrls, episode?.id, startPositionMs) {
         val mediaItems = viewModel.buildEpisodeMediaItems(
             movie = movie,
             episodeVideoUrls = episodeVideoUrls
@@ -150,7 +153,7 @@ fun PlayerScreen(
             episode = episode
         )
 
-        exoPlayer.seekTo(targetIndex, 0L)
+        exoPlayer.seekTo(targetIndex, startPositionMs.coerceAtLeast(0L))
         exoPlayer.playWhenReady = true
     }
 
@@ -165,6 +168,28 @@ fun PlayerScreen(
             targetIndex != exoPlayer.currentMediaItemIndex
         ) {
             exoPlayer.seekTo(targetIndex, 0L)
+        }
+    }
+
+    LaunchedEffect(exoPlayer, movie.id, episode?.id, videoUrl) {
+        if (videoUrl.isBlank()) return@LaunchedEffect
+
+        delay(1_000)
+        viewModel.saveWatchProgress(
+            movie = currentMovie,
+            episode = currentEpisode,
+            progress = exoPlayer.currentPosition,
+            duration = normalizedDurationMs(exoPlayer.duration)
+        )
+
+        while (true) {
+            delay(10_000)
+            viewModel.saveWatchProgress(
+                movie = currentMovie,
+                episode = currentEpisode,
+                progress = exoPlayer.currentPosition,
+                duration = normalizedDurationMs(exoPlayer.duration)
+            )
         }
     }
 
@@ -184,6 +209,15 @@ fun PlayerScreen(
                 ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
             showSystemBars(activity)
+
+            if (currentVideoUrl.isNotBlank()) {
+                viewModel.saveWatchProgress(
+                    movie = currentMovie,
+                    episode = currentEpisode,
+                    progress = exoPlayer.currentPosition,
+                    duration = normalizedDurationMs(exoPlayer.duration)
+                )
+            }
 
             exoPlayer.release()
         }
@@ -356,4 +390,8 @@ private fun showSystemBars(activity: Activity?) {
 
     WindowInsetsControllerCompat(window, window.decorView)
         .show(WindowInsetsCompat.Type.systemBars())
+}
+
+private fun normalizedDurationMs(duration: Long): Long {
+    return if (duration > 0L && duration != C.TIME_UNSET) duration else 0L
 }

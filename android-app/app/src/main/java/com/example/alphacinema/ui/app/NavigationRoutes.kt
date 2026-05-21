@@ -9,7 +9,11 @@ data object MainRoute
 data class MovieDetailNavRoute(val slug: String)
 
 @Serializable
-data class PlayerNavRoute(val slug: String, val episodeId: String? = null)
+data class PlayerNavRoute(
+    val slug: String,
+    val episodeId: String? = null,
+    val startPositionMs: Long = 0L
+)
 
 @Serializable
 data class MovieListNavRoute(val title: String, val filterKindName: String, val slug: String)
@@ -31,3 +35,6 @@ data object WatchPartySearchNavRoute
 
 @Serializable
 data object ProfileSettingsNavRoute
+
+@Serializable
+data object WatchHistoryNavRoute
