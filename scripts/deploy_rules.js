@@ -1,9 +1,6 @@
-const admin = require('firebase-admin');
+const { admin } = require('./firebaseAdmin');
 const path = require('path');
 const fs = require('fs');
-const serviceAccount = require(path.resolve(__dirname, '../service-account.json'));
-
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 
 async function deploy() {
     try {

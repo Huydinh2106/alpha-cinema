@@ -1,9 +1,4 @@
-const admin = require('firebase-admin');
-const path = require('path');
-const serviceAccount = require(path.resolve(__dirname, '../service-account.json'));
-
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-const db = admin.firestore();
+const { db } = require('./firebaseAdmin');
 
 // Danh sách các phim đã được "AI" duyệt và phân loại thủ công cho chuẩn
 const doraemonSlugs = [

@@ -1,10 +1,5 @@
-const admin = require('firebase-admin');
-const path = require('path');
+const { admin, db } = require('./firebaseAdmin');
 const https = require('https');
-const serviceAccount = require(path.resolve(__dirname, '../service-account.json'));
-
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-const db = admin.firestore();
 
 function fetchJson(url) {
     return new Promise((resolve, reject) => {
