@@ -407,7 +407,7 @@ fun MainContent(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
         NavHost(
             navController = navController,
@@ -487,6 +487,13 @@ fun MainContent(
                             onNavigateToMovieType = { type, title ->
                                 navController.navigate(
                                     MovieTypeNavRoute(type = type, title = title)
+                                )
+                            },
+                            onContinueWatchingMovie = { slug, episodeId, startPositionMs ->
+                                openPlayer(
+                                    slug = slug,
+                                    episodeId = episodeId,
+                                    startPositionMs = startPositionMs
                                 )
                             }
                         )
@@ -988,7 +995,7 @@ private fun RouteLoadingState(message: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1013,7 +1020,7 @@ private fun RouteErrorState(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1040,7 +1047,7 @@ private fun RouteErrorState(
                         .height(48.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFF6E29A),
-                        contentColor = Color(0xFF070B16)
+                        contentColor = Color.Black
                     )
                 ) {
                     Text(

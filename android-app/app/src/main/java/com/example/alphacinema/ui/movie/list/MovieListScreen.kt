@@ -31,7 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.PlayArrow
-import com.example.alphacinema.ui.components.LottieLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -92,20 +91,8 @@ fun MovieListScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
-        // Top gradient decoration
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF1A2240).copy(alpha = 0.5f), Color(0xFF070B16))
-                    )
-                )
-        )
-
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(3),
@@ -181,7 +168,18 @@ fun MovieListScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        LottieLoadingIndicator(size = 120.dp)
+                        Icon(
+                            imageVector = Icons.Outlined.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.18f),
+                            modifier = Modifier.size(42.dp)
+                        )
+                        Text(
+                            text = "Chưa có phim trong danh mục này.",
+                            color = Color.White.copy(alpha = 0.62f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
@@ -209,8 +207,8 @@ fun MovieListCard(movie: SearchMovieUi, onClick: () -> Unit = {}) {
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF2A3354),
-                            Color(0xFF131A2F)
+                            Color(0xFF2F2F2F),
+                            Color(0xFF1A1A1A)
                         )
                     )
                 )
@@ -257,7 +255,7 @@ fun MovieListCard(movie: SearchMovieUi, onClick: () -> Unit = {}) {
                         .align(Alignment.BottomStart)
                         .padding(8.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF5C6273).copy(alpha = 0.95f))
+                        .background(Color(0xFF666666).copy(alpha = 0.95f))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(

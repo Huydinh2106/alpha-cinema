@@ -174,6 +174,7 @@ class FirestoreRepository {
         userId: String,
         movieSlug: String,
         movieName: String,
+        originName: String,
         posterUrl: String,
         episodeId: String,
         episodeName: String,
@@ -187,6 +188,7 @@ class FirestoreRepository {
         val historyItem = mapOf(
             "movieId" to movieSlug,
             "movieName" to movieName,
+            "originName" to originName,
             "posterUrl" to posterUrl,
             "episodeId" to episodeId,
             "episodeName" to episodeName,

@@ -1,51 +1,52 @@
 package com.example.alphacinema.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = AlphaGold,
+    onPrimary = NetflixBlack,
+    secondary = AlphaMutedText,
+    onSecondary = NetflixBlack,
+    tertiary = NetflixSurfaceHighest,
+    onTertiary = Color.White,
+    background = NetflixBlack,
+    onBackground = Color.White,
+    surface = NetflixSurface,
+    onSurface = Color.White,
+    surfaceVariant = NetflixSurfaceHigh,
+    onSurfaceVariant = AlphaMutedText,
+    outline = NetflixBorder
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
+    primary = AlphaGold,
+    onPrimary = NetflixLightOnSurface,
+    secondary = NetflixSurfaceHighest,
     onSecondary = Color.White,
+    tertiary = NetflixBorder,
     onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    background = NetflixLightBackground,
+    onBackground = NetflixLightOnSurface,
+    surface = NetflixLightSurface,
+    onSurface = NetflixLightOnSurface,
+    surfaceVariant = Color(0xFFE6E6E6),
+    onSurfaceVariant = Color(0xFF4D4D4D),
+    outline = Color(0xFFB8B8B8)
 )
 
 @Composable
 fun AlphaCinemaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
+        dynamicColor -> if (darkTheme) DarkColorScheme else LightColorScheme
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }

@@ -117,31 +117,8 @@ fun SupportScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF10182B),
-                        Color(0xFF0A1120),
-                        Color(0xFF060913)
-                    )
-                )
-            )
+            .background(Color.Black)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(240.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0x44F6E29A),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -464,7 +441,7 @@ private fun UserAvatar(modifier: Modifier = Modifier) {
                 Brush.linearGradient(
                     colors = listOf(
                         Color(0xFFF6E29A),
-                        Color(0xFF9EE8FF)
+                        Color(0xFFD8DEE9)
                     )
                 )
             ),
@@ -472,7 +449,7 @@ private fun UserAvatar(modifier: Modifier = Modifier) {
     ) {
         Text(
             text = "K",
-            color = Color(0xFF070B16),
+            color = Color.Black,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.ExtraBold
         )
@@ -533,8 +510,8 @@ private fun ChatBubble(
     val linkItems = message.metadata?.linkItems.orEmpty()
     val bubbleColor = when (message.sender) {
         SupportMessageSender.USER -> Color(0xFFF6E29A)
-        SupportMessageSender.BOT -> Color(0xFF151F35)
-        SupportMessageSender.LOADING -> Color(0xFF111B2E)
+        SupportMessageSender.BOT -> Color(0xFF1A1A1A)
+        SupportMessageSender.LOADING -> Color(0xFF171717)
     }
     val displayText = remember(message.text, fromUser) {
         if (fromUser) message.text else SupportChatResponseParser.cleanDisplayText(message.text)

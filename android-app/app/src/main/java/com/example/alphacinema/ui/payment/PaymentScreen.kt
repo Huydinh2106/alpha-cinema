@@ -92,9 +92,9 @@ import java.text.NumberFormat
 import java.util.EnumMap
 import java.util.Locale
 
-private val ScreenBackground = Color(0xFF070B16)
-private val SurfaceDark = Color(0xFF10192E)
-private val SurfaceMuted = Color(0xFF151E34)
+private val ScreenBackground = Color.Black
+private val SurfaceDark = Color(0xFF141414)
+private val SurfaceMuted = Color(0xFF1F1F1F)
 private val AccentGold = Color(0xFFF6E29A)
 private val AccentTeal = Color(0xFF63E6D8)
 private val ErrorRed = Color(0xFFFF7A7A)
@@ -850,15 +850,7 @@ private fun PaymentBackground() {
         modifier = Modifier
             .fillMaxWidth()
             .height(300.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF202846),
-                        Color(0xFF111A2D),
-                        ScreenBackground
-                    )
-                )
-            )
+            .background(ScreenBackground)
     )
 }
 
@@ -1001,14 +993,14 @@ private fun PricingCard(
     val backgroundBrush = if (isPremium) {
         Brush.linearGradient(
             colors = listOf(
-                Color(0xFF171F35),
-                Color(0xFF221D34),
-                Color(0xFF111A2D)
+                Color(0xFF1F1F1F),
+                Color(0xFF242424),
+                Color(0xFF171717)
             )
         )
     } else {
         Brush.linearGradient(
-            colors = listOf(SurfaceDark, Color(0xFF0E1628))
+            colors = listOf(SurfaceDark, Color(0xFF101010))
         )
     }
     val borderBrush = when {
@@ -1428,7 +1420,7 @@ private fun ResultModalShell(content: @Composable ColumnScope.() -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF10192E))
+                .background(Color(0xFF141414))
                 .border(1.dp, Color.White.copy(alpha = 0.13f), RoundedCornerShape(28.dp))
                 .padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1460,7 +1452,7 @@ private fun PremiumIcon() {
 private fun BadgePill(text: String) {
     Text(
         text = text,
-        color = Color(0xFF070B16),
+        color = Color.Black,
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.ExtraBold,
         modifier = Modifier

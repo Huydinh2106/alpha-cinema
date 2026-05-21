@@ -8,5 +8,5 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <!-- Màu nền tối khi app khởi động (trước khi Compose render) -->
-    <color name="splash_bg">#FF070B16</color>
+    <color name="splash_bg">#FF000000</color>
 </resources>

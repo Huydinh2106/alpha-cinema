@@ -77,9 +77,9 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 // ── Color Palette ────────────────────────────────────────────────────────────
-private val DarkBg = Color(0xFF070B16)
-private val CardBg = Color(0xFF10192E)
-private val CardBorder = Color(0xFF1E2A48)
+private val DarkBg = Color.Black
+private val CardBg = Color(0xFF141414)
+private val CardBorder = Color(0xFF333333)
 private val GoldAccent = Color(0xFFF6E29A)
 private val TextPrimary = Color.White
 private val TextSecondary = Color.White.copy(alpha = 0.68f)
@@ -248,22 +248,6 @@ fun NotificationScreen(
                 deleteTargetId = null
             }
     ) {
-        // Gradient overlay top
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(250.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF1D2540),
-                            Color(0xFF101726),
-                            DarkBg
-                        )
-                    )
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -379,7 +363,7 @@ fun NotificationScreen(
         ) { data ->
             Snackbar(
                 snackbarData = data,
-                containerColor = Color(0xFF1E2A48),
+                containerColor = Color(0xFF333333),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(12.dp)
             )

@@ -56,6 +56,7 @@ class PlayerViewModel : ViewModel() {
                     userId = userId,
                     movieSlug = movie.id,
                     movieName = movie.title,
+                    originName = movie.subtitle,
                     posterUrl = movie.posterUrl,
                     episodeId = episode?.id.orEmpty(),
                     episodeName = episode?.name.orEmpty().ifBlank { movie.currentEpisode },

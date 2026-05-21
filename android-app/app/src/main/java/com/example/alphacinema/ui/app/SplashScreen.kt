@@ -93,7 +93,7 @@ fun SplashScreen(onFinished: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF070B16))
+                .background(Color.Black)
         )
 
         // Ảnh nền fade in mượt mà từ nền tối
