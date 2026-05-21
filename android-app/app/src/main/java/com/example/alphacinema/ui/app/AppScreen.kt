@@ -359,6 +359,23 @@ fun MainContent(
         }
     }
 
+    fun returnToAccountScreen() {
+        currentMainScreen = ScreenType.ACCOUNT
+        val isAlreadyOnMain = navController.currentBackStackEntry
+            ?.destination
+            ?.hasRoute<MainRoute>() == true
+        val poppedToMain = if (isAlreadyOnMain) {
+            true
+        } else {
+            navController.popBackStack(navController.graph.startDestinationId, inclusive = false)
+        }
+        if (!poppedToMain) {
+            navController.navigate(MainRoute) {
+                launchSingleTop = true
+            }
+        }
+    }
+
     fun handleSupportMovieAction(action: SupportChatAction) {
         val route = action.resolveRoute()
         val slug = route?.slug?.takeIf { it.isNotBlank() }
@@ -768,7 +785,7 @@ fun MainContent(
                         demoCurrentPlan = null
                         demoMembershipStartedDate = null
                         demoMembershipExpiredDate = null
-                        navController.popBackStack()
+                        returnToAccountScreen()
                     }
                 )
             }

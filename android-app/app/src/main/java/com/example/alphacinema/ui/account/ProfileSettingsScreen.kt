@@ -66,13 +66,24 @@ fun ProfileSettingsScreen(
     val profileCache = remember { com.example.alphacinema.data.local.UserProfileCache(context) }
     var userProfile by remember { mutableStateOf<com.example.alphacinema.data.model.UserProfile?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var isLoggingOut by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(ProfilePage.MAIN) }
 
     // Use cached values first for instant display, then refresh from server
     var cachedName by remember { mutableStateOf(profileCache.displayName) }
     var cachedAvatar by remember { mutableStateOf(profileCache.avatarUrl) }
 
-    LaunchedEffect(currentUser) {
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            currentUser = firebaseAuth.currentUser
+        }
+        auth.addAuthStateListener(listener)
+        onDispose {
+            auth.removeAuthStateListener(listener)
+        }
+    }
+
+    LaunchedEffect(currentUser?.uid) {
         currentUser?.let {
             firestoreRepo.saveUser(it)
             val profile = firestoreRepo.getUserProfile(it.uid)
@@ -83,6 +94,8 @@ fun ProfileSettingsScreen(
             profileCache.save(it.uid, freshName, freshAvatar)
             cachedName = freshName
             cachedAvatar = freshAvatar
+        } ?: run {
+            userProfile = null
         }
     }
 
@@ -134,9 +147,16 @@ fun ProfileSettingsScreen(
                         }
                     },
                     onLogout = {
-                        profileCache.clear()
-                        auth.signOut()
-                        onLogout()
+                        if (!isLoggingOut) {
+                            isLoggingOut = true
+                            profileCache.clear()
+                            currentUser = null
+                            userProfile = null
+                            isLoading = false
+                            currentPage = ProfilePage.MAIN
+                            onLogout()
+                            auth.signOut()
+                        }
                     }
                 )
 
