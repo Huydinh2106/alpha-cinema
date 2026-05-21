@@ -4,9 +4,8 @@
 .DS_Store
 Thumbs.db
 desktop.ini
-service-account.json
-service-account*.json
-*-firebase-adminsdk-*.json
+alpha-cinema-39dfb-firebase-adminsdk-fbsvc-a5d409e8dd.json
+
 # =========================
 # IDE / Editor
 # =========================
