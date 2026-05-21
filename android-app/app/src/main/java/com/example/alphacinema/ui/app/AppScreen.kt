@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,11 +51,13 @@ import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.ui.account.AccountScreen
 import com.example.alphacinema.ui.account.ProfileSettingsScreen
+import com.example.alphacinema.ui.account.WatchHistoryScreen
 import com.example.alphacinema.ui.admin.AdminScreen
 import com.example.alphacinema.ui.admin.AdminViewModel
 import com.example.alphacinema.ui.home.GlassBottomBar
 import com.example.alphacinema.ui.home.HomeScreen
 import com.example.alphacinema.ui.home.HomeViewModel
+import com.example.alphacinema.ui.home.MovieTypeScreen
 import com.example.alphacinema.ui.home.MovieUi
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailScreen
@@ -318,7 +322,11 @@ fun MainContent(
         navController.navigate(MovieDetailNavRoute(slug = slug))
     }
 
-    fun openPlayer(slug: String, episodeId: String? = null) {
+    fun openPlayer(
+        slug: String,
+        episodeId: String? = null,
+        startPositionMs: Long = 0L
+    ) {
         if (slug.isBlank()) {
             showToast("Phim này hiện chưa thể mở để xem.")
             return
@@ -326,12 +334,28 @@ fun MainContent(
         if (movieDetail?.id != slug) {
             movieDetailViewModel.loadMovieDetail(slug)
         }
-        navController.navigate(PlayerNavRoute(slug = slug, episodeId = episodeId))
+        navController.navigate(
+            PlayerNavRoute(
+                slug = slug,
+                episodeId = episodeId,
+                startPositionMs = startPositionMs.coerceAtLeast(0L)
+            )
+        )
     }
 
     fun openPlayerFromHome(movieUi: MovieUi) {
         if (movieUi.slug.isNotBlank()) {
-            openMovieDetail(movieUi.slug)
+            openPlayer(movieUi.slug)
+        }
+    }
+
+    fun returnToMainScreen() {
+        currentMainScreen = ScreenType.HOME
+        navController.navigate(MainRoute) {
+            popUpTo(navController.graph.startDestinationId) {
+                inclusive = false
+            }
+            launchSingleTop = true
         }
     }
 
@@ -383,7 +407,7 @@ fun MainContent(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
         NavHost(
             navController = navController,
@@ -459,6 +483,18 @@ fun MainContent(
                                         slug = slug
                                     )
                                 )
+                            },
+                            onNavigateToMovieType = { type, title ->
+                                navController.navigate(
+                                    MovieTypeNavRoute(type = type, title = title)
+                                )
+                            },
+                            onContinueWatchingMovie = { slug, episodeId, startPositionMs ->
+                                openPlayer(
+                                    slug = slug,
+                                    episodeId = episodeId,
+                                    startPositionMs = startPositionMs
+                                )
                             }
                         )
                         ScreenType.SEARCH -> SearchScreen(onOpenMovieDetail = ::openMovieDetail)
@@ -468,6 +504,7 @@ fun MainContent(
                         ScreenType.ACCOUNT -> AccountScreen(
                             onOpenAdminPanel = { navController.navigate(AdminNavRoute) },
                             onOpenMovieDetail = ::openMovieDetail,
+                            onOpenWatchHistoryPage = { navController.navigate(WatchHistoryNavRoute) },
                             onOpenMovieList = { title, filterKind, slug ->
                                 navController.navigate(
                                     MovieListNavRoute(
@@ -633,36 +670,37 @@ fun MainContent(
                         ?: playerMovie.episodes.firstOrNull()
                     val videoUrl = episode?.let { episodeVideoUrls[it.id] } ?: ""
 
-                    LaunchedEffect(route.slug, videoUrl) {
-                        if (videoUrl.isBlank()) {
-                            navController.popBackStack()
-                            navController.navigate(MovieDetailNavRoute(route.slug))
-                            showToast("Phim này hiện chưa có nguồn phát. Mở trang chi tiết để bạn xem thêm.")
-                        }
-                    }
-
-                    PlayerScreen(
-                        movie = playerMovie,
-                        episode = episode,
-                        onBack = { navController.popBackStack() },
-                        videoUrl = videoUrl,
-                        episodeVideoUrls = episodeVideoUrls,
-                        onSelectEpisode = { ep ->
-                            // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
-                            navController.navigate(
-                                PlayerNavRoute(slug = route.slug, episodeId = ep.id)
-                            ) {
-                                popUpTo<PlayerNavRoute> { inclusive = true }
+                    if (videoUrl.isBlank()) {
+                        RouteErrorState(
+                            title = "Phim đang được cập nhật",
+                            message = "Vui lòng quay lại sau.",
+                            actionLabel = "Quay lại giao diện chính",
+                            onAction = ::returnToMainScreen
+                        )
+                    } else {
+                        PlayerScreen(
+                            movie = playerMovie,
+                            episode = episode,
+                            onBack = { navController.popBackStack() },
+                            videoUrl = videoUrl,
+                            episodeVideoUrls = episodeVideoUrls,
+                            startPositionMs = route.startPositionMs,
+                            onSelectEpisode = { ep ->
+                                // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
+                                navController.navigate(
+                                    PlayerNavRoute(slug = route.slug, episodeId = ep.id)
+                                ) {
+                                    popUpTo<PlayerNavRoute> { inclusive = true }
+                                }
                             }
-                        }
-                    )
-                } else if (detailError != null) {
-                    LaunchedEffect(route.slug, detailError) {
-                        showToast("Không tìm thấy phim để phát.")
+                        )
                     }
+                } else if (detailError != null) {
                     RouteErrorState(
-                        title = "Không thể mở trình phát",
-                        message = detailError ?: ""
+                        title = "Phim đang được cập nhật",
+                        message = "Vui lòng quay lại sau.",
+                        actionLabel = "Quay lại giao diện chính",
+                        onAction = ::returnToMainScreen
                     )
                 }
             }
@@ -684,6 +722,17 @@ fun MainContent(
                 )
             }
 
+            // ── Movie Type (Phim bộ / Phim lẻ) ──────────────────────
+            composable<MovieTypeNavRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<MovieTypeNavRoute>()
+                MovieTypeScreen(
+                    type = route.type,
+                    title = route.title,
+                    onBack = { navController.popBackStack() },
+                    onOpenMovieDetail = ::openMovieDetail
+                )
+            }
+
             // ── Admin ───────────────────────────────────────────────────
             composable<AdminNavRoute> {
                 AdminScreen(
@@ -695,25 +744,17 @@ fun MainContent(
             composable<PaymentNavRoute> {
                 PaymentScreen(
                     onBack = { navController.popBackStack() },
-                    onContinuePayment = { planName, paymentMethod ->
+                    onPaymentConfirmed = {
                         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                         if (user != null) {
                             scope.launch {
-                                val expiresAt = firestoreRepo.updateUserSubscription(
-                                    uid = user.uid,
-                                    plan = planName.lowercase(),
-                                    paymentMethod = paymentMethod
-                                )
                                 val profile = firestoreRepo.getUserProfile(user.uid)
-                                demoCurrentPlan = profile?.subscriptionPlan ?: planName.lowercase()
+                                demoCurrentPlan = profile?.subscriptionPlan
                                 demoMembershipStartedDate = formatFirestoreDate(profile?.subscriptionStartedAt)
                                 demoMembershipExpiredDate = formatFirestoreDate(profile?.subscriptionExpiresAt)
-                                    ?: formatFirestoreDate(expiresAt)
                             }
-                        } else {
-                            demoCurrentPlan = planName.lowercase()
                         }
-                        showToast("Đã nâng cấp gói $planName qua $paymentMethod")
+                        showToast("MoMo đã xác nhận thanh toán")
                     }
                 )
             }
@@ -728,6 +769,19 @@ fun MainContent(
                         demoMembershipStartedDate = null
                         demoMembershipExpiredDate = null
                         navController.popBackStack()
+                    }
+                )
+            }
+
+            composable<WatchHistoryNavRoute> {
+                WatchHistoryScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenWatchHistoryItem = { slug, episodeId, startPositionMs ->
+                        openPlayer(
+                            slug = slug,
+                            episodeId = episodeId,
+                            startPositionMs = startPositionMs
+                        )
                     }
                 )
             }
@@ -941,7 +995,7 @@ private fun RouteLoadingState(message: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -959,12 +1013,14 @@ private fun RouteLoadingState(message: String) {
 @Composable
 private fun RouteErrorState(
     title: String,
-    message: String
+    message: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -981,6 +1037,25 @@ private fun RouteErrorState(
                     color = Color.White.copy(alpha = 0.5f),
                     style = MaterialTheme.typography.bodySmall
                 )
+            }
+            if (actionLabel != null && onAction != null) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Button(
+                    onClick = onAction,
+                    modifier = Modifier
+                        .fillMaxWidth(0.72f)
+                        .height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF6E29A),
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text(
+                        text = actionLabel,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

@@ -24,6 +24,7 @@ package com.example.alphacinema.ui.home
     import androidx.compose.material.icons.outlined.NotificationsNone
     import androidx.compose.material.icons.outlined.PersonOutline
     import androidx.compose.material.icons.outlined.PlayArrow
+    import androidx.compose.material.icons.outlined.KeyboardArrowDown
     import androidx.compose.material.icons.outlined.Search
     import androidx.compose.material.icons.outlined.Settings
     import androidx.compose.material.icons.outlined.Info
@@ -50,6 +51,7 @@ package com.example.alphacinema.ui.home
     import android.webkit.WebViewClient
     import androidx.compose.ui.viewinterop.AndroidView
     import com.example.alphacinema.R
+    import com.example.alphacinema.data.model.WatchHistoryItem
     import com.example.alphacinema.ui.app.ScreenType
     import com.example.alphacinema.ui.components.GradientPlayButton
     import com.example.alphacinema.ui.account.FilterKind
@@ -119,10 +121,40 @@ package com.example.alphacinema.ui.home
         val movies: List<RecommendMovieUi>
     )
 
+    data class ContinueWatchingMovieUi(
+        val title: String,
+        val originName: String,
+        val posterUrl: String,
+        val slug: String,
+        val episodeId: String?,
+        val startPositionMs: Long,
+        val progressFraction: Float
+    )
+
     private fun Int.loopedIndex(size: Int): Int {
         val mod = this % size
         return if (mod < 0) mod + size else mod
     }
+
+    private fun WatchHistoryItem.toContinueWatchingMovieUi(): ContinueWatchingMovieUi? {
+        val safeDuration = duration.coerceAtLeast(0L)
+        if (movieId.isBlank() || movieName.isBlank() || safeDuration == 0L) return null
+
+        val safeProgress = progress.coerceIn(0L, safeDuration)
+        if (safeProgress == 0L) return null
+
+        return ContinueWatchingMovieUi(
+            title = movieName,
+            originName = originName,
+            posterUrl = posterUrl,
+            slug = movieId,
+            episodeId = episodeId.takeIf { it.isNotBlank() },
+            startPositionMs = (safeProgress - CONTINUE_WATCHING_REWIND_MS).coerceAtLeast(0L),
+            progressFraction = (safeProgress.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
+        )
+    }
+
+    private const val CONTINUE_WATCHING_REWIND_MS = 3_000L
 
     @Composable
     fun HomeScreen(
@@ -131,12 +163,13 @@ package com.example.alphacinema.ui.home
         onPlayMovie: (MovieUi) -> Unit = {},
         onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> },
         onOpenMovieDetail: (String) -> Unit = {},
-        onNavigateToPlan: () -> Unit = {}
+        onNavigateToPlan: () -> Unit = {},
+        onNavigateToMovieType: (type: String, title: String) -> Unit = { _, _ -> },
+        onContinueWatchingMovie: (movieSlug: String, episodeId: String?, startPositionMs: Long) -> Unit = { _, _, _ -> }
     ) {
         val isLoading by viewModel.isLoading.collectAsState()
         val error by viewModel.error.collectAsState()
         var showNotificationScreen by remember { mutableStateOf(initialShowNotification) }
-
         val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
         var currentUid by remember { mutableStateOf(auth.currentUser?.uid) }
         var unreadCount by remember { mutableStateOf(0) }
@@ -174,6 +207,8 @@ package com.example.alphacinema.ui.home
                 listener.remove()
             }
         }
+
+        var showGenreSheet by remember { mutableStateOf(false) }
         
         val heroItems by viewModel.heroMovies.collectAsState()
         val phimBoMoi by viewModel.phimBoMoi.collectAsState()
@@ -192,6 +227,7 @@ package com.example.alphacinema.ui.home
         val previewTrailerKeys by viewModel.previewTrailerKeys.collectAsState()
         val previewTrailerLoading by viewModel.previewTrailerLoading.collectAsState()
         val isKidsMode by viewModel.isKidsMode.collectAsState()
+        val continueWatchingItems by viewModel.continueWatching.collectAsState()
 
         val kidsHoatHinh by viewModel.kidsHoatHinh.collectAsState()
         val kidsAnime by viewModel.kidsAnime.collectAsState()
@@ -199,6 +235,10 @@ package com.example.alphacinema.ui.home
         val kidsPhieuLuu by viewModel.kidsPhieuLuu.collectAsState()
         val kidsHaiHuoc by viewModel.kidsHaiHuoc.collectAsState()
         val kidsKhoaHoc by viewModel.kidsKhoaHoc.collectAsState()
+
+        val continueWatchingMovies = remember(continueWatchingItems) {
+            continueWatchingItems.mapNotNull { it.toContinueWatchingMovieUi() }
+        }
 
         val movies = remember(heroItems, heroDescriptions) {
             heroItems.map {
@@ -314,6 +354,20 @@ package com.example.alphacinema.ui.home
             allGroups
         }
 
+        val top10InsertIndex = remember(recommendationGroups) {
+            if (recommendationGroups.isEmpty()) {
+                0
+            } else {
+                (recommendationGroups.size / 2).coerceAtLeast(1)
+            }
+        }
+        val recommendationGroupsBeforeTop10 = remember(recommendationGroups, top10InsertIndex) {
+            recommendationGroups.take(top10InsertIndex)
+        }
+        val recommendationGroupsAfterTop10 = remember(recommendationGroups, top10InsertIndex) {
+            recommendationGroups.drop(top10InsertIndex)
+        }
+
         val top10Movies = remember {
             listOf(
                 RecommendMovieUi(
@@ -423,7 +477,7 @@ package com.example.alphacinema.ui.home
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF070B16))
+                .background(Color.Black)
         ) {
             BackgroundLayer(posterUrl = movies[currentMovieIndex].posterUrl)
 
@@ -438,12 +492,21 @@ package com.example.alphacinema.ui.home
                     CategoryChips(
                         selectedChip = selectedChip,
                         isKidsMode = isKidsMode,
-                        onChipSelected = { viewModel.setCategory(it) }
+                        onChipSelected = { chip ->
+                            if (!isKidsMode && (chip == "Phim bộ" || chip == "Phim lẻ")) {
+                                val type = if (chip == "Phim bộ") "phim-bo" else "phim-le"
+                                onNavigateToMovieType(type, chip)
+                            } else if (!isKidsMode && chip == "Thể loại") {
+                                showGenreSheet = true
+                            } else {
+                                viewModel.setCategory(chip)
+                            }
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(22.dp))
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    HeroCarousel(pagerState, movies, onMovieClick = onPlayMovie)
+                    HeroCarousel(pagerState, movies, onMovieClick = { onOpenMovieDetail(it.slug) })
                     if (isLoading && heroItems.isEmpty()) {
                         com.example.alphacinema.ui.components.LottieLoadingIndicator(size = 100.dp)
                     } else if (error != null && heroItems.isEmpty()) {
@@ -462,46 +525,52 @@ package com.example.alphacinema.ui.home
                         movie = movies[currentMovieIndex],
                         currentMovieIndex = currentMovieIndex,
                         total = movies.size,
-                        onPlayClick = { onPlayMovie(movies[currentMovieIndex]) }
+                        onPlayClick = { onPlayMovie(movies[currentMovieIndex]) },
+                        onInfoClick = { onOpenMovieDetail(movies[currentMovieIndex].slug) }
                     )
                 }
                 Spacer(modifier = Modifier.height(26.dp))
-                
+
+                if (continueWatchingMovies.isNotEmpty()) {
+                    ContinueWatchingSection(
+                        movies = continueWatchingMovies,
+                        onMovieClick = { movie ->
+                            onContinueWatchingMovie(
+                                movie.slug,
+                                movie.episodeId,
+                                movie.startPositionMs
+                            )
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(22.dp))
+                }
+
+                RecommendationGroupsSection(
+                    groups = recommendationGroupsBeforeTop10,
+                    onMovieClick = { recommendMovie ->
+                        onOpenMovieDetail(recommendMovie.slug)
+                    },
+                    onMovieLongClick = {
+                        previewMovie = it
+                    },
+                    onSeeMore = onSeeMore
+                )
+                if (recommendationGroupsBeforeTop10.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(22.dp))
+                }
+
                 Top10Section(
                     movies = top10Movies,
                     onMovieClick = { recommendMovie ->
-                        onPlayMovie(MovieUi(
-                            title = recommendMovie.title,
-                            subtitle = recommendMovie.originName,
-                            description = recommendMovie.description,
-                            rating = recommendMovie.rating,
-                            age = recommendMovie.age,
-                            year = recommendMovie.year,
-                            season = "",
-                            episode = recommendMovie.episode,
-                            posterUrl = recommendMovie.posterUrl,
-                            slug = recommendMovie.slug
-                        ))
+                        onOpenMovieDetail(recommendMovie.slug)
                     }
                 )
                 Spacer(modifier = Modifier.height(22.dp))
-                
-                // RecommendationGroupsSection sẽ quản lý padding của riêng nó để tràn viền
+
                 RecommendationGroupsSection(
-                    groups = recommendationGroups,
+                    groups = recommendationGroupsAfterTop10,
                     onMovieClick = { recommendMovie ->
-                        onPlayMovie(MovieUi(
-                            title = recommendMovie.title,
-                            subtitle = recommendMovie.originName,
-                            description = recommendMovie.description,
-                            rating = recommendMovie.rating,
-                            age = recommendMovie.age,
-                            year = recommendMovie.year,
-                            season = "",
-                            episode = recommendMovie.episode,
-                            posterUrl = recommendMovie.posterUrl,
-                            slug = recommendMovie.slug
-                        ))
+                        onOpenMovieDetail(recommendMovie.slug)
                     },
                     onMovieLongClick = {
                         previewMovie = it
@@ -540,11 +609,7 @@ package com.example.alphacinema.ui.home
                     onDetailClick = {
                         val m = previewMovie!!
                         previewMovie = null
-                        onPlayMovie(MovieUi(
-                            title = m.title, subtitle = m.originName, description = m.description,
-                            rating = m.rating, age = m.age, year = m.year, season = "", episode = m.episode,
-                            posterUrl = m.posterUrl, slug = m.slug
-                        ))
+                        onOpenMovieDetail(m.slug)
                     }
                 )
             }
@@ -564,6 +629,19 @@ package com.example.alphacinema.ui.home
                     }
                 )
             }
+        }
+
+        // Genre bottom sheet
+        if (showGenreSheet) {
+            GenreBottomSheet(
+                onGenreSelected = { genres, sortField ->
+                    showGenreSheet = false
+                    val slugs = genres.joinToString(",") { it.slug }
+                    val label = genres.joinToString(", ") { it.label }
+                    onNavigateToMovieType("the-loai/$slugs|sort=$sortField", label)
+                },
+                onDismiss = { showGenreSheet = false }
+            )
         }
     }
 
@@ -591,10 +669,10 @@ package com.example.alphacinema.ui.home
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color(0xFF070B16).copy(alpha = 0.3f),
-                                    Color(0xFF070B16).copy(alpha = 0.6f),
-                                    Color(0xFF070B16).copy(alpha = 0.85f),
-                                    Color(0xFF070B16)
+                                    Color.Black.copy(alpha = 0.3f),
+                                    Color.Black.copy(alpha = 0.6f),
+                                    Color.Black.copy(alpha = 0.85f),
+                                    Color.Black
                                 )
                             )
                         )
@@ -620,8 +698,8 @@ package com.example.alphacinema.ui.home
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color(0xFF1A2237),
-                                    Color(0xFF0B1120)
+                                    Color(0xFF1F1F1F),
+                                    Color(0xFF0B0B0B)
                                 )
                             )
                         )
@@ -636,10 +714,10 @@ package com.example.alphacinema.ui.home
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFF070B16).copy(alpha = 0.3f),
-                                Color(0xFF070B16).copy(alpha = 0.6f),
-                                Color(0xFF070B16).copy(alpha = 0.85f),
-                                Color(0xFF070B16)
+                                Color.Black.copy(alpha = 0.3f),
+                                Color.Black.copy(alpha = 0.6f),
+                                Color.Black.copy(alpha = 0.85f),
+                                Color.Black
                             )
                         )
                     )
@@ -672,7 +750,7 @@ package com.example.alphacinema.ui.home
         Column(
             modifier = modifier
                 .background(
-                    Color(0xFF1A1D2B).copy(alpha = bgAlpha * 0.95f)
+                    Color(0xFF141414).copy(alpha = bgAlpha * 0.95f)
                 )
                 .statusBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 6.dp),
@@ -770,6 +848,8 @@ package com.example.alphacinema.ui.home
             categories.forEach { category ->
                 if (selectedChip == category) {
                     FilledChip(text = category, selected = true, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
+                } else if (category == "Thể loại") {
+                    GenreOutlineChip(text = category, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
                 } else {
                     OutlineChip(text = category, modifier = Modifier.weight(1f).clickable { onChipSelected(category) })
                 }
@@ -796,8 +876,8 @@ package com.example.alphacinema.ui.home
         }
     }
 
-    @Composable
-    fun OutlineChip(text: String, modifier: Modifier = Modifier) {
+	    @Composable
+	    fun OutlineChip(text: String, modifier: Modifier = Modifier) {
         Box(
             modifier = modifier
                 .clip(RoundedCornerShape(16.dp))
@@ -812,6 +892,37 @@ package com.example.alphacinema.ui.home
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1
             )
+	        }
+	    }
+
+    @Composable
+    fun GenreOutlineChip(text: String, modifier: Modifier = Modifier) {
+        Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.2.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = text,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 
@@ -863,7 +974,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                         RoundedCornerShape(20.dp)
                     )
                     .background(
-                        if (isCenter) Color(0xFF20253A) else Color(0xFF1B2031)
+                        if (isCenter) Color(0xFF262626) else Color(0xFF202020)
                     )
                     .clickable { onMovieClick(movie) },
                 contentAlignment = Alignment.Center
@@ -894,7 +1005,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
         movie: MovieUi,
         currentMovieIndex: Int,
         total: Int,
-        onPlayClick: () -> Unit = {}
+        onPlayClick: () -> Unit = {},
+        onInfoClick: () -> Unit = {}
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
@@ -933,7 +1045,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                 )
 
                 Button(
-                    onClick = onPlayClick,
+                    onClick = onInfoClick,
                     modifier = Modifier
                         .weight(1f)
                         .height(actionButtonHeight),
@@ -1048,6 +1160,142 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
     }
 
     @Composable
+    fun ContinueWatchingSection(
+        movies: List<ContinueWatchingMovieUi>,
+        onMovieClick: (ContinueWatchingMovieUi) -> Unit = {}
+    ) {
+        if (movies.isEmpty()) return
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Tiếp tục xem",
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 20.dp)
+            ) {
+                items(movies) { movie ->
+                    ContinueWatchingMovieCard(
+                        movie = movie,
+                        onClick = { onMovieClick(movie) }
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun ContinueWatchingMovieCard(
+        movie: ContinueWatchingMovieUi,
+        onClick: () -> Unit = {}
+    ) {
+        Column(
+            modifier = Modifier
+                .width(132.dp)
+                .clickable(onClick = onClick)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        width = 1.dp,
+                        color = Color.White.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF2F2F2F),
+                                Color(0xFF1A1A1A)
+                            )
+                        )
+                    )
+            ) {
+                if (movie.posterUrl.isNotBlank()) {
+                    com.example.alphacinema.ui.components.AlphaCinemaImage(
+                        model = movie.posterUrl,
+                        contentDescription = movie.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.16f),
+                        modifier = Modifier
+                            .size(52.dp)
+                            .align(Alignment.Center)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.5f)
+                                )
+                            )
+                        )
+                )
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(Color.White.copy(alpha = 0.22f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(movie.progressFraction)
+                            .height(4.dp)
+                            .background(Color(0xFFF6E29A))
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = movie.title,
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (movie.originName.isNotBlank() && movie.originName != movie.title) {
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = movie.originName,
+                    color = Color.White.copy(alpha = 0.55f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+
+    @Composable
     fun RecommendationGroupsSection(
         groups: List<RecommendGroupUi>,
         onMovieClick: (RecommendMovieUi) -> Unit = {},
@@ -1073,17 +1321,32 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
         onMovieLongClick: (RecommendMovieUi) -> Unit = {},
         onSeeMore: (FilterKind, String, String) -> Unit = { _, _, _ -> }
     ) {
-        // Map group title → (FilterKind, slug) for the "See more" action
+        // Map group title -> (FilterKind, slug) for the "See more" action
         val (seeMoreKind, seeMoreSlug) = when (group.title) {
-            "Phim bộ mới tải lên"    -> FilterKind.CUSTOM_CATEGORY to "phim-bo-moi"
-            "Phim lẻ nổi bật"   -> FilterKind.CUSTOM_CATEGORY to "phim-le-hot"
-            "Hoạt hình 3D" -> FilterKind.CUSTOM_CATEGORY to "phim-hoat-hinh"
+            "Phim bộ đang thịnh hành",
+            "Phim bộ mới tải lên" -> FilterKind.CUSTOM_CATEGORY to "phim-bo-moi"
+            "Phim lẻ nổi bật" -> FilterKind.CUSTOM_CATEGORY to "phim-le-hot"
+            "Cổ Trang & Tiên Hiệp Đặc Sắc" -> FilterKind.CUSTOM_CATEGORY to "normal-co-trang"
+            "Kinh Dị Lạnh Sống Lưng" -> FilterKind.CUSTOM_CATEGORY to "normal-kinh-di"
+            "Kỳ Án & Phá Án Đỉnh Cao" -> FilterKind.CUSTOM_CATEGORY to "normal-hinh-su"
+            "Khoa Học & Viễn Tưởng Đột Phá" -> FilterKind.CUSTOM_CATEGORY to "normal-vien-tuong"
+            "Hài Hước Cười Ra Nước Mắt" -> FilterKind.CUSTOM_CATEGORY to "normal-hai-huoc"
+            "Hành Động Khai Mở Nhãn Quan" -> FilterKind.CUSTOM_CATEGORY to "normal-hanh-dong"
+            "Tình Cảm Ngọt Ngào & Lãng Mạn" -> FilterKind.CUSTOM_CATEGORY to "normal-tinh-cam"
+            "Siêu Phẩm Điện Ảnh Âu Mỹ",
+            "Siêu phẩm Âu Mỹ" -> FilterKind.CUSTOM_CATEGORY to "normal-au-my"
+            "Thế giới Hoạt Hình",
+            "Hoạt hình 3D" -> FilterKind.CUSTOM_CATEGORY to "kids-hoat-hinh"
+            "Anime dễ thương",
+            "Kho tàng Anime mới nhất" -> FilterKind.CUSTOM_CATEGORY to "kids-anime"
+            "Phim Gia Đình ấm áp" -> FilterKind.CUSTOM_CATEGORY to "kids-gia-dinh"
+            "Phim Hài Hước vui nhộn" -> FilterKind.CUSTOM_CATEGORY to "kids-hai-huoc"
+            "Khám phá & Phiêu lưu" -> FilterKind.CUSTOM_CATEGORY to "kids-phieu-luu"
+            "Khoa học & Bí ẩn" -> FilterKind.CUSTOM_CATEGORY to "kids-khoa-hoc"
             "Phim Hàn Quốc mới" -> FilterKind.CUSTOM_CATEGORY to "phim-han-quoc"
             "Phim Trung Quốc mới" -> FilterKind.CUSTOM_CATEGORY to "phim-trung-quoc"
-            "Siêu phẩm Âu Mỹ" -> FilterKind.CUSTOM_CATEGORY to "phim-au-my"
             "Phim điện ảnh mới cóng" -> FilterKind.CUSTOM_CATEGORY to "phim-chieu-rap"
-            "Kho tàng Anime mới nhất" -> FilterKind.CUSTOM_CATEGORY to "anime-moi"
-            else             -> FilterKind.GENRE      to group.title.lowercase().replace(" ", "-")
+            else -> FilterKind.ALL to ""
         }
         Column {
             Row(
@@ -1159,8 +1422,8 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFF2A3354),
-                                Color(0xFF131A2F)
+                                Color(0xFF2F2F2F),
+                                Color(0xFF1A1A1A)
                             )
                         )
                     )
@@ -1236,7 +1499,7 @@ fun HeroCarousel(pagerState: PagerState, movies: List<MovieUi>, onMovieClick: (M
     ) {
         NavigationBar(
             modifier = modifier,
-            containerColor = Color(0xFF1A1D2B).copy(alpha = 0.95f),
+            containerColor = Color(0xFF141414).copy(alpha = 0.95f),
             contentColor = Color.White,
             tonalElevation = 0.dp
         ) {
@@ -1360,7 +1623,7 @@ fun MoviePreviewDialog(
                     .padding(horizontal = 24.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF212534))
+                    .background(Color(0xFF262626))
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
@@ -1372,7 +1635,7 @@ fun MoviePreviewDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
-                        .background(Color(0xFF282C3D)),
+                        .background(Color(0xFF2F2F2F)),
                     contentAlignment = Alignment.Center
                 ) {
                     when {
@@ -1464,7 +1727,7 @@ fun MoviePreviewDialog(
                         movie.genres.forEach { genre ->
                             Box(
                                 modifier = Modifier
-                                    .background(Color(0xFF383C4D), RoundedCornerShape(4.dp))
+                                    .background(Color(0xFF4A4A4A), RoundedCornerShape(4.dp))
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text(
@@ -1640,7 +1903,7 @@ private fun TrailerPreviewWebView(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF111522)),
+                    .background(Color(0xFF171717)),
                 contentAlignment = Alignment.Center
             ) {
                 if (posterUrl.isNotBlank()) {
@@ -1907,7 +2170,7 @@ private fun openYoutubeTrailerSearch(context: Context, movie: RecommendMovieUi) 
         val rankText = rank.toString()
         val rankFontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif
         val rankFontWeight = FontWeight.Black
-        val rankFillColor = Color(0xFF070B16)
+        val rankFillColor = Color.Black
 
         Box(
             modifier = modifier,

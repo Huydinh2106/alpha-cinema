@@ -66,8 +66,11 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
-// ── Color Palette (đồng bộ với HomeScreen) ──────────────────────────────────
+// ── Color Palette ────────────────────────────────────────────────────────────
 private val DarkBg = Color(0xFF070B16)
+private val CardBg = Color(0xFF141414)
+private val CardBorder = Color(0xFF333333)
+private val GoldAccent = Color(0xFFF6E29A)
 private val TextPrimary = Color.White
 private val TextSecondary = Color.White.copy(alpha = 0.7f)
 private val TextMuted = Color.White.copy(alpha = 0.38f)
@@ -339,7 +342,7 @@ fun NotificationScreen(
         ) { data ->
             Snackbar(
                 snackbarData = data,
-                containerColor = Color(0xFF1E2A48),
+                containerColor = Color(0xFF333333),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(12.dp)
             )

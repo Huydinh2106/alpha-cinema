@@ -3,11 +3,15 @@ package com.example.alphacinema.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.api.RetrofitClient
+import com.example.alphacinema.data.model.WatchHistoryItem
 import com.example.alphacinema.data.model.TmdbVideo
 import com.example.alphacinema.data.repository.FirestoreRepository
 import com.example.alphacinema.data.model.MovieItem
 import com.example.alphacinema.data.repository.MovieRepository
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,8 +20,15 @@ import kotlinx.coroutines.launch
 class HomeViewModel : ViewModel() {
     private val repository = MovieRepository()
     private val firestoreRepo = FirestoreRepository()
+    private val auth = FirebaseAuth.getInstance()
     private val phimApi = RetrofitClient.instance
     private val tmdbApi = RetrofitClient.tmdbApi
+    private var watchHistoryJob: Job? = null
+    private val continueWatchingOriginNameCache = mutableMapOf<String, String>()
+
+    private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+        observeContinueWatching(firebaseAuth.currentUser?.uid)
+    }
 
     // Loading states
     private val _isLoading = MutableStateFlow(true)
@@ -92,11 +103,17 @@ class HomeViewModel : ViewModel() {
     private val _kidsKhoaHoc = MutableStateFlow<List<MovieItem>>(emptyList())
     val kidsKhoaHoc: StateFlow<List<MovieItem>> = _kidsKhoaHoc.asStateFlow()
 
+    private val _continueWatching = MutableStateFlow<List<WatchHistoryItem>>(emptyList())
+    val continueWatching: StateFlow<List<WatchHistoryItem>> = _continueWatching.asStateFlow()
+
     // Active Category Chip
     private val _selectedChip = MutableStateFlow("Đề xuất")
     val selectedChip: StateFlow<String> = _selectedChip.asStateFlow()
 
     init {
+        auth.addAuthStateListener(authListener)
+        observeContinueWatching(auth.currentUser?.uid)
+
         viewModelScope.launch {
             com.example.alphacinema.data.local.SettingsManager.getInstance().isKidsModeEnabled.collect { kidsMode ->
                 _isKidsMode.value = kidsMode
@@ -126,6 +143,28 @@ class HomeViewModel : ViewModel() {
                     }
                 }
             }
+        }
+    }
+
+    private fun observeContinueWatching(userId: String?) {
+        watchHistoryJob?.cancel()
+        if (userId.isNullOrBlank()) {
+            _continueWatching.value = emptyList()
+            return
+        }
+
+        watchHistoryJob = viewModelScope.launch {
+            firestoreRepo.getWatchHistory(userId)
+                .catch { error ->
+                    android.util.Log.w("HomeViewModel", "Continue watching load failed", error)
+                    _continueWatching.value = emptyList()
+                }
+                .collect { items ->
+                    val inProgressItems = items
+                        .filter { it.isInProgressWatch() }
+                        .take(5)
+                    _continueWatching.value = inProgressItems.map { it.withResolvedOriginName() }
+                }
         }
     }
 
@@ -213,6 +252,51 @@ class HomeViewModel : ViewModel() {
             slug.trim().equals("hehe", ignoreCase = true)
     }
 
+    private fun WatchHistoryItem.isInProgressWatch(): Boolean {
+        if (movieId.isBlank() || movieName.isBlank()) return false
+
+        val safeDuration = duration.coerceAtLeast(0L)
+        val safeProgress = progress.coerceAtLeast(0L)
+        if (safeDuration == 0L || safeProgress == 0L) return false
+
+        val completionCutoff = (safeDuration - WATCH_COMPLETE_THRESHOLD_MS)
+            .coerceAtMost((safeDuration * 9L) / 10L)
+            .coerceAtLeast(0L)
+        return safeProgress < completionCutoff
+    }
+
+    private suspend fun WatchHistoryItem.withResolvedOriginName(): WatchHistoryItem {
+        if (originName.isNotBlank()) return this
+
+        val resolvedOriginName = resolveContinueWatchingOriginName(movieId)
+        return if (resolvedOriginName.isBlank()) {
+            this
+        } else {
+            copy(originName = resolvedOriginName)
+        }
+    }
+
+    private suspend fun resolveContinueWatchingOriginName(slug: String): String {
+        if (slug.isBlank()) return ""
+        continueWatchingOriginNameCache[slug]?.let { return it }
+
+        val resolvedOriginName = runCatching {
+            firestoreRepo.getMovieBySlug(slug)?.originName.orEmpty()
+                .ifBlank { phimApi.getMovieDetail(slug).movie?.origin_name.orEmpty() }
+        }.getOrDefault("")
+
+        if (resolvedOriginName.isNotBlank()) {
+            continueWatchingOriginNameCache[slug] = resolvedOriginName
+        }
+        return resolvedOriginName
+    }
+
+    override fun onCleared() {
+        auth.removeAuthStateListener(authListener)
+        watchHistoryJob?.cancel()
+        super.onCleared()
+    }
+
     fun loadPreviewTrailer(slug: String, tmdbId: String?, tmdbType: String?) {
         if (slug.isBlank()) return
         if (_previewTrailerKeys.value.containsKey(slug) || slug in _previewTrailerLoading.value) return
@@ -288,3 +372,5 @@ class HomeViewModel : ViewModel() {
         val type: String?
     )
 }
+
+private const val WATCH_COMPLETE_THRESHOLD_MS = 30_000L

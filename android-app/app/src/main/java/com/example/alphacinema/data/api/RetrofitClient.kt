@@ -12,22 +12,36 @@ object RetrofitClient {
     private const val TMDB_BASE_URL = "https://api.themoviedb.org/3/"
     private const val EMAILJS_BASE_URL = "https://api.emailjs.com/"
     private const val FUNCTIONS_BASE_URL = "https://asia-southeast1-alpha-cinema-39dfb.cloudfunctions.net/"
+    private const val SPOTIFY_API_BASE_URL = "https://api.spotify.com/"
+    private const val SPOTIFY_ACCOUNTS_BASE_URL = "https://accounts.spotify.com/"
+    // MoMo payments go through Cloud Functions (no direct MoMo calls from app)
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
+        redactHeader("Authorization")
     }
 
-    private val okHttpClient = OkHttpClient.Builder()
+    private fun baseOkHttpClientBuilder(): OkHttpClient.Builder {
+        return OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+    }
+
+    private val okHttpClient = baseOkHttpClientBuilder()
         .addInterceptor(loggingInterceptor)
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private fun createRetrofit(baseUrl: String): Retrofit {
+    private val quietOkHttpClient = baseOkHttpClientBuilder()
+        .build()
+
+    private fun createRetrofit(
+        baseUrl: String,
+        client: OkHttpClient = okHttpClient
+    ): Retrofit {
         return Retrofit.Builder()
             .baseUrl(baseUrl)
-            .client(okHttpClient)
+            .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
@@ -50,6 +64,18 @@ object RetrofitClient {
 
     val functionsApi: FunctionsService by lazy {
         createRetrofit(FUNCTIONS_BASE_URL).create(FunctionsService::class.java)
+    }
+
+    val momoApi: MomoApiService by lazy {
+        createRetrofit(FUNCTIONS_BASE_URL).create(MomoApiService::class.java)
+    }
+
+    val spotifyApi: SpotifyApiService by lazy {
+        createRetrofit(SPOTIFY_API_BASE_URL, quietOkHttpClient).create(SpotifyApiService::class.java)
+    }
+
+    val spotifyAuthApi: SpotifyAuthApiService by lazy {
+        createRetrofit(SPOTIFY_ACCOUNTS_BASE_URL, quietOkHttpClient).create(SpotifyAuthApiService::class.java)
     }
 }
 

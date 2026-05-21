@@ -1,8 +1,27 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun secretValue(name: String): String {
+    return providers.gradleProperty(name)
+        .orElse(providers.environmentVariable(name))
+        .getOrElse(localProperties.getProperty(name).orEmpty())
+}
+
+fun String.asBuildConfigString(): String {
+    return "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 }
 
 android {
@@ -17,6 +36,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SPOTIFY_CLIENT_ID", secretValue("SPOTIFY_CLIENT_ID").asBuildConfigString())
+        buildConfigField("String", "SPOTIFY_CLIENT_SECRET", secretValue("SPOTIFY_CLIENT_SECRET").asBuildConfigString())
     }
 
     buildTypes {
@@ -34,6 +55,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -58,6 +80,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-svg:2.7.0")
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.github.momo-wallet:mobile-sdk:1.0.5") {
+        exclude(group = "com.android.support")
+    }
 
     // Lottie Animation
     implementation("com.airbnb.android:lottie-compose:6.6.2")
