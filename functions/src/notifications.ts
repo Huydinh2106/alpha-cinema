@@ -325,10 +325,23 @@ export const checkExpiringSubscriptions = onSchedule({
       let shouldNotify = false;
       let displayDays = 0;
       let flagToUpdate = "";
+      let isExpired = false;
 
       if (diffDays <= 0) {
-        // Đã hết hạn -> Cập nhật status thành inactive nếu cần
-        // Không gửi thông báo "sắp" nữa
+        // Đã hết hạn -> Cập nhật status thành inactive, plan thành free
+        if (!userData.notifiedExpired) {
+          shouldNotify = true;
+          isExpired = true;
+          flagToUpdate = "notifiedExpired";
+          
+          currentBatch.update(doc.ref, {
+            subscriptionStatus: "inactive",
+            subscriptionPlan: "free",
+            subscriptionExpiresAt: admin.firestore.FieldValue.delete(),
+            notifiedExpired: true
+          });
+          batchCount++;
+        }
       } else if (diffDays <= 1) {
         // Dưới 1 ngày, nếu chưa báo mốc 1 ngày
         if (!userData.notified1Day) {
@@ -345,10 +358,11 @@ export const checkExpiringSubscriptions = onSchedule({
         }
       } else if (diffDays > 3) {
         // Gói còn trên 3 ngày (có thể do user vừa gia hạn) -> Reset flags
-        if (userData.notified3Days || userData.notified1Day) {
+        if (userData.notified3Days || userData.notified1Day || userData.notifiedExpired) {
           currentBatch.update(doc.ref, {
             notified3Days: false,
-            notified1Day: false
+            notified1Day: false,
+            notifiedExpired: false
           });
           batchCount++;
         }
@@ -357,10 +371,10 @@ export const checkExpiringSubscriptions = onSchedule({
       if (shouldNotify) {
         const uid = doc.id;
         const label = planLabel(plan);
-        const title = `Gói ${label} sắp hết hạn`;
-        const body =
-          `Gói ${label} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. ` +
-          `Gia hạn ngay để không bị gián đoạn trải nghiệm xem phim.`;
+        const title = isExpired ? `Gói ${label} đã hết hạn` : `Gói ${label} sắp hết hạn`;
+        const body = isExpired 
+          ? `Gói ${label} của bạn đã hết hạn. Vui lòng gia hạn để tiếp tục xem phim không giới hạn.`
+          : `Gói ${label} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. Gia hạn ngay để không bị gián đoạn trải nghiệm xem phim.`;
         const type = "billing";
 
         // Thêm thông báo vào subcollection của user
@@ -376,14 +390,18 @@ export const checkExpiringSubscriptions = onSchedule({
         });
         batchCount++;
 
-        // Đánh dấu đã gửi thông báo cho mốc này trên doc user
-        currentBatch.update(doc.ref, {
-          [flagToUpdate]: true
-        });
-        batchCount++;
+        // Đánh dấu đã gửi thông báo cho mốc này trên doc user (nếu chưa phải là hết hạn vì hết hạn đã update ở trên)
+        if (!isExpired) {
+          currentBatch.update(doc.ref, {
+            [flagToUpdate]: true
+          });
+          batchCount++;
+        }
 
         if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-          const key = `${(plan as string).toLowerCase()}|${displayDays}`;
+          // Lưu group riêng cho expired vs expiring
+          const groupKey = isExpired ? "expired" : String(displayDays);
+          const key = `${(plan as string).toLowerCase()}|${groupKey}`;
           if (!tokensByPlanAndDays.has(key)) tokensByPlanAndDays.set(key, []);
           tokensByPlanAndDays.get(key)!.push(...userData.fcmTokens);
         }
@@ -406,16 +424,18 @@ export const checkExpiringSubscriptions = onSchedule({
     await batch.commit();
   }
 
-  // Gửi FCM PUSH notification — push từng nhóm (plan, days) để body cá nhân hoá.
+  // Gửi FCM PUSH notification — push từng nhóm (plan, days/expired) để body cá nhân hoá.
   for (const [key, tokens] of tokensByPlanAndDays.entries()) {
     if (tokens.length === 0) continue;
-    const [plan, daysStr] = key.split("|");
-    const displayDays = Number(daysStr);
+    const [plan, groupKey] = key.split("|");
+    const isExpired = groupKey === "expired";
+    const displayDays = isExpired ? 0 : Number(groupKey);
     const label = planLabel(plan);
-    const pushTitle = `Gói ${label} sắp hết hạn`;
-    const pushBody =
-      `Gói ${label} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. ` +
-      `Mở ứng dụng và gia hạn ngay!`;
+    
+    const pushTitle = isExpired ? `Gói ${label} đã hết hạn` : `Gói ${label} sắp hết hạn`;
+    const pushBody = isExpired
+      ? `Gói ${label} của bạn đã hết hạn. Mở ứng dụng và gia hạn ngay!`
+      : `Gói ${label} của bạn sẽ hết hạn trong dưới ${displayDays} ngày. Mở ứng dụng và gia hạn ngay!`;
 
     const uniqueTokens = Array.from(new Set(tokens));
     const chunkSize = 500;
