@@ -208,6 +208,7 @@ package com.example.alphacinema.ui.home
             }
         }
 
+
         var showGenreSheet by remember { mutableStateOf(false) }
         
         val heroItems by viewModel.heroMovies.collectAsState()
@@ -583,6 +584,7 @@ package com.example.alphacinema.ui.home
             TopHeader(
                 collapseFraction = collapseFraction,
                 unreadCount = unreadCount,
+
                 onNotificationClick = { showNotificationScreen = true },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -729,6 +731,7 @@ package com.example.alphacinema.ui.home
     fun TopHeader(
         collapseFraction: Float,
         unreadCount: Int,
+
         onNotificationClick: () -> Unit = {},
         modifier: Modifier = Modifier
     ) {
@@ -821,6 +824,7 @@ package com.example.alphacinema.ui.home
                             }
                         }
                     }
+
                 }
 
                 IconButton(onClick = {}) {

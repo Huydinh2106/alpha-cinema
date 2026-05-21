@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -13,6 +14,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import java.net.HttpURLConnection
 import java.net.URL
+
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -38,6 +40,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         Log.d(TAG, "Message received from: ${message.from}")
 
         // FCM gửi tin nhắn có thể chứa 'notification' payload, 'data' payload, hoặc CẢ HAI.
+
         val title = message.notification?.title ?: message.data["title"] ?: "Alpha Cinema"
         val body = message.notification?.body ?: message.data["body"] ?: ""
         val type = message.data["type"] ?: "system"
@@ -53,6 +56,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         // Hiển thị thông báo lên thanh trạng thái (chỉ áp dụng khi app foreground).
         showNotification(title, body, type, message.data)
     }
+
 
     private fun showNotification(title: String, body: String, type: String, data: Map<String, String>) {
         Log.d(TAG, "Attempting to show notification: $title")
@@ -87,6 +91,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val bitmap: Bitmap? = imageUrl?.let { loadBitmapFromUrl(it) }
 
         val builder = NotificationCompat.Builder(this, com.example.alphacinema.notification.NotificationHelper.CHANNEL_PUSH)
+
             .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: Update to app logo
             .setContentTitle(title)
             .setContentText(body)
@@ -127,6 +132,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             Log.w(TAG, "Failed to load notification image: $url", e)
             null
         }
+
     }
 
     private fun sendTokenToServer(token: String) {

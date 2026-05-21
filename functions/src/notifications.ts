@@ -1,5 +1,6 @@
 import * as functions from "firebase-functions/v2/https";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
+
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 
@@ -27,6 +28,7 @@ export const notifySeriesUpdate = functions.onCall({ region: REGION }, async (re
   const { uid, seriesName, episode, seriesId } = request.data;
   const tokens = await getUserTokens(uid);
 
+
   const message: admin.messaging.MulticastMessage = {
     notification: {
       title: `Tập ${episode} của ${seriesName} đã có!`,
@@ -43,6 +45,7 @@ export const notifySeriesUpdate = functions.onCall({ region: REGION }, async (re
     tokens: tokens
   };
 
+
   await sendPush(tokens, message);
   return { success: true };
 });
@@ -51,6 +54,7 @@ export const notifySeriesUpdate = functions.onCall({ region: REGION }, async (re
 export const notifyPersonalRecommendation = functions.onCall({ region: REGION }, async (request) => {
   const { uid, movieTitle, movieId } = request.data;
   const tokens = await getUserTokens(uid);
+
 
   const message: admin.messaging.MulticastMessage = {
     notification: {
@@ -67,6 +71,7 @@ export const notifyPersonalRecommendation = functions.onCall({ region: REGION },
     tokens: tokens
   };
 
+
   await sendPush(tokens, message);
   return { success: true };
 });
@@ -75,6 +80,7 @@ export const notifyPersonalRecommendation = functions.onCall({ region: REGION },
 export const notifySecurityAlert = functions.onCall({ region: REGION }, async (request) => {
   const { uid, deviceName, location } = request.data;
   const tokens = await getUserTokens(uid);
+
 
   const message: admin.messaging.MulticastMessage = {
     notification: {
@@ -94,6 +100,7 @@ export const notifySecurityAlert = functions.onCall({ region: REGION }, async (r
     tokens: tokens
   };
 
+
   await sendPush(tokens, message);
   return { success: true };
 });
@@ -109,6 +116,7 @@ export const notifyBilling = functions.onCall({ region: REGION }, async (request
       ? `Thanh toán thất bại`
       : `Gói ${plan} sắp hết hạn`;
 
+
   const body = status === "success"
     ? `Gói ${plan} đã được kích hoạt. Hạn dùng đến ${expiry}.`
     : status === "failure"
@@ -119,6 +127,7 @@ export const notifyBilling = functions.onCall({ region: REGION }, async (request
     notification: { title, body },
     android: {
       notification: {
+
         channelId: "push_notifications",
         priority: "high"
       },
@@ -130,6 +139,7 @@ export const notifyBilling = functions.onCall({ region: REGION }, async (request
     },
     tokens: tokens
   };
+
 
   await sendPush(tokens, message);
   return { success: true };
@@ -469,4 +479,5 @@ export const checkExpiringSubscriptions = onSchedule({
       );
     }
   }
+
 });

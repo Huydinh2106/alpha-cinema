@@ -102,6 +102,7 @@ class FirestoreRepository {
                 userData["notifiedExpired"] = false
             }
 
+
             userRef.set(userData, SetOptions.merge()).await()
         } catch (e: Exception) {
             android.util.Log.e("FirestoreRepository", "saveUser failed", e)
@@ -146,6 +147,7 @@ class FirestoreRepository {
                 updates["notified3Days"] = false
                 updates["notified1Day"] = false
                 updates["notifiedExpired"] = false
+
             }
             if (!paymentMethod.isNullOrBlank()) {
                 updates["subscriptionPaymentMethod"] = paymentMethod

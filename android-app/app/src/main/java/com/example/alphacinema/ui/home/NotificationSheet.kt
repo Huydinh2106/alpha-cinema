@@ -3,6 +3,7 @@
 package com.example.alphacinema.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.outlined.Payment
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +62,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,6 +72,7 @@ import kotlinx.coroutines.launch
 
 // ── Color Palette ────────────────────────────────────────────────────────────
 private val DarkBg = Color(0xFF070B16)
+
 private val CardBg = Color(0xFF141414)
 private val CardBorder = Color(0xFF333333)
 private val GoldAccent = Color(0xFFF6E29A)
@@ -75,6 +80,7 @@ private val TextPrimary = Color.White
 private val TextSecondary = Color.White.copy(alpha = 0.7f)
 private val TextMuted = Color.White.copy(alpha = 0.38f)
 private val DividerColor = Color.White.copy(alpha = 0.08f)
+
 
 // ── Notification Types ───────────────────────────────────────────────────────
 enum class NotificationType(
@@ -86,6 +92,7 @@ enum class NotificationType(
         label = "Khuyến mãi",
         icon = Icons.Outlined.Movie,
         color = Color(0xFFF6E29A)
+
     ),
     TRANSACTION(
         label = "Giao dịch",
@@ -96,16 +103,19 @@ enum class NotificationType(
         label = "Xã hội",
         icon = Icons.Outlined.Movie,
         color = Color(0xFF60A5FA)
+
     ),
     SYSTEM(
         label = "Hệ thống",
         icon = Icons.Outlined.SystemUpdate,
         color = Color(0xFFA78BFA)
+
     ),
     NEW_MOVIE(
         label = "Phim mới",
         icon = Icons.Outlined.Movie,
         color = Color(0xFFFB7185)
+
     )
 }
 
@@ -122,6 +132,7 @@ data class NotificationItem(
     val plan: String? = null,
     val imageUrl: String? = null
 )
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // MAIN COMPOSABLE: NotificationScreen (Full-screen overlay)
@@ -212,8 +223,8 @@ fun NotificationScreen(
                     
                     // Lọc trùng lặp để xử lý các thông báo cũ bị lỗi tạo 2 lần
                     val uniqueItems = sortedItems.distinctBy { 
-                        // Ưu tiên gom nhóm theo movieId, nếu không có thì gom nhóm theo tiêu đề
-                        it.movieId ?: it.title.trim()
+                        // Ưu tiên gom nhóm theo movieId, nếu không thì kết hợp title và message để phân biệt
+                        it.movieId ?: (it.title.trim() + it.message.trim())
                     }
                     
                     notifications.clear()
@@ -221,10 +232,12 @@ fun NotificationScreen(
                 }
             }
         onDispose { listener.remove() }
+
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
     var deleteTargetId by remember { mutableStateOf<String?>(null) }
 
     // ── UI ────────────────────────────────────────────────────────────────────
@@ -232,6 +245,7 @@ fun NotificationScreen(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBg)
+
     ) {
         Column(
             modifier = Modifier
@@ -265,6 +279,7 @@ fun NotificationScreen(
 
             // ── Notification List / Empty State ──────────────────────────────
             if (notifications.isEmpty()) {
+
                 NotificationEmptyState(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -284,6 +299,7 @@ fun NotificationScreen(
                         key = { it.id }
                     ) { notification ->
                         NotificationRow(
+
                             notification = notification,
                             isDeleteMode = deleteTargetId == notification.id,
                             onTap = {
@@ -291,6 +307,7 @@ fun NotificationScreen(
                                     deleteTargetId = null
                                 } else {
                                     // Đánh dấu đã đọc
+
                                     if (!notification.isRead) {
                                         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                                         if (user != null) {
@@ -301,6 +318,7 @@ fun NotificationScreen(
                                         }
                                     }
                                     // Điều hướng
+
                                     if (notification.rawType == "new_movie" && notification.movieId != null) {
                                         onNavigateToMovie(notification.movieId)
                                         onClose()
@@ -324,6 +342,7 @@ fun NotificationScreen(
                                 deleteTargetId = null
                                 scope.launch {
                                     snackbarHostState.showSnackbar("Đã xóa thông báo")
+
                                 }
                             }
                         )
@@ -355,6 +374,7 @@ fun NotificationScreen(
 // ═════════════════════════════════════════════════════════════════════════════
 @Composable
 private fun NotificationRow(
+
     notification: NotificationItem,
     isDeleteMode: Boolean,
     onTap: () -> Unit,
@@ -471,6 +491,7 @@ private fun NotificationRow(
             thickness = 0.5.dp,
             modifier = Modifier.padding(start = 128.dp, end = 16.dp)
         )
+
     }
 }
 
@@ -495,6 +516,7 @@ private fun NotificationEmptyState(modifier: Modifier = Modifier) {
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+
 
             Text(
                 text = "Chưa có thông báo nào",

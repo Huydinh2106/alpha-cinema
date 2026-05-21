@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
         val extras = intent.extras ?: return
         val sentTime = extras.getLong("google.sent_time", 0L)
         if (sentTime > 0L) {
+
             intent.putExtra("open_notifications", true)
         }
     }

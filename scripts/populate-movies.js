@@ -19,6 +19,7 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
+
 // API Endpoints
 const API_BASE = "https://phimapi.com";
 const LIST_API = `${API_BASE}/danh-sach/phim-moi-cap-nhat`;

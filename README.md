@@ -146,6 +146,7 @@ The current codebase includes project-specific endpoints and third-party integra
 - EmailJS configuration
 - Google Sign-In web client ID
 
+
 ## Security Notes
 
 - Do not commit production secrets, service account files, private keys, or payment credentials.
