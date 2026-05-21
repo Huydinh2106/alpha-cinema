@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -58,19 +59,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.alphacinema.R
 import com.example.alphacinema.data.model.SupportChatAction
+import com.example.alphacinema.data.model.SupportChatLinkItem
 import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportChatMovieItem
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.primaryAction
 import com.example.alphacinema.data.model.resolveRoute
+import com.example.alphacinema.data.repository.SupportChatResponseParser
 import com.example.alphacinema.ui.components.GradientPlayButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -98,6 +104,7 @@ fun SupportScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val messages by supportViewModel.messages.collectAsState()
     val listState = rememberLazyListState()
+    val uriHandler = LocalUriHandler.current
     val hasStartedChat = messages.isNotEmpty()
     val isLoading = messages.any { it.sender == SupportMessageSender.LOADING }
 
@@ -160,7 +167,19 @@ fun SupportScreen(
                     ChatMessageList(
                         messages = messages,
                         listState = listState,
-                        onMovieAction = onMovieAction
+                        onMovieAction = onMovieAction,
+                        onLinkClick = { link ->
+                            val primaryUri = link.uri?.takeIf { it.isNotBlank() } ?: link.url
+                            runCatching { uriHandler.openUri(primaryUri) }
+                                .recoverCatching {
+                                    if (primaryUri != link.url) {
+                                        uriHandler.openUri(link.url)
+                                    } else {
+                                        throw it
+                                    }
+                                }
+                                .onFailure { error = "Khong mo duoc lien ket Spotify." }
+                        }
                     )
                 } else {
                     ChatWelcome(
@@ -309,6 +328,7 @@ private fun ChatWelcome(
         ChatSuggestionUi("Gói Premium có gì?", Icons.Outlined.WorkspacePremium),
         ChatSuggestionUi("Cách tạo phòng xem chung?", Icons.Outlined.Groups),
         ChatSuggestionUi("Tôi cần hỗ trợ tài khoản", Icons.Outlined.PersonOutline),
+        ChatSuggestionUi("Nhạc phim Interstellar", Icons.Outlined.HeadsetMic),
         ChatSuggestionUi("Phim đang hot hôm nay", Icons.Outlined.Movie)
     )
 
@@ -463,7 +483,8 @@ private fun UserAvatar(modifier: Modifier = Modifier) {
 private fun ChatMessageList(
     messages: List<SupportChatMessage>,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    onMovieAction: (SupportChatAction) -> Unit
+    onMovieAction: (SupportChatAction) -> Unit,
+    onLinkClick: (SupportChatLinkItem) -> Unit
 ) {
     LazyColumn(
         state = listState,
@@ -480,7 +501,8 @@ private fun ChatMessageList(
         items(messages, key = { it.id }) { message ->
             ChatBubble(
                 message = message,
-                onMovieAction = onMovieAction
+                onMovieAction = onMovieAction,
+                onLinkClick = onLinkClick
             )
         }
     }
@@ -489,26 +511,33 @@ private fun ChatMessageList(
 @Composable
 internal fun MessageBubble(
     message: SupportChatMessage,
-    onMovieAction: (SupportChatAction) -> Unit = {}
+    onMovieAction: (SupportChatAction) -> Unit = {},
+    onLinkClick: (SupportChatLinkItem) -> Unit = {}
 ) {
     ChatBubble(
         message = message,
-        onMovieAction = onMovieAction
+        onMovieAction = onMovieAction,
+        onLinkClick = onLinkClick
     )
 }
 
 @Composable
 private fun ChatBubble(
     message: SupportChatMessage,
-    onMovieAction: (SupportChatAction) -> Unit = {}
+    onMovieAction: (SupportChatAction) -> Unit = {},
+    onLinkClick: (SupportChatLinkItem) -> Unit = {}
 ) {
     val fromUser = message.sender == SupportMessageSender.USER
     val isLoading = message.sender == SupportMessageSender.LOADING
     val movieItems = message.metadata?.movieItems.orEmpty()
+    val linkItems = message.metadata?.linkItems.orEmpty()
     val bubbleColor = when (message.sender) {
         SupportMessageSender.USER -> Color(0xFFF6E29A)
         SupportMessageSender.BOT -> Color(0xFF151F35)
         SupportMessageSender.LOADING -> Color(0xFF111B2E)
+    }
+    val displayText = remember(message.text, fromUser) {
+        if (fromUser) message.text else SupportChatResponseParser.cleanDisplayText(message.text)
     }
     val textColor = if (fromUser) Color(0xFF111111) else Color.White
     val bubbleShape = if (fromUser) UserBubbleShape else BotBubbleShape
@@ -546,9 +575,9 @@ private fun ChatBubble(
                         modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (message.text.isNotBlank()) {
+                        if (displayText.isNotBlank()) {
                             Text(
-                                text = message.text,
+                                text = displayText,
                                 color = textColor,
                                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp)
                             )
@@ -559,6 +588,15 @@ private fun ChatBubble(
                                 SupportMovieSuggestionCard(
                                     movie = movieItem,
                                     onMovieAction = onMovieAction
+                                )
+                            }
+                        }
+
+                        if (!fromUser && linkItems.isNotEmpty()) {
+                            linkItems.forEach { linkItem ->
+                                SupportLinkCard(
+                                    link = linkItem,
+                                    onClick = { onLinkClick(linkItem) }
                                 )
                             }
                         }
@@ -598,6 +636,90 @@ private fun TypingIndicator() {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+@Composable
+private fun SupportLinkCard(
+    link: SupportChatLinkItem,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = Color.White.copy(alpha = 0.06f),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(16.dp)
+            )
+            .clickable(onClick = onClick)
+            .testTag("support_link_${link.id}")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (!link.thumbnailUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = link.thumbnailUrl,
+                    contentDescription = link.label,
+                    contentScale = ContentScale.Crop,
+                    placeholder = painterResource(id = R.drawable.logo_app),
+                    error = painterResource(id = R.drawable.logo_app),
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1DB954).copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.HeadsetMic,
+                        contentDescription = null,
+                        tint = Color(0xFF1DB954),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = link.label,
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (link.subtitle.isNotBlank()) {
+                    Text(
+                        text = link.subtitle,
+                        color = Color.White.copy(alpha = 0.62f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.78f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 

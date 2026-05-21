@@ -184,16 +184,17 @@ class FirestoreRepository {
         val historyRef = db.collection("users").document(userId)
             .collection("watch_history").document(movieSlug)
 
-        val historyItem = WatchHistoryItem(
-            movieId = movieSlug,
-            movieName = movieName,
-            posterUrl = posterUrl,
-            episodeId = episodeId,
-            episodeName = episodeName,
-            progress = progress,
-            duration = duration
+        val historyItem = mapOf(
+            "movieId" to movieSlug,
+            "movieName" to movieName,
+            "posterUrl" to posterUrl,
+            "episodeId" to episodeId,
+            "episodeName" to episodeName,
+            "progress" to progress,
+            "duration" to duration,
+            "lastWatchedAt" to FieldValue.serverTimestamp()
         )
-        historyRef.set(historyItem).await()
+        historyRef.set(historyItem, com.google.firebase.firestore.SetOptions.merge()).await()
     }
 
     fun getWatchHistory(userId: String): Flow<List<WatchHistoryItem>> = callbackFlow {
@@ -205,16 +206,15 @@ class FirestoreRepository {
 
         val listener = db.collection("users").document(userId)
             .collection("watch_history")
-            .orderBy("lastWatchedAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    val items = snapshot.documents.mapNotNull { doc -> 
+                    val items = snapshot.documents.mapNotNull { doc ->
                         doc.toObject(WatchHistoryItem::class.java)?.apply { this.movieId = doc.id } 
-                    }
+                    }.sortedByDescending { item -> item.lastWatchedAt?.toDate()?.time ?: 0L }
                     trySend(items)
                 }
             }

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -115,7 +116,7 @@ private data class AccountMenuItemUi(
 enum class PinDialogMode { SETUP, VERIFY }
 
 private enum class AccountMenuAction {
-    WATCHING,
+    WATCH_HISTORY,
     MOVIE_LIBRARY,
     FAVORITES,
     POLICY,
@@ -125,7 +126,6 @@ private enum class AccountMenuAction {
 }
 
 private enum class AccountPanelType {
-    WATCHING,
     MOVIE_LIBRARY,
     FAVORITES,
     POLICY,
@@ -160,6 +160,7 @@ private data class DemoUserProfileUi(
 fun AccountScreen(
     onOpenAdminPanel: () -> Unit = {},
     onOpenMovieDetail: (String) -> Unit = {},
+    onOpenWatchHistoryPage: () -> Unit = {},
     onOpenMovieList: (title: String, filterKind: FilterKind, slug: String) -> Unit = { _, _, _ -> },
     onWatchTogether: () -> Unit = {},
     onOpenPayment: () -> Unit = {},
@@ -305,10 +306,6 @@ fun AccountScreen(
 
     val settingsManager = remember { SettingsManager.getInstance() }
     val isKidsModeEnabled by settingsManager.isKidsModeEnabled.collectAsState()
-    val watchHistoryFlow = remember(currentUser?.uid) {
-        currentUser?.uid?.let(firestoreRepository::getWatchHistory) ?: flowOf(emptyList())
-    }
-    val watchHistory by watchHistoryFlow.collectAsState(initial = emptyList())
     val favoritesFlow = remember(currentUser?.uid) {
         currentUser?.uid?.let(firestoreRepository::getFavorites) ?: flowOf(emptyList())
     }
@@ -371,7 +368,7 @@ fun AccountScreen(
     }
 
     val menuItems = mutableListOf(
-        AccountMenuItemUi("Đang xem", { Icon(Icons.Outlined.WatchLater, contentDescription = null) }),
+        AccountMenuItemUi("Lịch sử xem", { Icon(Icons.Outlined.History, contentDescription = null) }),
         AccountMenuItemUi("Yêu thích", { Icon(Icons.Outlined.FavoriteBorder, contentDescription = null) }),
         AccountMenuItemUi("Chính sách", { Icon(Icons.Outlined.Info, contentDescription = null) }),
         AccountMenuItemUi("Góp ý", { Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null) })
@@ -395,7 +392,9 @@ fun AccountScreen(
 
     fun handleMenuAction(action: AccountMenuAction) {
         when (action) {
-            AccountMenuAction.WATCHING -> openPanel(AccountPanelType.WATCHING, requiresLogin = true)
+            AccountMenuAction.WATCH_HISTORY -> {
+                if (isLoggedIn) onOpenWatchHistoryPage() else showLoginRequiredDialog = true
+            }
             AccountMenuAction.MOVIE_LIBRARY -> {
                 if (isLoggedIn) openPanel(AccountPanelType.MOVIE_LIBRARY) else showLoginRequiredDialog = true
             }
@@ -411,7 +410,7 @@ fun AccountScreen(
 
     fun resolveMenuAction(item: AccountMenuItemUi): AccountMenuAction {
         return item.action ?: when (item.title) {
-            "Đang xem" -> AccountMenuAction.WATCHING
+            "Lịch sử xem" -> AccountMenuAction.WATCH_HISTORY
             "Danh sách phim" -> AccountMenuAction.MOVIE_LIBRARY
             "Yêu thích" -> AccountMenuAction.FAVORITES
             "Xem chung" -> AccountMenuAction.WATCH_TOGETHER
@@ -603,7 +602,6 @@ fun AccountScreen(
         if (activePanel != null) {
             AccountPanelBottomSheet(
                 panel = activePanel!!,
-                watchHistory = watchHistory,
                 favorites = favorites,
                 feedbackInput = feedbackInput,
                 onDismiss = { activePanel = null },
@@ -1707,7 +1705,6 @@ internal fun PlanInfoRow(
 @Composable
 private fun AccountPanelBottomSheet(
     panel: AccountPanelType,
-    watchHistory: List<com.example.alphacinema.data.model.WatchHistoryItem>,
     favorites: List<com.example.alphacinema.data.model.FavoriteItem>,
     feedbackInput: String,
     onDismiss: () -> Unit,
@@ -1717,7 +1714,6 @@ private fun AccountPanelBottomSheet(
     onOpenMovieList: (String, FilterKind, String) -> Unit
 ) {
     val sheetTitle = when (panel) {
-        AccountPanelType.WATCHING -> "Đang xem"
         AccountPanelType.MOVIE_LIBRARY -> "Danh sách phim"
         AccountPanelType.FAVORITES -> "Yêu thích"
         AccountPanelType.POLICY -> "Chính sách"
@@ -1752,7 +1748,6 @@ private fun AccountPanelBottomSheet(
                     )
                     Text(
                         text = when (panel) {
-                            AccountPanelType.WATCHING -> "Tiếp tục những nội dung bạn đang theo dõi"
                             AccountPanelType.MOVIE_LIBRARY -> "Mở nhanh các danh sách phim phổ biến"
                             AccountPanelType.FAVORITES -> "Những phim bạn đã lưu yêu thích"
                             AccountPanelType.POLICY -> "Thông tin sử dụng và quyền riêng tư"
@@ -1772,26 +1767,6 @@ private fun AccountPanelBottomSheet(
             }
 
             when (panel) {
-                AccountPanelType.WATCHING -> {
-                    if (watchHistory.isEmpty()) {
-                        AccountEmptyState("Bạn chưa có lịch sử xem nào.")
-                    } else {
-                        watchHistory.forEach { item ->
-                            AccountMediaRow(
-                                title = item.movieName,
-                                subtitle = item.episodeName.ifBlank { "Tiếp tục xem" },
-                                meta = if (item.duration > 0) {
-                                    "${(item.progress * 100 / item.duration).coerceIn(0, 100)}% đã xem"
-                                } else {
-                                    "Tiếp tục xem"
-                                },
-                                posterUrl = item.posterUrl,
-                                onClick = { onOpenMovieDetail(item.movieId) }
-                            )
-                        }
-                    }
-                }
-
                 AccountPanelType.MOVIE_LIBRARY -> {
                     LibraryShortcutRow(
                         title = "Phim bộ",
@@ -1883,6 +1858,7 @@ private fun AccountMediaRow(
     subtitle: String,
     meta: String,
     posterUrl: String,
+    progressFraction: Float? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -1908,9 +1884,45 @@ private fun AccountMediaRow(
                 .weight(1f)
                 .padding(start = 12.dp)
         ) {
-            Text(title, color = Color.White, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = Color.White.copy(alpha = 0.72f), style = MaterialTheme.typography.bodySmall)
-            Text(meta, color = Color(0xFFF6E29A), style = MaterialTheme.typography.labelMedium)
+            Text(
+                title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                subtitle,
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                meta,
+                color = Color(0xFFF6E29A),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (progressFraction != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.16f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFFF6E29A))
+                    )
+                }
+            }
         }
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
