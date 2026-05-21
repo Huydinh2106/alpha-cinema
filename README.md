@@ -146,6 +146,21 @@ The current codebase includes project-specific endpoints and third-party integra
 - EmailJS configuration
 - Google Sign-In web client ID
 
+### Utility Scripts Authentication
+
+The Node scripts in `scripts/` use Google Application Default Credentials. Do not place Firebase service account JSON files in this repository.
+
+For local development, authenticate before running scripts:
+
+```bash
+gcloud auth application-default login
+export FIREBASE_PROJECT_ID=alpha-cinema-39dfb
+cd scripts
+npm start
+```
+
+If you must use a service account file locally, store it outside the repository and set `GOOGLE_APPLICATION_CREDENTIALS` to that absolute path.
+
 ## Security Notes
 
 - Do not commit production secrets, service account files, private keys, or payment credentials.
