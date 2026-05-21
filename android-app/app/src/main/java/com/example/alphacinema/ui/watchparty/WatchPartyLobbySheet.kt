@@ -69,7 +69,7 @@ fun WatchPartyLobbySheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF10192E),
+        containerColor = Color(0xFF141414),
         scrimColor = Color.Black.copy(alpha = 0.62f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -186,7 +186,7 @@ fun WatchPartyLobbySheet(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF1A2237)),
+                                .background(Color(0xFF1F1F1F)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -263,8 +263,8 @@ fun WatchPartyLobbySheet(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF16233B),
-                            unfocusedContainerColor = Color(0xFF10192D),
+                            focusedContainerColor = Color(0xFF1F1F1F),
+                            unfocusedContainerColor = Color(0xFF141414),
                             focusedBorderColor = Color(0xFFF6E29A),
                             unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
                             cursorColor = Color(0xFFF6E29A),

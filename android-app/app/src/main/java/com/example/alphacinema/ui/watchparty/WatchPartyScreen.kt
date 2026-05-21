@@ -489,7 +489,7 @@ fun WatchPartyScreen(
                             .padding(end = 48.dp, bottom = 56.dp)
                             .widthIn(max = 280.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF1A2237).copy(alpha = 0.75f))
+                            .background(Color(0xFF1F1F1F).copy(alpha = 0.75f))
                             .padding(16.dp)
                             .clickable(enabled = false) {}
                     ) {
@@ -543,7 +543,7 @@ fun WatchPartyScreen(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { focusManager.clearFocus() })
             }
@@ -638,7 +638,7 @@ fun WatchPartyScreen(
                     if (showInviteDialog) {
                         androidx.compose.material3.AlertDialog(
                             onDismissRequest = { showInviteDialog = false },
-                            containerColor = Color(0xFF1A2237),
+                            containerColor = Color(0xFF1F1F1F),
                             title = {
                                 Text("Mời bạn bè", color = Color.White, fontWeight = FontWeight.Bold)
                             },
@@ -886,7 +886,7 @@ private fun MembersList(
                                     if (memberIsHost) Brush.linearGradient(
                                         listOf(Color(0xFFF6E29A), Color(0xFFD4A843))
                                     ) else Brush.linearGradient(
-                                        listOf(Color(0xFF1A2237), Color(0xFF1A2237))
+                                        listOf(Color(0xFF1F1F1F), Color(0xFF1F1F1F))
                                     )
                                 )
                                 .then(
@@ -926,7 +926,7 @@ private fun MembersList(
                     if (showVolumePopup) {
                         androidx.compose.material3.AlertDialog(
                             onDismissRequest = { showVolumePopup = false },
-                            containerColor = Color(0xFF1A2237),
+                            containerColor = Color(0xFF1F1F1F),
                             title = {
                                 Text("Âm lượng: ${member.displayName}", color = Color.White, style = MaterialTheme.typography.titleMedium)
                             },
@@ -1075,7 +1075,7 @@ private fun ChatSection(
                 .weight(1f)
                 .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF0D1520))
+                .background(Color(0xFF101010))
         ) {
             if (messages.isEmpty()) {
                 // Empty state
@@ -1142,7 +1142,7 @@ private fun ChatSection(
                 .navigationBarsPadding()
                 .imePadding()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF16233B))
+                .background(Color(0xFF1F1F1F))
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1184,7 +1184,7 @@ private fun ChatSection(
                 Icon(
                     Icons.AutoMirrored.Outlined.Send,
                     contentDescription = "Gửi",
-                    tint = if (hasText) Color(0xFF070B16) else Color.White.copy(alpha = 0.2f),
+                    tint = if (hasText) Color.Black else Color.White.copy(alpha = 0.2f),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1219,7 +1219,7 @@ private fun ChatBubble(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1A2237)),
+                        .background(Color(0xFF1F1F1F)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (avatarUrl.isNotBlank()) {
@@ -1271,14 +1271,14 @@ private fun ChatBubble(
                 modifier = Modifier
                     .clip(bubbleShape)
                     .background(
-                        if (isMe) Color(0xFFF6E29A) else Color(0xFF1A2840)
+                        if (isMe) Color(0xFFF6E29A) else Color(0xFF242424)
                     )
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Column {
                     Text(
                         text = message.text,
-                        color = if (isMe) Color(0xFF070B16) else Color.White,
+                        color = if (isMe) Color.Black else Color.White,
                         style = MaterialTheme.typography.bodySmall,
                         lineHeight = 18.sp
                     )
@@ -1286,7 +1286,7 @@ private fun ChatBubble(
                     if (isLastInGroup && timeText.isNotEmpty()) {
                         Text(
                             text = timeText,
-                            color = if (isMe) Color(0xFF070B16).copy(alpha = 0.45f) else Color.White.copy(alpha = 0.35f),
+                            color = if (isMe) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.35f),
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 10.sp,
                             modifier = Modifier

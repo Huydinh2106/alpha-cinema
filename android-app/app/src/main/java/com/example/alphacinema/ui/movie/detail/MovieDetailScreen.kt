@@ -137,7 +137,7 @@ fun MovieDetailScreen(
         state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)),
+            .background(Color.Black),
         contentPadding = PaddingValues(bottom = 28.dp)
     ) {
         item {
@@ -291,7 +291,7 @@ private fun DetailTopBanner(
                         colors = listOf(
                             Color.Black.copy(alpha = 0.25f),
                             Color.Black.copy(alpha = 0.55f),
-                            Color(0xFF070B16)
+                            Color.Black
                         )
                     )
                 )
@@ -758,7 +758,7 @@ private fun EpisodeTabModern(
                     ) {
                         Text(
                             text = groupName,
-                            color = if (isSelected) Color(0xFF0A0F1E) else Color.White,
+                            color = if (isSelected) Color.Black else Color.White,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -795,7 +795,7 @@ private fun EpisodeTabModern(
                                     .trim()
                                 Text(
                                     text = badgeText,
-                                    color = if (isCurrent) Color(0xFF0A0F1E) else Color.White,
+                                    color = if (isCurrent) Color.Black else Color.White,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
@@ -854,7 +854,7 @@ private fun CastTab(cast: List<CastUi>) {
                                     .height(150.dp)
                                     .background(
                                         Brush.verticalGradient(
-                                            listOf(Color(0xFF1A1F35), Color(0xFF0E1225))
+                                            listOf(Color(0xFF1F1F1F), Color(0xFF101010))
                                         )
                                     ),
                                 contentAlignment = Alignment.Center
@@ -1044,7 +1044,7 @@ private fun CommentsTab(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1F2438)),
+                            .background(Color(0xFF262626)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

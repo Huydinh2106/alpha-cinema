@@ -101,12 +101,7 @@ fun SearchScreen(
         if (shouldLoadMore.value && isSearchActive) viewModel.loadMore()
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF070B16))) {
-        // Top gradient decoration
-        Box(modifier = Modifier.fillMaxWidth().height(300.dp).background(
-            Brush.verticalGradient(listOf(Color(0xFF1A2240).copy(alpha = 0.6f), Color(0xFF070B16)))
-        ))
-
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = 100.dp),
@@ -254,7 +249,7 @@ fun FilterBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF1B1E2E),
+        containerColor = Color(0xFF1F1F1F),
         scrimColor = Color.Black.copy(alpha = 0.6f),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f)) }
@@ -318,7 +313,7 @@ fun FilterBottomSheet(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Color(0xFF1B1E2E))
+                    .background(Color(0xFF1F1F1F))
                     .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
             ) {
                 Button(
@@ -402,7 +397,7 @@ fun SearchHeader(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF1A1F2E))
+                    .background(Color(0xFF1F1F1F))
                     .clickable { onBackClick() },
                 contentAlignment = Alignment.Center
             ) {
@@ -410,7 +405,7 @@ fun SearchHeader(
             }
         }
         Row(
-            modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(26.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF1A1F2E), Color(0xFF1E2438))))
+            modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(26.dp)).background(Brush.horizontalGradient(listOf(Color(0xFF1F1F1F), Color(0xFF242424))))
                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(26.dp)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -434,7 +429,7 @@ fun SearchHeader(
             }
         }
         Box(
-            modifier = Modifier.size(52.dp).clip(CircleShape).background(if (isFiltered) Color(0xFFF6E29A) else Color(0xFF1A1F2E)).clickable { onFilterClick() },
+            modifier = Modifier.size(52.dp).clip(CircleShape).background(if (isFiltered) Color(0xFFF6E29A) else Color(0xFF1F1F1F)).clickable { onFilterClick() },
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Outlined.Tune, null, tint = if (isFiltered) Color.Black else Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
@@ -457,7 +452,7 @@ fun HistoryChip(text: String, onClick: () -> Unit, onDelete: () -> Unit) {
 
 @Composable
 fun SearchMovieCard(movie: SearchMovieUi, onClick: () -> Unit = {}) {
-    Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.68f).clip(RoundedCornerShape(18.dp)).background(Color(0xFF131A2F)).clickable(onClick = onClick)) {
+    Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.68f).clip(RoundedCornerShape(18.dp)).background(Color(0xFF1A1A1A)).clickable(onClick = onClick)) {
         com.example.alphacinema.ui.components.AlphaCinemaImage(
             model = movie.posterUrl,
             contentDescription = movie.title,
