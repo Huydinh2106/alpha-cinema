@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,6 +60,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -69,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.alphacinema.R
+import com.example.alphacinema.data.local.UserProfileCache
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatLinkItem
 import com.example.alphacinema.data.model.SupportChatMessage
@@ -81,6 +85,7 @@ import com.example.alphacinema.ui.components.GradientPlayButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
+import com.google.firebase.auth.FirebaseAuth
 
 private val UserBubbleShape = RoundedCornerShape(
     topStart = 22.dp,
@@ -95,6 +100,37 @@ private val BotBubbleShape = RoundedCornerShape(
     bottomEnd = 22.dp
 )
 
+private fun resolveSupportUserName(
+    auth: FirebaseAuth,
+    profileCache: UserProfileCache
+): String {
+    val user = auth.currentUser ?: return "bạn"
+    val cachedName = profileCache.displayName
+        .takeIf { profileCache.uid == user.uid }
+        .cleanDisplayName()
+    return user.displayName.cleanDisplayName()
+        ?: cachedName
+        ?: user.email
+            ?.substringBefore("@")
+            .cleanDisplayName()
+        ?: "bạn"
+}
+
+private fun String?.cleanDisplayName(): String? {
+    return this
+        ?.trim()
+        ?.replace(Regex("\\s+"), " ")
+        ?.takeIf { it.isNotBlank() }
+}
+
+private fun avatarInitial(displayName: String): String {
+    return displayName
+        .takeUnless { it.equals("bạn", ignoreCase = true) }
+        ?.firstOrNull()
+        ?.uppercase()
+        ?: "A"
+}
+
 @Composable
 fun SupportScreen(
     supportViewModel: SupportViewModel = viewModel(),
@@ -104,9 +140,28 @@ fun SupportScreen(
     var error by remember { mutableStateOf<String?>(null) }
     val messages by supportViewModel.messages.collectAsState()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val auth = remember { FirebaseAuth.getInstance() }
+    val profileCache = remember(context) { UserProfileCache(context) }
+    var userDisplayName by remember { mutableStateOf(resolveSupportUserName(auth, profileCache)) }
     val hasStartedChat = messages.isNotEmpty()
     val isLoading = messages.any { it.sender == SupportMessageSender.LOADING }
+    val imeBottomPadding = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val bottomBarPadding = if (imeBottomPadding > 0.dp) {
+        0.dp
+    } else {
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp
+    }
+
+    DisposableEffect(auth, profileCache) {
+        val listener = FirebaseAuth.AuthStateListener {
+            userDisplayName = resolveSupportUserName(auth, profileCache)
+        }
+        userDisplayName = resolveSupportUserName(auth, profileCache)
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -122,12 +177,11 @@ fun SupportScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Reserve room above the floating GlassBottomBar from AppScreen.
-                // Use dynamic WindowInsets so it works on all screen ratios.
-                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp)
+                .padding(bottom = bottomBarPadding)
         ) {
             ChatHeader(
                 hasStartedChat = hasStartedChat,
+                userDisplayName = userDisplayName,
                 onNewConversation = {
                     inputText = ""
                     error = null
@@ -144,6 +198,7 @@ fun SupportScreen(
                     ChatMessageList(
                         messages = messages,
                         listState = listState,
+                        userDisplayName = userDisplayName,
                         onMovieAction = onMovieAction,
                         onLinkClick = { link ->
                             val primaryUri = link.uri?.takeIf { it.isNotBlank() } ?: link.url
@@ -160,6 +215,7 @@ fun SupportScreen(
                     )
                 } else {
                     ChatWelcome(
+                        userDisplayName = userDisplayName,
                         onSuggestionClick = { suggestion ->
                             inputText = ""
                             error = null
@@ -190,6 +246,7 @@ fun SupportScreen(
 @Composable
 private fun ChatHeader(
     hasStartedChat: Boolean,
+    userDisplayName: String,
     onNewConversation: () -> Unit
 ) {
     Row(
@@ -268,7 +325,10 @@ private fun ChatHeader(
             }
         }
 
-        UserAvatar(modifier = Modifier.size(38.dp))
+        UserAvatar(
+            displayName = userDisplayName,
+            modifier = Modifier.size(38.dp)
+        )
     }
 }
 
@@ -297,6 +357,7 @@ private fun HeaderIconButton(
 
 @Composable
 private fun ChatWelcome(
+    userDisplayName: String,
     onSuggestionClick: (String) -> Unit
 ) {
     val suggestions = listOf(
@@ -320,11 +381,13 @@ private fun ChatWelcome(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Xin chào Khoa!",
+                text = "Xin chào $userDisplayName!",
                 color = Color.White,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
-                lineHeight = 36.sp
+                lineHeight = 36.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = "Bạn muốn xem gì hôm nay?",
@@ -433,7 +496,10 @@ private fun BotAvatar(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun UserAvatar(modifier: Modifier = Modifier) {
+private fun UserAvatar(
+    displayName: String,
+    modifier: Modifier = Modifier
+) {
     Box(
         modifier = modifier
             .clip(CircleShape)
@@ -448,7 +514,7 @@ private fun UserAvatar(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "K",
+            text = avatarInitial(displayName),
             color = Color.Black,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.ExtraBold
@@ -460,6 +526,7 @@ private fun UserAvatar(modifier: Modifier = Modifier) {
 private fun ChatMessageList(
     messages: List<SupportChatMessage>,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    userDisplayName: String,
     onMovieAction: (SupportChatAction) -> Unit,
     onLinkClick: (SupportChatLinkItem) -> Unit
 ) {
@@ -478,6 +545,7 @@ private fun ChatMessageList(
         items(messages, key = { it.id }) { message ->
             ChatBubble(
                 message = message,
+                userDisplayName = userDisplayName,
                 onMovieAction = onMovieAction,
                 onLinkClick = onLinkClick
             )
@@ -488,11 +556,13 @@ private fun ChatMessageList(
 @Composable
 internal fun MessageBubble(
     message: SupportChatMessage,
+    userDisplayName: String = "bạn",
     onMovieAction: (SupportChatAction) -> Unit = {},
     onLinkClick: (SupportChatLinkItem) -> Unit = {}
 ) {
     ChatBubble(
         message = message,
+        userDisplayName = userDisplayName,
         onMovieAction = onMovieAction,
         onLinkClick = onLinkClick
     )
@@ -501,6 +571,7 @@ internal fun MessageBubble(
 @Composable
 private fun ChatBubble(
     message: SupportChatMessage,
+    userDisplayName: String = "bạn",
     onMovieAction: (SupportChatAction) -> Unit = {},
     onLinkClick: (SupportChatLinkItem) -> Unit = {}
 ) {
@@ -594,7 +665,10 @@ private fun ChatBubble(
 
         if (fromUser) {
             Spacer(modifier = Modifier.width(8.dp))
-            UserAvatar(modifier = Modifier.size(30.dp))
+            UserAvatar(
+                displayName = userDisplayName,
+                modifier = Modifier.size(30.dp)
+            )
         }
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,8 +72,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 // ── Color Palette ────────────────────────────────────────────────────────────
-private val DarkBg = Color(0xFF070B16)
-
+private val DarkBg = Color.Black
 private val CardBg = Color(0xFF141414)
 private val CardBorder = Color(0xFF333333)
 private val GoldAccent = Color(0xFFF6E29A)
@@ -245,7 +245,13 @@ fun NotificationScreen(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBg)
-
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                // Tap anywhere outside to cancel delete mode
+                deleteTargetId = null
+            }
     ) {
         Column(
             modifier = Modifier

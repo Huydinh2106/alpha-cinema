@@ -16,9 +16,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
@@ -403,6 +406,7 @@ fun MainContent(
     // Theo dõi current route để hiện/ẩn bottom bar
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val isOnMainRoute = navBackStackEntry?.destination?.hasRoute<MainRoute>() == true
+    val isKeyboardVisible = WindowInsets.ime.asPaddingValues().calculateBottomPadding() > 0.dp
 
     Box(
         modifier = modifier
@@ -978,7 +982,7 @@ fun MainContent(
             }
         }
 
-        if (isOnMainRoute) {
+        if (isOnMainRoute && !isKeyboardVisible) {
             GlassBottomBar(
                 modifier = Modifier.align(Alignment.BottomCenter),
                 currentScreen = currentMainScreen,
