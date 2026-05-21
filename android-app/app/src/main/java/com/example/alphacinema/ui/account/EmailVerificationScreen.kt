@@ -23,7 +23,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
@@ -427,10 +426,9 @@ private fun OtpInputRow(
 
         // ── 6 ô hiển thị ────────────────────────────────────────────────────
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .fillMaxWidth()
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
@@ -446,8 +444,7 @@ private fun OtpInputRow(
                     isCurrent = isCurrent,
                     isFilled = isFilled,
                     hasError = hasError,
-                    shimmerAlpha = shimmerAlpha,
-                    modifier = Modifier.weight(1f).aspectRatio(1f)
+                    shimmerAlpha = shimmerAlpha
                 )
             }
         }
@@ -461,8 +458,7 @@ private fun OtpDigitBox(
     isCurrent: Boolean,
     isFilled: Boolean,
     hasError: Boolean,
-    shimmerAlpha: Float,
-    modifier: Modifier = Modifier
+    shimmerAlpha: Float
 ) {
     // ── Hiệu ứng scale khi số xuất hiện ─────────────────────────────────────
     val scale = remember { Animatable(1f) }
@@ -487,7 +483,8 @@ private fun OtpDigitBox(
     }
 
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .size(50.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(bgColor)
             .border(1.5.dp, borderColor, RoundedCornerShape(14.dp)),

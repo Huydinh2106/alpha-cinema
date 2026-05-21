@@ -1,24 +1,4 @@
-const admin = require('firebase-admin');
-const path = require('path');
-const fs = require('fs');
-
-// Path to your service account key
-const serviceAccountPath = path.resolve(__dirname, '../service-account.json');
-
-if (!fs.existsSync(serviceAccountPath)) {
-    console.error(`ERROR: cannot find service account at ${serviceAccountPath}`);
-    console.error('Please download your service-account.json from Firebase Console -> Project Settings -> Service Accounts');
-    process.exit(1);
-}
-
-const serviceAccount = require(serviceAccountPath);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
-
-const db = admin.firestore();
-
+const { admin, db } = require('./firebaseAdmin');
 
 // API Endpoints
 const API_BASE = "https://phimapi.com";
