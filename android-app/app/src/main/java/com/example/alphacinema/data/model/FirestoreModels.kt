@@ -22,6 +22,7 @@ data class UserProfile(
 data class WatchHistoryItem(
     var movieId: String = "", // Same as slug
     val movieName: String = "",
+    val originName: String = "",
     val posterUrl: String = "",
     val episodeId: String = "",
     val episodeName: String = "",

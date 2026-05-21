@@ -5,13 +5,13 @@ import com.google.gson.annotations.SerializedName
 data class SupportChatRequest(
     val question: String,
     @SerializedName("top_k")
-    val topK: Int = 4,
+    val topK: Int = 6,
     @SerializedName("top_n_recommendations")
-    val topNRecommendations: Int = 3,
+    val topNRecommendations: Int = 5,
     @SerializedName("generation_model")
-    val generationModel: String? = null,
+    val generationModel: String = "gpt-4o-mini",
     @SerializedName("session_id")
-    val sessionId: String,
+    val sessionId: String? = null,
     @SerializedName("remember_history")
     val rememberHistory: Boolean = true,
     @SerializedName("chat_history")
@@ -28,6 +28,7 @@ data class SupportChatApiResponse(
     val intent: String? = null,
     val mode: String? = null,
     val sources: List<SupportChatSource> = emptyList(),
+    val recommendations: List<SupportChatRecommendation> = emptyList(),
     @SerializedName("standalone_question")
     val standaloneQuestion: String? = null,
     @SerializedName("session_id")
@@ -40,6 +41,34 @@ data class SupportChatSource(
     val title: String? = null,
     val content: String? = null,
     val url: String? = null
+)
+
+data class SupportChatRecommendation(
+    val id: String? = null,
+    @SerializedName("movie_id")
+    val movieId: String? = null,
+    val title: String? = null,
+    val name: String? = null,
+    @SerializedName("origin_name")
+    val originName: String? = null,
+    val slug: String? = null,
+    val year: String? = null,
+    val poster: String? = null,
+    @SerializedName("poster_url")
+    val posterUrl: String? = null,
+    @SerializedName("thumb_url")
+    val thumbUrl: String? = null,
+    val reason: String? = null
+)
+
+data class SupportRecommendRequest(
+    val query: String,
+    @SerializedName("top_n")
+    val topN: Int = 5
+)
+
+data class SupportRecommendApiResponse(
+    val recommendations: List<SupportChatRecommendation> = emptyList()
 )
 
 data class SupportChatMemoryContext(
@@ -58,29 +87,27 @@ data class SupportChatMemoryContext(
 )
 
 data class SupportChatResponseContract(
-    val version: String = "2026-04-12",
+    val version: String = "2026-05-13",
     @SerializedName("include_intent")
     val includeIntent: Boolean = true,
-    @SerializedName("structured_movies_only_for_recommendation")
-    val structuredMoviesOnlyForRecommendation: Boolean = true,
-    @SerializedName("required_movie_fields")
-    val requiredMovieFields: List<String> = listOf(
-        "id",
-        "title",
-        "slug",
-        "actions"
+    @SerializedName("supported_intents")
+    val supportedIntents: List<String> = listOf(
+        "policy",
+        "movie",
+        "recommendation",
+        "mixed"
     ),
-    @SerializedName("supported_action_types")
-    val supportedActionTypes: List<String> = listOf(
-        "play_movie",
-        "view_detail",
-        "save_to_list",
-        "watch_trailer"
+    @SerializedName("recommendation_key")
+    val recommendationKey: String = "recommendations",
+    @SerializedName("required_recommendation_fields")
+    val requiredRecommendationFields: List<String> = listOf(
+        "title",
+        "slug"
     ),
     val rules: List<String> = listOf(
-        "Return movies only when the user explicitly asks for movie recommendations or what-to-watch suggestions.",
-        "For app policy, account, troubleshooting, or general support questions return text-only with no movies array.",
-        "When intent is movie_recommendation include intent and structured movie actions so the app can render CTA buttons."
+        "Return an answer for every successful /ask response.",
+        "Use recommendations only when the answer includes movie suggestions.",
+        "Preserve session_id for multi-turn conversations."
     )
 )
 
@@ -129,9 +156,22 @@ data class SupportChatMovieItem(
     val actions: List<SupportChatAction> = emptyList()
 )
 
+data class SupportChatLinkItem(
+    val id: String,
+    val label: String,
+    val subtitle: String = "",
+    val url: String,
+    val provider: String = "",
+    val uri: String? = null,
+    val thumbnailUrl: String? = null,
+    val contentId: String? = null,
+    val contentType: String? = null
+)
+
 data class SupportChatMetadata(
     val movieItems: List<SupportChatMovieItem> = emptyList(),
-    val actions: List<SupportChatAction> = emptyList()
+    val actions: List<SupportChatAction> = emptyList(),
+    val linkItems: List<SupportChatLinkItem> = emptyList()
 )
 
 data class SupportChatMessage(

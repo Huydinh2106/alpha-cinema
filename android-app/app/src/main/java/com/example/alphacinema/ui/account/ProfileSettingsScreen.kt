@@ -102,20 +102,8 @@ fun ProfileSettingsScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16))
+            .background(Color.Black)
     ) {
-        // Background gradient
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF1D2540), Color(0xFF101726), Color(0xFF070B16))
-                    )
-                )
-        )
-
         AnimatedContent(
             targetState = currentPage,
             transitionSpec = {
@@ -283,7 +271,7 @@ private fun ProfileMainPage(
         else -> "Gói Free"
     }
     val planColor = when (plan.lowercase()) {
-        "basic" -> Color(0xFF8BE7FF)
+        "basic" -> Color(0xFFD8DEE9)
         "couple" -> Color(0xFFFFB2D2)
         "premium" -> Color(0xFFF6E29A)
         else -> Color.White.copy(alpha = 0.6f)
@@ -502,7 +490,7 @@ private fun EditProfilePage(
                     ) {
                         Text(
                             (previewName.firstOrNull() ?: 'A').uppercase(),
-                            color = Color(0xFF070B16),
+                            color = Color.Black,
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -510,16 +498,16 @@ private fun EditProfilePage(
                 }
                 Box(
                     modifier = Modifier.size(32.dp).clip(CircleShape)
-                        .background(Color(0xFFF6E29A)).border(2.dp, Color(0xFF070B16), CircleShape),
+                        .background(Color(0xFFF6E29A)).border(2.dp, Color.Black, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Outlined.CameraAlt, null, tint = Color(0xFF070B16), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.CameraAlt, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 if (selectedImageUri != null) "Đã chọn ảnh mới" else "Nhấn để đổi ảnh đại diện",
-                color = if (selectedImageUri != null) Color(0xFF8BE7FF) else Color.White.copy(alpha = 0.5f),
+                color = if (selectedImageUri != null) Color(0xFFD8DEE9) else Color.White.copy(alpha = 0.5f),
                 style = MaterialTheme.typography.labelSmall
             )
         }
@@ -550,7 +538,7 @@ private fun EditProfilePage(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
             enabled = !isLoading,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A), contentColor = Color(0xFF070B16))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A), contentColor = Color.Black)
         ) {
             Text("Lưu thay đổi", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
         }
@@ -562,7 +550,7 @@ private fun EditProfilePage(
     if (showPickerSheet) {
         ModalBottomSheet(
             onDismissRequest = { showPickerSheet = false },
-            containerColor = Color(0xFF0F1628),
+            containerColor = Color(0xFF141414),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             dragHandle = {
                 Box(
@@ -581,7 +569,7 @@ private fun EditProfilePage(
                     style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
 
                 ImageSourceOption(
-                    icon = Icons.Outlined.PhotoLibrary, iconTint = Color(0xFF8BE7FF),
+                    icon = Icons.Outlined.PhotoLibrary, iconTint = Color(0xFFD8DEE9),
                     label = "Thư viện ảnh"
                 ) {
                     showPickerSheet = false
@@ -741,7 +729,7 @@ private fun ChangePasswordPage(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
             enabled = !isLoading,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE8A0FF), contentColor = Color(0xFF070B16))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE8A0FF), contentColor = Color.Black)
         ) {
             Text("Xác nhận đổi mật khẩu", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
         }
@@ -771,7 +759,7 @@ private fun ProfileAvatarLarge(name: String, url: String) {
         ) {
             Text(
                 (name.firstOrNull() ?: 'A').uppercase(),
-                color = Color(0xFF070B16),
+                color = Color.Black,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold
             )
@@ -970,37 +958,24 @@ private fun SubscriptionManagementPage(
         }
 
         // Bottom buttons - pinned
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(top = 12.dp, bottom = 16.dp)
-        ) {
-            Button(
-                onClick = onChangePlan,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFF6E29A),
-                    contentColor = Color(0xFF070B16)
-                )
+        if (membershipPlan.key != DemoMembershipPlanKey.PREMIUM) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(top = 12.dp, bottom = 16.dp)
             ) {
-                Text("Đổi gói", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedButton(
-                onClick = { /* TODO: handle cancel renew */ },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color.White.copy(alpha = 0.78f),
-                    containerColor = Color.White.copy(alpha = 0.035f)
-                )
-            ) {
-                Text("Hủy gia hạn", fontWeight = FontWeight.SemiBold)
+                Button(
+                    onClick = onChangePlan,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF6E29A),
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Nâng cấp gói", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
+                }
             }
         }
     }

@@ -116,18 +116,14 @@ fun NotificationScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070B16)) // Đồng bộ màu nền với HomeScreen
+            .background(Color.Black)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color(0xFF1A1D2B), Color(0xFF070B16))
-                        )
-                    )
+                    .background(Color.Black)
                     .padding(top = 48.dp, start = 20.dp, end = 20.dp, bottom = 16.dp),
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -165,7 +161,7 @@ fun NotificationCard(item: NotificationItem) {
     Card(
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1D2B).copy(alpha = 0.7f)), // Glassmorphism navy style
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF141414).copy(alpha = 0.7f)),
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))

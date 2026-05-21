@@ -43,9 +43,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val GoldAccent = Color(0xFFF6E29A)
-private val DarkBg = Color(0xFF070B16)
-private val CardBg = Color(0xFF10192E)
-private val CardBorder = Color(0xFF1E2A48)
+private val DarkBg = Color.Black
+private val CardBg = Color(0xFF141414)
+private val CardBorder = Color(0xFF333333)
 private val ErrorRed = Color(0xFFFF6B6B)
 private val SuccessGreen = Color(0xFF4ADE80)
 

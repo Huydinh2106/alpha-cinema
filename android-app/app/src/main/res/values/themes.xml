@@ -9,7 +9,7 @@
     </style>
 
     <!-- System Splash Screen của Android 12+ được "vô hiệu hoá" bằng cách:
-         - Nền tối đúng màu app (#070B16)
+         - Nền tối đúng màu app (#000000)
          - Icon trong suốt hoàn toàn → KHÔNG thấy gì cả
          Kết quả: người dùng chỉ thấy màn đen → fade vào Splash của mình -->
     <style name="Theme.AlphaCinema.Splash" parent="Theme.SplashScreen">

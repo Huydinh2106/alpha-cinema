@@ -11,12 +11,14 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatActionFactory
+import com.example.alphacinema.data.model.SupportChatLinkItem
 import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportChatMetadata
 import com.example.alphacinema.data.model.SupportChatMovieItem
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.resolveRoute
+import com.example.alphacinema.ui.support.MessageBubble
 import com.example.alphacinema.ui.theme.AlphaCinemaTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -109,6 +111,29 @@ class SupportScreenTest {
         composeRule.onAllNodesWithText("Xem phim").assertCountEquals(0)
     }
 
+    @Test
+    fun rendersAndClicksSpotifyLinkForMusicReply() {
+        var clickedLink: SupportChatLinkItem? = null
+
+        composeRule.setContent {
+            AlphaCinemaTheme {
+                MessageBubble(
+                    message = spotifyLinkMessage(),
+                    onLinkClick = { clickedLink = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("support_link_spotify-titanic").assertIsDisplayed()
+        composeRule.onNodeWithText("Titanic: Music From The Motion Picture").assertIsDisplayed()
+        composeRule.onNodeWithTag("support_link_spotify-titanic").performClick()
+        composeRule.runOnIdle {
+            assertNotNull(clickedLink)
+            assertEquals("https://open.spotify.com/album/3Xx4fZfIuNDA6oLQ4uM5X5", clickedLink?.url)
+            assertEquals("spotify:album:3Xx4fZfIuNDA6oLQ4uM5X5", clickedLink?.uri)
+        }
+    }
+
     private fun suggestedMovieMessage(
         action: SupportChatAction = SupportChatActionFactory.createWatchMovieAction(
             slug = "ung-kinh-ma-quai-2026",
@@ -132,6 +157,29 @@ class SupportScreenTest {
                         slug = "ung-kinh-ma-quai-2026",
                         movieId = "ung-kinh-ma-quai-2026",
                         actions = listOf(action)
+                    )
+                )
+            )
+        )
+    }
+
+    private fun spotifyLinkMessage(): SupportChatMessage {
+        return SupportChatMessage(
+            id = "bot-spotify",
+            text = "Spotify link ready.",
+            sender = SupportMessageSender.BOT,
+            timestamp = "12:01",
+            metadata = SupportChatMetadata(
+                linkItems = listOf(
+                    SupportChatLinkItem(
+                        id = "spotify-titanic",
+                        label = "Titanic: Music From The Motion Picture",
+                        subtitle = "Album Spotify - ID 3Xx4fZfIuNDA6oLQ4uM5X5",
+                        url = "https://open.spotify.com/album/3Xx4fZfIuNDA6oLQ4uM5X5",
+                        provider = "Spotify",
+                        uri = "spotify:album:3Xx4fZfIuNDA6oLQ4uM5X5",
+                        contentId = "3Xx4fZfIuNDA6oLQ4uM5X5",
+                        contentType = "album"
                     )
                 )
             )
