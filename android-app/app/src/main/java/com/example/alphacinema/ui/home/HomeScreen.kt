@@ -75,6 +75,7 @@ package com.example.alphacinema.ui.home
     import androidx.compose.ui.res.painterResource
     import com.example.alphacinema.ui.theme.AlphaCinemaTheme
     import kotlinx.coroutines.delay
+    import kotlinx.coroutines.launch
     import kotlin.math.PI
     import kotlin.math.cos
     import kotlin.math.sin
@@ -454,6 +455,7 @@ package com.example.alphacinema.ui.home
         }
 
         val scrollState = rememberScrollState()
+        val scrollScope = rememberCoroutineScope()
         val collapseFraction by remember {
             derivedStateOf {
                 (scrollState.value / 200f).coerceIn(0f, 1f)
@@ -581,7 +583,11 @@ package com.example.alphacinema.ui.home
             TopHeader(
                 collapseFraction = collapseFraction,
                 unreadCount = unreadCount,
-
+                onLogoClick = {
+                    scrollScope.launch {
+                        scrollState.animateScrollTo(0)
+                    }
+                },
                 onNotificationClick = { showNotificationScreen = true },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -728,7 +734,7 @@ package com.example.alphacinema.ui.home
     fun TopHeader(
         collapseFraction: Float,
         unreadCount: Int,
-
+        onLogoClick: () -> Unit = {},
         onNotificationClick: () -> Unit = {},
         modifier: Modifier = Modifier
     ) {
@@ -761,7 +767,9 @@ package com.example.alphacinema.ui.home
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onLogoClick),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Image(
