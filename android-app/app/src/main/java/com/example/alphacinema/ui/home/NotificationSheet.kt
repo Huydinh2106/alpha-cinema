@@ -399,7 +399,23 @@ private fun NotificationRow(
             verticalAlignment = Alignment.Top
         ) {
             // ── Thumbnail (poster hoặc icon) ─────────────────────────────────
-            if (!notification.imageUrl.isNullOrBlank()) {
+            val localDrawableRes = when (notification.plan?.lowercase()) {
+                "basic" -> com.example.alphacinema.R.drawable.basic
+                "couple" -> com.example.alphacinema.R.drawable.couple
+                "premium" -> com.example.alphacinema.R.drawable.premium
+                else -> null
+            }
+
+            if (localDrawableRes != null) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = localDrawableRes),
+                    contentDescription = notification.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(width = 100.dp, height = 56.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                )
+            } else if (!notification.imageUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = notification.imageUrl,
                     contentDescription = notification.title,

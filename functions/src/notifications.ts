@@ -124,18 +124,15 @@ export const notifyBilling = functions.onCall({ region: REGION }, async (request
       : `Gói Premium của bạn sẽ hết hạn trong ${expiry} ngày tới. Gia hạn ngay!`;
 
   const message: admin.messaging.MulticastMessage = {
-    notification: { title, body },
     android: {
-      notification: {
-
-        channelId: "push_notifications",
-        priority: "high"
-      },
+      priority: "high"
     },
     data: {
       type: "billing",
       plan: plan ?? "",
-      status: status ?? ""
+      status: status ?? "",
+      title: title,
+      body: body
     },
     tokens: tokens
   };
@@ -452,24 +449,16 @@ export const checkExpiringSubscriptions = onSchedule({
     for (let i = 0; i < uniqueTokens.length; i += chunkSize) {
       const chunk = uniqueTokens.slice(i, i + chunkSize);
       const message: admin.messaging.MulticastMessage = {
-        notification: {
-          title: pushTitle,
-          body: pushBody,
-          imageUrl: SUBSCRIPTION_REMINDER_IMAGE
-        },
         android: {
-          priority: "high",
-          notification: {
-            channelId: "push_notifications",
-            priority: "default",
-            imageUrl: SUBSCRIPTION_REMINDER_IMAGE
-          }
+          priority: "high"
         },
         data: {
           type: "billing",
           plan,
           days: String(displayDays),
-          imageUrl: SUBSCRIPTION_REMINDER_IMAGE
+          title: pushTitle,
+          body: pushBody
+          // Bỏ imageUrl để tránh tải ảnh cũ, client sẽ tự lấy ảnh local dựa vào plan
         },
         tokens: chunk
       };

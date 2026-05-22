@@ -824,13 +824,7 @@ package com.example.alphacinema.ui.home
 
                 }
 
-                IconButton(onClick = {}) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                }
+
             }
         }
     }
