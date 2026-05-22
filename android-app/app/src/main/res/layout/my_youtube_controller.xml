@@ -51,13 +51,14 @@
 
         <!-- Time and secondary buttons -->
         <LinearLayout
+            android:id="@+id/bottom_actions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_above="@+id/exo_progress"
-            android:layout_marginBottom="4dp"
+            android:layout_alignParentBottom="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="16dp">
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="10dp">
 
             <TextView
                 android:id="@+id/exo_position"
@@ -118,12 +119,13 @@
                 android:tint="@android:color/white" />
         </LinearLayout>
 
-        <!-- Progress Bar at the absolute bottom — App primary color (gold) -->
+        <!-- Progress Bar above bottom actions for easier edge gestures -->
         <androidx.media3.ui.DefaultTimeBar
             android:id="@+id/exo_progress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
+            android:layout_above="@id/bottom_actions"
+            android:layout_marginBottom="8dp"
             app:bar_height="3dp"
             app:buffered_color="#80F6E29A"
             app:played_color="#FFF6E29A"

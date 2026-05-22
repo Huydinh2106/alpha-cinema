@@ -52,6 +52,7 @@ class WatchPartyViewModel : ViewModel() {
     // --- Agora Voice Chat State ---
     private var rtcEngine: RtcEngine? = null
     private var localAgoraUid: Int = 0
+    private var activeRoomId: String? = null
 
     private val _isMicMuted = MutableStateFlow(false)
     val isMicMuted: StateFlow<Boolean> = _isMicMuted.asStateFlow()
@@ -155,23 +156,17 @@ class WatchPartyViewModel : ViewModel() {
     }
 
     fun leaveRoom() {
-        val roomId = _room.value?.roomId ?: return
-        val uid = auth.currentUser?.uid ?: return
+        val roomId = _room.value?.roomId ?: activeRoomId
+        val uid = auth.currentUser?.uid
+
+        clearLocalRoomSession()
+
+        if (roomId.isNullOrBlank() || uid.isNullOrBlank()) return
+
         viewModelScope.launch {
             try {
                 repository.leaveRoom(roomId, uid)
             } catch (_: Exception) { }
-            stopObserving()
-            
-            // Giải phóng Agora
-            rtcEngine?.leaveChannel()
-            RtcEngine.destroy()
-            rtcEngine = null
-            _speakingUsers.value = emptyMap()
-            
-            _room.value = null
-            _members.value = emptyList()
-            _chatMessages.value = emptyList()
         }
     }
 
@@ -218,7 +213,7 @@ class WatchPartyViewModel : ViewModel() {
 
     fun adjustUserVolume(firebaseUid: String, volume: Int) {
         // volume range: 0 - 100
-        rtcEngine?.adjustUserPlaybackSignalVolume(firebaseUid.hashCode(), volume)
+        rtcEngine?.adjustUserPlaybackSignalVolume(firebaseUid.hashCode() and 0x7FFFFFFF, volume)
     }
 
     // ── Playback Control (Host only) ────────────────────────────────
@@ -292,6 +287,7 @@ class WatchPartyViewModel : ViewModel() {
 
     private fun startObserving(roomId: String) {
         stopObserving()
+        activeRoomId = roomId
         _roomDismissed.value = false
         observeJob = viewModelScope.launch {
             launch {
@@ -299,7 +295,7 @@ class WatchPartyViewModel : ViewModel() {
                     if (room == null) {
                         // Room was deleted (host left)
                         _roomDismissed.value = true
-                        _room.value = null
+                        clearLocalRoomSession()
                     } else {
                         _room.value = room
                     }
@@ -328,13 +324,33 @@ class WatchPartyViewModel : ViewModel() {
         observeJob = null
     }
 
+    private fun clearLocalRoomSession() {
+        stopObserving()
+        activeRoomId = null
+        leaveVoiceChannel()
+        _room.value = null
+        _members.value = emptyList()
+        _chatMessages.value = emptyList()
+    }
+
+    private fun leaveVoiceChannel() {
+        rtcEngine?.leaveChannel()
+        if (rtcEngine != null) {
+            RtcEngine.destroy()
+        }
+        rtcEngine = null
+        _speakingUsers.value = emptyMap()
+        _isMicMuted.value = false
+        localAgoraUid = 0
+    }
+
     fun clearError() {
         _error.value = null
     }
 
     override fun onCleared() {
-        super.onCleared()
         leaveRoom()
+        super.onCleared()
     }
 
     private fun getAvatarUrl(context: Context, user: com.google.firebase.auth.FirebaseUser): String {

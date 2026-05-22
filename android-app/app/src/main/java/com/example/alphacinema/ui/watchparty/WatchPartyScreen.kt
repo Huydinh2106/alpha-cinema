@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo
 import android.view.View
 import android.view.ViewGroup
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -77,7 +78,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -115,6 +115,7 @@ import com.example.alphacinema.data.model.WatchPartyChatMessage
 import com.example.alphacinema.data.model.WatchPartyMember
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.player.findActivity
+import com.example.alphacinema.ui.player.installBrightnessGesture
 import kotlinx.coroutines.delay
 
 
@@ -131,7 +132,6 @@ fun WatchPartyScreen(
     val room by viewModel.room.collectAsState()
     val members by viewModel.members.collectAsState()
     val chatMessages by viewModel.chatMessages.collectAsState()
-    val roomDismissed by viewModel.roomDismissed.collectAsState()
     val serverTimeOffset by viewModel.serverTimeOffset.collectAsState()
 
     val context = LocalContext.current
@@ -170,14 +170,6 @@ fun WatchPartyScreen(
     var isFullscreen by remember { mutableStateOf(false) }
     var showEpisodeDialog by remember { mutableStateOf(false) }
     val activity = context.findActivity()
-
-    // Room dismissed → host left
-    LaunchedEffect(roomDismissed) {
-        if (roomDismissed) {
-            android.widget.Toast.makeText(context, "Chủ phòng đã giải tán phòng", android.widget.Toast.LENGTH_SHORT).show()
-            onBack()
-        }
-    }
 
     // ExoPlayer
     val exoPlayer = remember {
@@ -322,11 +314,23 @@ fun WatchPartyScreen(
         }
     }
 
+    BackHandler {
+        when {
+            isImeVisible -> focusManager.clearFocus()
+            isFullscreen -> toggleFullscreen()
+            else -> onBack()
+        }
+    }
+
     // Fullscreen mode
     if (isFullscreen) {
         var brightness by remember { mutableFloatStateOf(1f) }
+        var showBrightnessIndicator by remember { mutableStateOf(false) }
         var visibleChats by remember { mutableStateOf<List<WatchPartyChatMessage>>(emptyList()) }
         val prevMsgCount = remember { mutableStateOf(chatMessages.size) }
+        LaunchedEffect(showBrightnessIndicator) {
+            if (showBrightnessIndicator) { delay(1500); showBrightnessIndicator = false }
+        }
         LaunchedEffect(chatMessages.size) {
             if (chatMessages.size > prevMsgCount.value) {
                 val newMsgs = chatMessages.takeLast(chatMessages.size - prevMsgCount.value)
@@ -345,6 +349,10 @@ fun WatchPartyScreen(
                         useController = isHost
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         setFullscreenButtonClickListener { toggleFullscreen() }
+                        installBrightnessGesture { delta ->
+                            brightness = (brightness + delta).coerceIn(0.05f, 1f)
+                            showBrightnessIndicator = true
+                        }
 
                         // Force custom 10s icons
                         val applyCustomIcons = {
@@ -372,27 +380,6 @@ fun WatchPartyScreen(
             // Brightness dim overlay (pass-through touches)
             if (overlayAlpha > 0.01f) {
                 Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f }.background(Color.Black.copy(alpha = overlayAlpha)))
-            }
-            // Left-half gesture zone for brightness (does NOT block taps)
-            var showBrightnessIndicator by remember { mutableStateOf(false) }
-            LaunchedEffect(showBrightnessIndicator) {
-                if (showBrightnessIndicator) { delay(1500); showBrightnessIndicator = false }
-            }
-            androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val halfWidth = maxWidth / 2
-                Box(
-                    modifier = Modifier
-                        .width(halfWidth)
-                        .fillMaxHeight()
-                        .align(Alignment.CenterStart)
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures { _, dragAmount ->
-                                val delta = -dragAmount / size.height.toFloat()
-                                brightness = (brightness + delta).coerceIn(0.05f, 1f)
-                                showBrightnessIndicator = true
-                            }
-                        }
-                )
             }
 
             // CENTER: Brightness indicator (Netflix-style)

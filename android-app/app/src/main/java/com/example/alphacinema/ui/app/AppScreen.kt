@@ -197,6 +197,7 @@ fun MainContent(
 
     val watchPartyViewModel: WatchPartyViewModel = viewModel()
     val wpRoom by watchPartyViewModel.room.collectAsState()
+    val wpRoomDismissed by watchPartyViewModel.roomDismissed.collectAsState()
     val wpError by watchPartyViewModel.error.collectAsState()
     val wpIsCreating by watchPartyViewModel.isCreating.collectAsState()
     val wpIsJoining by watchPartyViewModel.isJoining.collectAsState()
@@ -402,6 +403,11 @@ fun MainContent(
         navController.navigate(WatchPartyNavRoute(roomId = roomId))
     }
 
+    fun leaveWatchParty() {
+        watchPartyViewModel.leaveRoom()
+        navController.popBackStack()
+    }
+
     // Handle deep link: alphacinema://watchparty/{roomId}
     val deepLinkHandled = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -416,6 +422,24 @@ fun MainContent(
                         openWatchParty(roomId)
                     }
                 }
+            }
+        }
+    }
+
+    LaunchedEffect(wpRoomDismissed) {
+        if (!wpRoomDismissed) return@LaunchedEffect
+
+        showToast("Chủ phòng đã giải tán phòng")
+        val destination = navController.currentBackStackEntry?.destination
+        val isOnWatchPartyRoute = destination?.hasRoute<WatchPartyNavRoute>() == true ||
+            destination?.hasRoute<WatchPartySearchNavRoute>() == true
+
+        if (isOnWatchPartyRoute) {
+            navController.navigate(MainRoute) {
+                popUpTo(navController.graph.startDestinationId) {
+                    inclusive = false
+                }
+                launchSingleTop = true
             }
         }
     }
@@ -844,7 +868,7 @@ fun MainContent(
                         onChangeMovieClick = {
                             navController.navigate(WatchPartySearchNavRoute)
                         },
-                        onBack = { navController.popBackStack() }
+                        onBack = ::leaveWatchParty
                     )
                 } else if (detailLoading || playerMovie == null) {
                     RouteLoadingState(message = "Đang chuẩn bị phòng xem chung...")
@@ -862,7 +886,7 @@ fun MainContent(
                         onChangeMovieClick = {
                             navController.navigate(WatchPartySearchNavRoute)
                         },
-                        onBack = { navController.popBackStack() }
+                        onBack = ::leaveWatchParty
                     )
                 }
             }
