@@ -86,9 +86,27 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             this, 0, intent, android.app.PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Lấy URL ảnh poster từ data payload (server gửi kèm khi có phim mới)
-        val imageUrl = data["imageUrl"]?.takeIf { it.isNotBlank() }
-        val bitmap: Bitmap? = imageUrl?.let { loadBitmapFromUrl(it) }
+        // Kiểm tra xem có phải thông báo billing không và sử dụng ảnh local tương ứng
+        val plan = data["plan"]?.lowercase()
+        var bitmap: Bitmap? = null
+
+        if (type == "billing" && plan != null) {
+            val resId = when (plan) {
+                "basic" -> R.drawable.basic
+                "couple" -> R.drawable.couple
+                "premium" -> R.drawable.premium
+                else -> null
+            }
+            if (resId != null) {
+                bitmap = BitmapFactory.decodeResource(resources, resId)
+            }
+        }
+
+        // Nếu không có ảnh local, thử tải từ imageUrl
+        if (bitmap == null) {
+            val imageUrl = data["imageUrl"]?.takeIf { it.isNotBlank() }
+            bitmap = imageUrl?.let { loadBitmapFromUrl(it) }
+        }
 
         val builder = NotificationCompat.Builder(this, com.example.alphacinema.notification.NotificationHelper.CHANNEL_PUSH)
 
