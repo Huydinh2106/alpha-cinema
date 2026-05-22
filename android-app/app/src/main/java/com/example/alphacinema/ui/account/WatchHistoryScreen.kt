@@ -39,10 +39,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.alphacinema.data.local.SettingsManager
 import com.example.alphacinema.data.model.WatchHistoryItem
 import com.example.alphacinema.data.repository.FirestoreRepository
 import com.example.alphacinema.ui.components.AlphaCinemaImage
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -56,9 +58,17 @@ fun WatchHistoryScreen(
 ) {
     val auth = remember { FirebaseAuth.getInstance() }
     val firestoreRepository = remember { FirestoreRepository() }
+    val settingsManager = remember { SettingsManager.getInstance() }
+    val isKidsMode by settingsManager.isKidsModeEnabled.collectAsState()
     val userId = auth.currentUser?.uid
-    val watchHistoryFlow = remember(userId) {
-        userId?.let(firestoreRepository::getWatchHistory) ?: flowOf(emptyList())
+    val watchHistoryFlow = remember(userId, isKidsMode) {
+        userId?.let {
+            firestoreRepository.getWatchHistory(it, isKidsMode)
+                .catch { error ->
+                    android.util.Log.w("WatchHistoryScreen", "Watch history load failed", error)
+                    emit(emptyList())
+                }
+        } ?: flowOf(emptyList())
     }
     val watchHistory by watchHistoryFlow.collectAsState(initial = emptyList())
     val dateGroups = remember(watchHistory) { watchHistory.groupByWatchDate() }
@@ -93,7 +103,7 @@ fun WatchHistoryScreen(
                     )
                 }
                 Text(
-                    text = "Lịch sử xem",
+                    text = if (isKidsMode) "Lịch sử xem trẻ em" else "Lịch sử xem",
                     color = Color.White,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.ExtraBold,
@@ -104,7 +114,7 @@ fun WatchHistoryScreen(
             }
 
             if (dateGroups.isEmpty()) {
-                WatchHistoryEmptyState()
+                WatchHistoryEmptyState(isKidsMode = isKidsMode)
             } else {
                 dateGroups.forEach { group ->
                     WatchHistoryDateSection(
@@ -349,7 +359,7 @@ private fun WatchHistoryMediaRow(
 }
 
 @Composable
-private fun WatchHistoryEmptyState() {
+private fun WatchHistoryEmptyState(isKidsMode: Boolean) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -357,7 +367,11 @@ private fun WatchHistoryEmptyState() {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "Bạn chưa có lịch sử xem nào.",
+            text = if (isKidsMode) {
+                "Chế độ trẻ em chưa có lịch sử xem nào."
+            } else {
+                "Bạn chưa có lịch sử xem nào."
+            },
             color = Color.White.copy(alpha = 0.58f),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center

@@ -2,6 +2,7 @@ package com.example.alphacinema.ui.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.alphacinema.data.local.SettingsManager
 import com.example.alphacinema.data.repository.FirestoreRepository
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailUi
@@ -52,6 +53,10 @@ class PlayerViewModel : ViewModel() {
 
         viewModelScope.launch {
             runCatching {
+                val isKidsMode = runCatching {
+                    SettingsManager.getInstance().isKidsModeEnabled.value
+                }.getOrDefault(false)
+
                 firestoreRepository.updateWatchProgress(
                     userId = userId,
                     movieSlug = movie.id,
@@ -61,7 +66,8 @@ class PlayerViewModel : ViewModel() {
                     episodeId = episode?.id.orEmpty(),
                     episodeName = episode?.name.orEmpty().ifBlank { movie.currentEpisode },
                     progress = progress.coerceAtLeast(0L),
-                    duration = duration.coerceAtLeast(0L)
+                    duration = duration.coerceAtLeast(0L),
+                    isKidsMode = isKidsMode
                 )
             }
         }
