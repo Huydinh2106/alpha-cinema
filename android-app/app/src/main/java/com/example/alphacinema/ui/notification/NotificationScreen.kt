@@ -7,6 +7,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -14,7 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -23,7 +30,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import com.example.alphacinema.R
 
 // Data model
 data class NotificationItem(
@@ -31,7 +37,6 @@ data class NotificationItem(
     val title: String,
     val body: String,
     val timeAgo: String,
-    val iconRes: Int,
     val type: String
 )
 
@@ -71,19 +76,11 @@ class NotificationViewModel : ViewModel() {
                         else -> "${diff / 86400000} ngày trước"
                     }
                     
-                    val iconRes = when (type) {
-                        "series_update", "new_movie" -> android.R.drawable.ic_media_play
-                        "billing" -> android.R.drawable.ic_secure
-                        "security_alert" -> android.R.drawable.ic_dialog_alert
-                        else -> android.R.drawable.ic_dialog_info
-                    }
-
                     NotificationItem(
                         id = doc.id,
                         title = title,
                         body = body,
                         timeAgo = timeAgo,
-                        iconRes = iconRes,
                         type = type
                     )
                 } ?: emptyList()
@@ -136,7 +133,7 @@ fun NotificationScreen(
                 )
                 IconButton(onClick = onClose) {
                     Icon(
-                        painter = painterResource(android.R.drawable.ic_menu_close_clear_cancel),
+                        imageVector = Icons.Rounded.Close,
                         contentDescription = "Close",
                         tint = Color.White
                     )
@@ -173,7 +170,7 @@ fun NotificationCard(item: NotificationItem) {
                 .background(Color.Transparent)
         ) {
             Icon(
-                painter = painterResource(id = item.iconRes),
+                imageVector = notificationIcon(item.type),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(36.dp)
@@ -202,5 +199,15 @@ fun NotificationCard(item: NotificationItem) {
                 )
             }
         }
+    }
+}
+
+private fun notificationIcon(type: String): ImageVector {
+    return when (type) {
+        "series_update", "new_movie" -> Icons.Rounded.Movie
+        "billing" -> Icons.Rounded.CreditCard
+        "security_alert" -> Icons.Rounded.Security
+        "system" -> Icons.Rounded.SystemUpdate
+        else -> Icons.Rounded.Info
     }
 }

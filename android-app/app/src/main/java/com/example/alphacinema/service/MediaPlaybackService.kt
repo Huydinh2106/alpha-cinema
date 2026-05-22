@@ -25,18 +25,18 @@ class MediaPlaybackService : Service() {
         )
 
         val builder = NotificationCompat.Builder(this, NotificationHelper.CHANNEL_MEDIA)
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(R.drawable.ic_notification_alpha)
             .setContentTitle("Đang phát")
             .setContentText("Tên phim đang chiếu...")
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .addAction(
-                android.R.drawable.ic_media_pause,
+                R.drawable.ic_media_pause_round,
                 "Pause",
                 getActionPendingIntent(ACTION_PAUSE)
             )
             .addAction(
-                android.R.drawable.ic_media_next,
+                R.drawable.ic_media_skip_next_round,
                 "Tiếp",
                 getActionPendingIntent(ACTION_NEXT)
             )

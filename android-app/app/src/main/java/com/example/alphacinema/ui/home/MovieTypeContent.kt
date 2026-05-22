@@ -9,11 +9,11 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -117,7 +117,7 @@ fun MovieTypeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "Quay lại",
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
@@ -152,7 +152,7 @@ fun MovieTypeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Tune,
+                            imageVector = Icons.Rounded.Tune,
                             contentDescription = "Bộ lọc",
                             tint = if (isFiltered) Color.Black else Color.White.copy(alpha = 0.7f),
                             modifier = Modifier.size(20.dp)
@@ -281,7 +281,7 @@ private fun PaginationBar(
     ) {
         // Previous button
         PaginationArrowButton(
-            icon = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+            icon = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
             enabled = currentPage > 1,
             onClick = onPrevious
         )
@@ -311,7 +311,7 @@ private fun PaginationBar(
 
         // Next button
         PaginationArrowButton(
-            icon = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
             enabled = currentPage < totalPages,
             onClick = onNext
         )
@@ -433,7 +433,7 @@ fun MovieTypeCard(movie: MovieItem, onClick: () -> Unit = {}) {
                 )
             } else {
                 Icon(
-                    imageVector = Icons.Outlined.PlayArrow,
+                    imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.16f),
                     modifier = Modifier

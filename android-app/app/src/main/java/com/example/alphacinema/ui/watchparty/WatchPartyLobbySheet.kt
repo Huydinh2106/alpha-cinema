@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.MeetingRoom
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -83,7 +83,7 @@ fun WatchPartyLobbySheet(
         ) {
             // Title
             Icon(
-                imageVector = Icons.Outlined.Groups,
+                imageVector = Icons.Rounded.Groups,
                 contentDescription = null,
                 tint = Color(0xFFF6E29A),
                 modifier = Modifier.size(36.dp)
@@ -190,7 +190,7 @@ fun WatchPartyLobbySheet(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Outlined.MeetingRoom,
+                                Icons.Rounded.MeetingRoom,
                                 contentDescription = null,
                                 tint = Color(0xFFF6E29A),
                                 modifier = Modifier.size(20.dp)
@@ -245,7 +245,7 @@ fun WatchPartyLobbySheet(
                         if (isCreating) {
                             LottieLoadingIndicator(size = 32.dp)
                         } else {
-                            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Tạo phòng xem chung", fontWeight = FontWeight.Bold)
                         }

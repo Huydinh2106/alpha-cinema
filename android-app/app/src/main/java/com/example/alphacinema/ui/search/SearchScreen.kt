@@ -23,8 +23,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.*
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -138,7 +138,7 @@ fun SearchScreen(
                 if (searchHistory.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
-                            Icon(Icons.Outlined.History, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.History, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                             Text(" Lịch sử tìm kiếm", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
                             Spacer(Modifier.weight(1f))
                             Text("Xóa tất cả", color = Color(0xFFF6E29A), modifier = Modifier.clickable { viewModel.clearAllHistory() }, style = MaterialTheme.typography.labelMedium)
@@ -219,7 +219,7 @@ fun SearchMessageDisplay(message: String) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Icon(
-            imageVector = Icons.Outlined.Search,
+            imageVector = Icons.Rounded.Search,
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.2f),
             modifier = Modifier.size(64.dp)
@@ -260,7 +260,7 @@ fun FilterBottomSheet(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(imageVector = Icons.Outlined.Tune, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    Icon(imageVector = Icons.Rounded.Tune, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                     Spacer(modifier = Modifier.width(12.dp))
                     Text("Bộ lọc", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                 }
@@ -349,7 +349,7 @@ fun ExpandableFilterRow(
             Text(title, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(selectedLabel, color = if (selectedLabel == "Tất cả") Color.White.copy(alpha = 0.5f) else Color(0xFFF6E29A), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.width(8.dp))
-            Icon(imageVector = Icons.Outlined.KeyboardArrowDown, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp).rotate(arrowRotation))
+            Icon(imageVector = Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp).rotate(arrowRotation))
         }
         AnimatedVisibility(visible = isExpanded) {
             Box(modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp)) { content() }
@@ -401,7 +401,7 @@ fun SearchHeader(
                     .clickable { onBackClick() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Trở lại", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Trở lại", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
             }
         }
         Row(
@@ -409,7 +409,7 @@ fun SearchHeader(
                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(26.dp)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Outlined.Search, null, tint = Color(0xFFF6E29A).copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+            Icon(Icons.Rounded.Search, null, tint = Color(0xFFF6E29A).copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             BasicTextField(
                 value = searchQuery,
@@ -425,14 +425,14 @@ fun SearchHeader(
                 singleLine = true
             )
             if (searchQuery.isNotEmpty()) {
-                Icon(Icons.Outlined.Close, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp).clickable { onSearchQueryChange("") })
+                Icon(Icons.Rounded.Close, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(18.dp).clickable { onSearchQueryChange("") })
             }
         }
         Box(
             modifier = Modifier.size(52.dp).clip(CircleShape).background(if (isFiltered) Color(0xFFF6E29A) else Color(0xFF1F1F1F)).clickable { onFilterClick() },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Outlined.Tune, null, tint = if (isFiltered) Color.Black else Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+            Icon(Icons.Rounded.Tune, null, tint = if (isFiltered) Color.Black else Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -445,7 +445,7 @@ fun HistoryChip(text: String, onClick: () -> Unit, onDelete: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
-        Icon(Icons.Outlined.Close, null, tint = Color.White.copy(alpha = 0.4f), 
+        Icon(Icons.Rounded.Close, null, tint = Color.White.copy(alpha = 0.4f), 
             modifier = Modifier.size(16.dp).padding(start = 4.dp).clickable { onDelete() })
     }
 }

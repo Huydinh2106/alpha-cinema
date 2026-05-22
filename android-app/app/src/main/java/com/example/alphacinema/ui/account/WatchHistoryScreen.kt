@@ -18,8 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
@@ -87,7 +87,7 @@ fun WatchHistoryScreen(
                     modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Quay lại",
                         tint = Color.White.copy(alpha = 0.9f)
                     )
@@ -340,7 +340,7 @@ private fun WatchHistoryMediaRow(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
+            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.35f),
             modifier = Modifier.size(14.dp)

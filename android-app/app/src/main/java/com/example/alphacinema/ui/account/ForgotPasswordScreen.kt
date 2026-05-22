@@ -17,8 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -112,7 +112,7 @@ fun ForgotPasswordScreen(
                 else if (step == ForgotStep.OTP) step = ForgotStep.EMAIL
                 else step = ForgotStep.OTP
             }) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Quay lại", tint = Color.White)
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Quay lại", tint = Color.White)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -297,7 +297,7 @@ fun ForgotPasswordScreen(
                     label = { Text("Mật khẩu mới") },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (showNewPw) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = { IconButton(onClick = { showNewPw = !showNewPw }) { Icon(if (showNewPw) Icons.Outlined.VisibilityOff else Icons.Outlined.RemoveRedEye, null, tint = Color.White.copy(0.6f)) } },
+                    trailingIcon = { IconButton(onClick = { showNewPw = !showNewPw }) { Icon(if (showNewPw) Icons.Rounded.VisibilityOff else Icons.Rounded.RemoveRedEye, null, tint = Color.White.copy(0.6f)) } },
                     colors = forgotTextFieldColors()
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -307,7 +307,7 @@ fun ForgotPasswordScreen(
                     label = { Text("Nhập lại mật khẩu mới") },
                     modifier = Modifier.fillMaxWidth(),
                     visualTransformation = if (showConfirmPw) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = { IconButton(onClick = { showConfirmPw = !showConfirmPw }) { Icon(if (showConfirmPw) Icons.Outlined.VisibilityOff else Icons.Outlined.RemoveRedEye, null, tint = Color.White.copy(0.6f)) } },
+                    trailingIcon = { IconButton(onClick = { showConfirmPw = !showConfirmPw }) { Icon(if (showConfirmPw) Icons.Rounded.VisibilityOff else Icons.Rounded.RemoveRedEye, null, tint = Color.White.copy(0.6f)) } },
                     supportingText = { passwordError?.let { Text(it) } },
                     colors = forgotTextFieldColors()
                 )
@@ -341,7 +341,7 @@ fun ForgotPasswordScreen(
 
             if (step == ForgotStep.SUCCESS) {
                 Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Outlined.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(72.dp))
+                    Icon(Icons.Rounded.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(72.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Đổi mật khẩu thành công!\nĐang vào ứng dụng...", color = Color.White, textAlign = TextAlign.Center)
                 }

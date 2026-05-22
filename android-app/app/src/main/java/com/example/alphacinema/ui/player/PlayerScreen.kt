@@ -4,18 +4,18 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -33,9 +33,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.BrightnessHigh
-import androidx.compose.material.icons.outlined.BrightnessLow
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.BrightnessHigh
+import androidx.compose.material.icons.rounded.BrightnessLow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -54,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,11 +73,72 @@ import androidx.media3.ui.PlayerView
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailUi
 import kotlinx.coroutines.delay
+import kotlin.math.abs
+
+private const val BRIGHTNESS_GESTURE_WIDTH_RATIO = 0.5f
 
 fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+internal fun PlayerView.installBrightnessGesture(
+    onBrightnessDelta: (Float) -> Unit
+) {
+    val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    var downX = 0f
+    var downY = 0f
+    var lastY = 0f
+    var isBrightnessGesture = false
+    var canAdjustBrightness = false
+
+    setOnTouchListener { view, event ->
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x
+                downY = event.y
+                lastY = event.y
+                isBrightnessGesture = false
+                canAdjustBrightness = event.x <= view.width * BRIGHTNESS_GESTURE_WIDTH_RATIO
+                false
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (!canAdjustBrightness || view.height <= 0) {
+                    return@setOnTouchListener false
+                }
+
+                val horizontalDrag = abs(event.x - downX)
+                val verticalDrag = abs(event.y - downY)
+                if (!isBrightnessGesture) {
+                    if (verticalDrag <= touchSlop || verticalDrag <= horizontalDrag) {
+                        return@setOnTouchListener false
+                    }
+                    isBrightnessGesture = true
+                    view.parent?.requestDisallowInterceptTouchEvent(true)
+                }
+
+                val delta = (lastY - event.y) / view.height.toFloat()
+                lastY = event.y
+                if (delta != 0f) {
+                    onBrightnessDelta(delta)
+                }
+                true
+            }
+
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                val consumed = isBrightnessGesture
+                isBrightnessGesture = false
+                canAdjustBrightness = false
+                view.parent?.requestDisallowInterceptTouchEvent(false)
+                consumed
+            }
+
+            else -> false
+        }
+    }
 }
 
 @OptIn(UnstableApi::class)
@@ -260,6 +320,10 @@ fun PlayerScreen(
                     player = exoPlayer
                     useController = true
                     showController()
+                    installBrightnessGesture { delta ->
+                        brightness = (brightness + delta).coerceIn(0.05f, 1f)
+                        showBrightnessIndicator = true
+                    }
 
                     playerView = this
 
@@ -310,23 +374,6 @@ fun PlayerScreen(
             )
         }
 
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val halfWidth = maxWidth / 2
-            Box(
-                modifier = Modifier
-                    .width(halfWidth)
-                    .fillMaxHeight()
-                    .align(Alignment.CenterStart)
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures { _, dragAmount ->
-                            val delta = -dragAmount / size.height.toFloat()
-                            brightness = (brightness + delta).coerceIn(0.05f, 1f)
-                            showBrightnessIndicator = true
-                        }
-                    }
-            )
-        }
-
         AnimatedVisibility(
             visible = showBrightnessIndicator,
             enter = fadeIn(),
@@ -345,9 +392,9 @@ fun PlayerScreen(
             ) {
                 Icon(
                     imageVector = if (brightness > 0.5f) {
-                        Icons.Outlined.BrightnessHigh
+                        Icons.Rounded.BrightnessHigh
                     } else {
-                        Icons.Outlined.BrightnessLow
+                        Icons.Rounded.BrightnessLow
                     },
                     contentDescription = null,
                     tint = Color.White,
@@ -414,7 +461,7 @@ fun PlayerScreen(
                         .align(Alignment.TopStart)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Quay lại",
                         tint = Color.White
                     )

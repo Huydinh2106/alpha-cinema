@@ -27,16 +27,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.HeadsetMic
-import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.PersonOutline
-import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.HeadsetMic
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
@@ -257,7 +257,7 @@ private fun ChatHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         HeaderIconButton(
-            icon = Icons.Outlined.Menu,
+            icon = Icons.Rounded.Menu,
             contentDescription = "Mở menu",
             onClick = {}
         )
@@ -272,7 +272,7 @@ private fun ChatHeader(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.AutoAwesome,
+                    imageVector = Icons.Rounded.AutoAwesome,
                     contentDescription = null,
                     tint = Color(0xFFF6E29A),
                     modifier = Modifier.size(16.dp)
@@ -296,7 +296,7 @@ private fun ChatHeader(
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Add,
+                            imageVector = Icons.Rounded.Add,
                             contentDescription = null,
                             tint = Color(0xFFF6E29A),
                             modifier = Modifier.size(14.dp)
@@ -361,13 +361,13 @@ private fun ChatWelcome(
     onSuggestionClick: (String) -> Unit
 ) {
     val suggestions = listOf(
-        ChatSuggestionUi("Gợi ý phim cho tôi", Icons.Outlined.Movie),
-        ChatSuggestionUi("Tìm phim theo tâm trạng", Icons.Outlined.AutoAwesome),
-        ChatSuggestionUi("Gói Premium có gì?", Icons.Outlined.WorkspacePremium),
-        ChatSuggestionUi("Cách tạo phòng xem chung?", Icons.Outlined.Groups),
-        ChatSuggestionUi("Tôi cần hỗ trợ tài khoản", Icons.Outlined.PersonOutline),
-        ChatSuggestionUi("Nhạc phim Interstellar", Icons.Outlined.HeadsetMic),
-        ChatSuggestionUi("Phim đang hot hôm nay", Icons.Outlined.Movie)
+        ChatSuggestionUi("Gợi ý phim cho tôi", Icons.Rounded.Movie),
+        ChatSuggestionUi("Tìm phim theo tâm trạng", Icons.Rounded.AutoAwesome),
+        ChatSuggestionUi("Gói Premium có gì?", Icons.Rounded.WorkspacePremium),
+        ChatSuggestionUi("Cách tạo phòng xem chung?", Icons.Rounded.Groups),
+        ChatSuggestionUi("Tôi cần hỗ trợ tài khoản", Icons.Rounded.PersonOutline),
+        ChatSuggestionUi("Nhạc phim Interstellar", Icons.Rounded.HeadsetMic),
+        ChatSuggestionUi("Phim đang hot hôm nay", Icons.Rounded.Movie)
     )
 
     Column(
@@ -487,7 +487,7 @@ private fun BotAvatar(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Outlined.AutoAwesome,
+            imageVector = Icons.Rounded.AutoAwesome,
             contentDescription = null,
             tint = Color(0xFFF6E29A),
             modifier = Modifier.size(18.dp)
@@ -733,7 +733,7 @@ private fun SupportLinkCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.HeadsetMic,
+                        imageVector = Icons.Rounded.HeadsetMic,
                         contentDescription = null,
                         tint = Color(0xFF1DB954),
                         modifier = Modifier.size(18.dp)
@@ -765,7 +765,7 @@ private fun SupportLinkCard(
             }
 
             Icon(
-                imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.78f),
                 modifier = Modifier.size(18.dp)
@@ -924,7 +924,7 @@ private fun ChatInputBar(
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 InputActionButton(
-                    icon = Icons.Outlined.Add,
+                    icon = Icons.Rounded.Add,
                     contentDescription = "Thêm lựa chọn",
                     enabled = !isLoading,
                     onClick = {}
@@ -967,7 +967,7 @@ private fun ChatInputBar(
                 )
 
                 InputActionButton(
-                    icon = Icons.Outlined.HeadsetMic,
+                    icon = Icons.Rounded.HeadsetMic,
                     contentDescription = "Nhập bằng giọng nói",
                     enabled = !isLoading,
                     onClick = {}
@@ -987,7 +987,7 @@ private fun ChatInputBar(
                     modifier = Modifier.size(42.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.Send,
+                        imageVector = Icons.AutoMirrored.Rounded.Send,
                         contentDescription = "Gửi",
                         modifier = Modifier.size(19.dp)
                     )
