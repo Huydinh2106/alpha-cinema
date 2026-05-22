@@ -681,12 +681,6 @@ private fun TypingIndicator() {
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         LottieLoadingIndicator(size = 30.dp)
-        Text(
-            text = "Alpha AI đang trả lời...",
-            color = Color.White.copy(alpha = 0.84f),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
-        )
     }
 }
 

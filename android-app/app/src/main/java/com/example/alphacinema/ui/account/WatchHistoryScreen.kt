@@ -328,7 +328,7 @@ private fun WatchHistoryMediaRow(
             )
             Text(
                 text = meta,
-                color = Color(0xFFF6E29A),
+                color = Color.White,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

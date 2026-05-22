@@ -862,13 +862,12 @@ private fun WatchTogetherHighlightCard(
             .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
             .border(1.dp, Color(0xFFF6E29A).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .background(Color(0xFF1F1F1F), CircleShape),
+                .size(42.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -888,14 +887,6 @@ private fun WatchTogetherHighlightCard(
                 color = Color(0xFFF6E29A),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Tạo phòng xem phim cùng bạn bè",
-                color = Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 2.dp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         }
 
@@ -1144,9 +1135,7 @@ private fun FreePlanUpgradeBanner(
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFF6E29A).copy(alpha = 0.13f)),
+                .size(42.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1174,23 +1163,6 @@ private fun FreePlanUpgradeBanner(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-
-        Button(
-            onClick = onClick,
-            modifier = Modifier.height(40.dp),
-            shape = RoundedCornerShape(13.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFFF6E29A),
-                contentColor = Color.Black
-            )
-        ) {
-            Text(
-                text = "Đăng ký",
-                fontWeight = FontWeight.ExtraBold,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1
             )
         }
     }
@@ -1321,11 +1293,7 @@ private fun MembershipUpgradeCard(
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isPremium) Color(0xFFF6E29A).copy(alpha = 0.13f) else Color(0xFFD8DEE9).copy(alpha = 0.12f)
-                ),
+                .size(42.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1396,8 +1364,7 @@ private fun AccountMenuList(
         ) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .background(Color(0xFF1F1F1F), CircleShape),
+                    .size(34.dp),
                 contentAlignment = Alignment.Center
             ) {
                 androidx.compose.runtime.CompositionLocalProvider(
@@ -1546,9 +1513,7 @@ private fun ProfilePlanIcon(plan: DemoMembershipPlanUi) {
 
     Box(
         modifier = Modifier
-            .size(18.dp)
-            .clip(CircleShape)
-            .background(tint.copy(alpha = 0.14f)),
+            .size(18.dp),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -1752,9 +1717,7 @@ internal fun PlanInfoRow(
     ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFF6E29A).copy(alpha = 0.10f)),
+                .size(34.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(

@@ -117,24 +117,13 @@ fun SplashScreen(onFinished: () -> Unit) {
                 .graphicsLayer { this.alpha = alpha }
         )
 
-        // Spinner + text "Đang tải" ở phía dưới, cũng fade in cùng lúc
-        Column(
+        // Loading indicator ở vị trí thấp phía dưới, không hiển thị text.
+        com.example.alphacinema.ui.components.LottieLoadingIndicator(
+            size = 140.dp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 60.dp)
-                .graphicsLayer { this.alpha = alpha },
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            com.example.alphacinema.ui.components.LottieLoadingIndicator(size = 140.dp)
-
-            Text(
-                text = "Đang tải",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp,
-                modifier = Modifier.offset(y = (-24).dp)
-            )
-        }
+                .padding(bottom = 8.dp)
+                .graphicsLayer { this.alpha = alpha }
+        )
     }
 }

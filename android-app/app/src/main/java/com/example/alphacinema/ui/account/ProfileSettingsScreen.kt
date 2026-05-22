@@ -356,26 +356,23 @@ private fun ProfileMainPage(
             icon = Icons.Rounded.Edit,
             iconTint = Color(0xFFF6E29A),
             title = "Hồ sơ cá nhân",
-            subtitle = "Đổi tên hiển thị, ảnh đại diện",
             onClick = onEditProfile
         )
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         SettingsMenuItem(
             icon = Icons.Rounded.Lock,
             iconTint = Color(0xFFF6E29A),
             title = "Đổi mật khẩu",
-            subtitle = if (isGoogleUser) "Không khả dụng cho tài khoản Google" else "Thay đổi mật khẩu đăng nhập",
             onClick = if (isGoogleUser) ({}) else onChangePassword,
             enabled = !isGoogleUser
         )
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         SettingsMenuItem(
             icon = Icons.Rounded.WorkspacePremium,
             iconTint = Color(0xFFF6E29A),
             title = "Quản lý gói đăng ký",
-            subtitle = if (plan.lowercase() == "free") "Nâng cấp để mở khóa tính năng cao cấp" else "$planLabel đang hoạt động",
             onClick = onManageSubscription
         )
 
@@ -383,19 +380,18 @@ private fun ProfileMainPage(
         Spacer(modifier = Modifier.weight(1f))
 
         // Logout
-        OutlinedButton(
+        Button(
             onClick = onLogout,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF7A7A).copy(alpha = 0.24f)),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = Color(0xFFFFA0A0),
-                containerColor = Color(0xFFFF6B6B).copy(alpha = 0.05f)
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFF6E29A),
+                contentColor = Color.Black
             )
         ) {
-            Icon(Icons.AutoMirrored.Rounded.ExitToApp, null, tint = Color(0xFFFFA0A0), modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Rounded.ExitToApp, null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.size(8.dp))
-            Text("Đăng xuất", fontWeight = FontWeight.SemiBold)
+            Text("Đăng xuất", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -560,7 +556,7 @@ private fun EditProfilePage(
             enabled = !isLoading,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A), contentColor = Color.Black)
         ) {
-            Text("Lưu thay đổi", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
+            Text("Lưu thay đổi", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 20.sp)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -634,7 +630,7 @@ private fun ImageSourceOption(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(38.dp).clip(CircleShape).background(iconTint.copy(alpha = 0.12f)),
+            modifier = Modifier.size(38.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, null, tint = iconTint, modifier = Modifier.size(20.dp))
@@ -751,7 +747,7 @@ private fun ChangePasswordPage(
             enabled = !isLoading,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE8A0FF), contentColor = Color.Black)
         ) {
-            Text("Xác nhận đổi mật khẩu", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
+            Text("Xác nhận đổi mật khẩu", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 20.sp)
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -792,7 +788,6 @@ private fun SettingsMenuItem(
     icon: ImageVector,
     iconTint: Color,
     title: String,
-    subtitle: String,
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
@@ -806,17 +801,19 @@ private fun SettingsMenuItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(42.dp).clip(CircleShape).background(iconTint.copy(alpha = 0.12f)),
+            modifier = Modifier.size(42.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, null, tint = if (enabled) iconTint else iconTint.copy(alpha = 0.4f), modifier = Modifier.size(22.dp))
         }
         Column(modifier = Modifier.weight(1f).padding(start = 14.dp, end = 8.dp)) {
-            Text(title, color = if (enabled) Color.White else Color.White.copy(alpha = 0.5f),
-                style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(subtitle, color = if (enabled) Color.White.copy(alpha = 0.58f) else Color.White.copy(alpha = 0.35f),
-                style = MaterialTheme.typography.bodySmall, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                text = title,
+                color = if (enabled) Color.White else Color.White.copy(alpha = 0.5f),
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
         Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, null,
             tint = if (enabled) Color.White.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.15f), modifier = Modifier.size(14.dp))
@@ -897,9 +894,7 @@ private fun SubscriptionManagementPage(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFF6E29A).copy(alpha = 0.15f)),
+                                .size(48.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -994,7 +989,7 @@ private fun SubscriptionManagementPage(
                         contentColor = Color.Black
                     )
                 ) {
-                    Text("Nâng cấp gói", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleSmall)
+                    Text("Nâng cấp gói", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 20.sp)
                 }
             }
         }
