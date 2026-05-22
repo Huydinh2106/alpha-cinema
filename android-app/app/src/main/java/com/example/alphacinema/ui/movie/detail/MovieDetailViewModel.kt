@@ -98,7 +98,14 @@ class MovieDetailViewModel : ViewModel() {
         }
     }
 
-    fun postComment(userName: String, userAvatar: String, content: String, onResult: (Boolean, String) -> Unit) {
+    fun postComment(
+        userName: String,
+        userAvatar: String,
+        content: String,
+        parentCommentId: String = "",
+        replyToUserName: String = "",
+        onResult: (Boolean, String) -> Unit
+    ) {
         val uid = activeUserId
         if (uid == null) {
             onResult(false, "Vui lòng đăng nhập để bình luận")
@@ -109,10 +116,44 @@ class MovieDetailViewModel : ViewModel() {
         
         viewModelScope.launch {
             try {
-                firestoreRepository.postComment(slug, uid, userName, userAvatar, content)
-                onResult(true, "Đã gửi bình luận")
+                val profile = firestoreRepository.getUserProfile(uid)
+                val resolvedUserName = profile?.displayName
+                    ?.takeIf { it.isNotBlank() }
+                    ?: userName.ifBlank { "Người dùng" }
+                val resolvedUserAvatar = profile?.photoUrl
+                    ?.takeIf { it.isNotBlank() }
+                    ?: userAvatar
+
+                firestoreRepository.postComment(
+                    slug,
+                    uid,
+                    resolvedUserName,
+                    resolvedUserAvatar,
+                    content,
+                    parentCommentId,
+                    replyToUserName
+                )
+                onResult(true, if (parentCommentId.isBlank()) "Đã gửi bình luận" else "Đã trả lời bình luận")
             } catch (e: Exception) {
                onResult(false, "Không thể gửi bình luận")
+            }
+        }
+    }
+
+    fun toggleCommentLike(commentId: String, onResult: (Boolean, String) -> Unit) {
+        val uid = activeUserId
+        if (uid == null) {
+            onResult(false, "Vui lòng đăng nhập để thả tim")
+            return
+        }
+        val slug = activeMovieSlug ?: return
+        if (commentId.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                firestoreRepository.toggleCommentLike(slug, commentId, uid)
+            } catch (e: Exception) {
+                onResult(false, "Không thể cập nhật thả tim")
             }
         }
     }

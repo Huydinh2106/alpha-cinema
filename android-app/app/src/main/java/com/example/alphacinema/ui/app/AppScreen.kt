@@ -174,6 +174,7 @@ fun MainContent(
     val firestoreRepo = remember { com.example.alphacinema.data.repository.FirestoreRepository() }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val profileCache = remember { com.example.alphacinema.data.local.UserProfileCache(context) }
     val movieDetailViewModel: MovieDetailViewModel = viewModel()
     val movieDetail by movieDetailViewModel.movieDetail.collectAsState()
     val detailLoading by movieDetailViewModel.isLoading.collectAsState()
@@ -209,6 +210,13 @@ fun MainContent(
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    fun currentCommentAvatarUrl(user: com.google.firebase.auth.FirebaseUser?): String {
+        if (user == null) return ""
+        val cachedAvatar = profileCache.avatarUrl
+            .takeIf { profileCache.uid == user.uid && it.isNotBlank() }
+        return cachedAvatar ?: user.photoUrl?.toString().orEmpty()
     }
 
     val appAuthStateHolder = rememberAccountAuthStateHolder(
@@ -625,6 +633,10 @@ fun MainContent(
                         movieStats = movieStats,
                         userRating = userRating,
                         comments = comments,
+                        currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+                        currentUserAvatarUrl = currentCommentAvatarUrl(
+                            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                        ),
                         onToggleFavorite = { movie ->
                             movieDetailViewModel.toggleFavorite(movie.title, movie.posterUrl) { _, msg ->
                                 showToast(msg)
@@ -632,7 +644,24 @@ fun MainContent(
                         },
                         onPostComment = { content ->
                             val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                            movieDetailViewModel.postComment(user?.displayName ?: "Ẩn danh", user?.photoUrl?.toString() ?: "", content) { _, msg ->
+                            movieDetailViewModel.postComment(
+                                user?.displayName ?: "Ẩn danh",
+                                currentCommentAvatarUrl(user),
+                                content
+                            ) { _, msg -> showToast(msg) }
+                        },
+                        onReplyComment = { parentComment, content ->
+                            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                            movieDetailViewModel.postComment(
+                                user?.displayName ?: "Ẩn danh",
+                                currentCommentAvatarUrl(user),
+                                content,
+                                parentCommentId = parentComment.id,
+                                replyToUserName = parentComment.userName.ifBlank { "Người dùng" }
+                            ) { _, msg -> showToast(msg) }
+                        },
+                        onToggleCommentLike = { comment ->
+                            movieDetailViewModel.toggleCommentLike(comment.id) { _, msg ->
                                 showToast(msg)
                             }
                         },

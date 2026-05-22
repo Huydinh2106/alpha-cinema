@@ -324,7 +324,9 @@ class FirestoreRepository {
         userId: String,
         userName: String,
         userAvatar: String,
-        content: String
+        content: String,
+        parentCommentId: String = "",
+        replyToUserName: String = ""
     ) {
         if (movieId.isBlank() || userId.isBlank() || content.isBlank()) return
         
@@ -335,9 +337,50 @@ class FirestoreRepository {
             userId = userId,
             userName = userName,
             userAvatar = userAvatar,
-            content = content
+            content = content,
+            parentCommentId = parentCommentId,
+            replyToUserName = replyToUserName,
+            likedBy = emptyList()
         )
         commentsRef.add(comment).await()
+    }
+
+    suspend fun toggleCommentLike(
+        movieId: String,
+        commentId: String,
+        userId: String
+    ) {
+        if (movieId.isBlank() || commentId.isBlank() || userId.isBlank()) return
+
+        val commentRef = db.collection("movies").document(movieId)
+            .collection("comments").document(commentId)
+
+        db.runTransaction { transaction ->
+            val snapshot = transaction.get(commentRef)
+            if (!snapshot.exists()) {
+                throw IllegalStateException("Comment does not exist")
+            }
+            val likedBy = snapshot.get("likedBy")
+                .let { value -> value as? List<*> }
+                ?.mapNotNull { it as? String }
+                .orEmpty()
+
+            val updatedLikedBy = if (userId in likedBy) {
+                likedBy.filterNot { it == userId }
+            } else {
+                likedBy + userId
+            }
+
+            transaction.set(
+                commentRef,
+                mapOf(
+                    "likedBy" to updatedLikedBy,
+                    "likes" to updatedLikedBy.size.toLong(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+        }.await()
     }
 
     fun getComments(movieId: String): Flow<List<Comment>> = callbackFlow {

@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -42,6 +45,7 @@ import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,6 +58,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import com.example.alphacinema.data.model.Comment
 import com.example.alphacinema.data.model.MovieStats
@@ -89,8 +94,12 @@ fun MovieDetailScreen(
     movieStats: MovieStats?,
     userRating: Int?,
     comments: List<Comment>,
+    currentUserId: String? = null,
+    currentUserAvatarUrl: String = "",
     onToggleFavorite: (MovieDetailUi) -> Unit,
     onPostComment: (String) -> Unit,
+    onReplyComment: (Comment, String) -> Unit = { _, _ -> },
+    onToggleCommentLike: (Comment) -> Unit = {},
     onSubmitRating: (Int) -> Unit,
     onBack: () -> Unit,
     onPlayMovie: (MovieDetailUi, EpisodeUi?) -> Unit,
@@ -132,126 +141,157 @@ fun MovieDetailScreen(
         mutableStateOf(defaultEp?.id)
     }
     val activeEpisode = movie.episodes.find { it.id == activeEpisodeId }
+    var commentDraft by rememberSaveable(movie.id) { mutableStateOf("") }
+    var replyTarget by remember(movie.id) { mutableStateOf<Comment?>(null) }
 
-    LazyColumn(
-        state = listState,
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
-        contentPadding = PaddingValues(bottom = 28.dp)
+            .background(Color.Black)
     ) {
-        item {
-            DetailTopBanner(
-                movie = movie,
-                onBack = onBack
-            )
-        }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = if (selectedTab == MovieDetailTab.COMMENTS) 172.dp else 28.dp)
+        ) {
+            item {
+                DetailTopBanner(
+                    movie = movie,
+                    onBack = onBack
+                )
+            }
 
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-            ) {
-                Spacer(modifier = Modifier.height(18.dp))
-                Text(
-                    text = movie.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = movie.subtitle,
-                    color = Color.White.copy(alpha = 0.65f),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                DetailMetaRow(movie = movie)
-                Spacer(modifier = Modifier.height(10.dp))
-                GenreRow(genres = movie.genres)
-                Spacer(modifier = Modifier.height(16.dp))
-                DescriptionBlock(
-                    description = movie.description,
-                    expanded = descriptionExpanded,
-                    onToggle = { descriptionExpanded = !descriptionExpanded }
-                )
-                Spacer(modifier = Modifier.height(18.dp))
-                ButtonRow(
-                    onPlay = { activeEpisode?.let { onPlayMovie(movie, it) } },
-                    onEpisodes = if (showEpisodesTab) {
-                        {
-                            selectedTabName = MovieDetailTab.EPISODES.name
-                            coroutineScope.launch {
-                                listState.animateScrollToItem(2)
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Text(
+                        text = movie.title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = movie.subtitle,
+                        color = Color.White.copy(alpha = 0.65f),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    DetailMetaRow(movie = movie)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    GenreRow(genres = movie.genres)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    DescriptionBlock(
+                        description = movie.description,
+                        expanded = descriptionExpanded,
+                        onToggle = { descriptionExpanded = !descriptionExpanded }
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
+                    ButtonRow(
+                        onPlay = { activeEpisode?.let { onPlayMovie(movie, it) } },
+                        onEpisodes = if (showEpisodesTab) {
+                            {
+                                selectedTabName = MovieDetailTab.EPISODES.name
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(2)
+                                }
+                            }
+                        } else null
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    ActionRow(
+                        isFavorite = isFavorite,
+                        onActionClick = { action ->
+                            when(action) {
+                                MovieDetailAction.FAVORITE -> onToggleFavorite(movie)
+                                MovieDetailAction.WATCH_TOGETHER -> onWatchTogether()
+                                else -> {}
                             }
                         }
-                    } else null
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                ActionRow(
-                    isFavorite = isFavorite,
-                    onActionClick = { action ->
-                        when(action) {
-                            MovieDetailAction.FAVORITE -> onToggleFavorite(movie)
-                            MovieDetailAction.WATCH_TOGETHER -> onWatchTogether()
-                            else -> {}
-                        }
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
+                }
+            }
+
+            item {
+                TabRow(
+                    selectedTabIndex = visibleTabs.indexOf(selectedTab).coerceAtLeast(0),
+                    containerColor = Color.Transparent,
+                    contentColor = Color.White,
+                    indicator = {}
+                ) {
+                    visibleTabs.forEach { tab ->
+                        val selected = tab == selectedTab
+                        Tab(
+                            selected = selected,
+                            onClick = { selectedTabName = tab.name },
+                            text = {
+                                Text(
+                                    text = tab.title,
+                                    color = if (selected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.65f),
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        )
                     }
-                )
-                Spacer(modifier = Modifier.height(18.dp))
+                }
             }
-        }
 
-        item {
-            TabRow(
-                selectedTabIndex = visibleTabs.indexOf(selectedTab).coerceAtLeast(0),
-                containerColor = Color.Transparent,
-                contentColor = Color.White,
-                indicator = {}
-            ) {
-                visibleTabs.forEach { tab ->
-                    val selected = tab == selectedTab
-                    Tab(
-                        selected = selected,
-                        onClick = { selectedTabName = tab.name },
-                        text = {
-                            Text(
-                                text = tab.title,
-                                color = if (selected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.65f),
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
+            item {
+                Spacer(modifier = Modifier.height(10.dp))
+                when (selectedTab) {
+                    MovieDetailTab.EPISODES -> if (showEpisodesTab) {
+                        EpisodeTabModern(
+                            episodes = episodesForPicker,
+                            currentEpisode = activeEpisode,
+                            relatedSeasons = movie.relatedSeasons,
+                            currentMovieName = movie.title,
+                            onSelectEpisode = { activeEpisodeId = it.id },
+                            onOpenSeason = onOpenMovie
+                        )
+                    }
+
+                    MovieDetailTab.CAST -> CastTab(cast = movie.cast)
+                    MovieDetailTab.COMMENTS -> CommentsTab(
+                        comments = comments,
+                        currentUserId = currentUserId,
+                        currentUserAvatarUrl = currentUserAvatarUrl,
+                        onSelectReplyTarget = { replyTarget = it },
+                        onToggleCommentLike = onToggleCommentLike
+                    )
+                    MovieDetailTab.RATINGS -> RatingsTab(
+                        stats = movieStats,
+                        userRating = userRating,
+                        onSubmitRating = onSubmitRating
                     )
                 }
             }
         }
 
-        item {
-            Spacer(modifier = Modifier.height(10.dp))
-            when (selectedTab) {
-                MovieDetailTab.EPISODES -> if (showEpisodesTab) {
-                    EpisodeTabModern(
-                        episodes = episodesForPicker,
-                        currentEpisode = activeEpisode,
-                        relatedSeasons = movie.relatedSeasons,
-                        currentMovieName = movie.title,
-                        onSelectEpisode = { activeEpisodeId = it.id },
-                        onOpenSeason = onOpenMovie
-                    )
-                }
-
-                MovieDetailTab.CAST -> CastTab(cast = movie.cast)
-                MovieDetailTab.COMMENTS -> CommentsTab(
-                    comments = comments,
-                    onPostComment = onPostComment
-                )
-                MovieDetailTab.RATINGS -> RatingsTab(
-                    stats = movieStats,
-                    userRating = userRating,
-                    onSubmitRating = onSubmitRating
-                )
-            }
+        if (selectedTab == MovieDetailTab.COMMENTS) {
+            CommentInputBar(
+                text = commentDraft,
+                replyTarget = replyTarget,
+                onTextChange = { commentDraft = it },
+                onCancelReply = { replyTarget = null },
+                onSend = {
+                    val content = commentDraft.trim()
+                    if (content.isBlank()) return@CommentInputBar
+                    val target = replyTarget
+                    if (target == null) {
+                        onPostComment(content)
+                    } else {
+                        onReplyComment(target, content)
+                    }
+                    commentDraft = ""
+                    replyTarget = null
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 }
@@ -991,92 +1031,296 @@ private fun actionIcon(action: MovieDetailAction) = when (action) {
 @Composable
 private fun CommentsTab(
     comments: List<Comment>,
-    onPostComment: (String) -> Unit
+    currentUserId: String?,
+    currentUserAvatarUrl: String,
+    onSelectReplyTarget: (Comment) -> Unit,
+    onToggleCommentLike: (Comment) -> Unit
 ) {
-    var text by rememberSaveable { mutableStateOf("") }
+    val topLevelComments = remember(comments) {
+        comments
+            .filter { it.parentCommentId.isBlank() }
+            .sortedByDescending { it.createdAtMillis() }
+    }
+    val repliesByParent = remember(comments) {
+        comments
+            .filter { it.parentCommentId.isNotBlank() }
+            .groupBy { it.parentCommentId }
+            .mapValues { (_, replies) -> replies.sortedBy { it.createdAtMillis() } }
+    }
     
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 20.dp)
+            .padding(top = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        if (topLevelComments.isEmpty()) {
+            Text("Chưa có bình luận nào.", color = Color.White.copy(alpha = 0.5f))
+        } else {
+            topLevelComments.forEach { comment ->
+                CommentRow(
+                    comment = comment,
+                    currentUserId = currentUserId,
+                    currentUserAvatarUrl = currentUserAvatarUrl,
+                    showReplyAction = true,
+                    onReply = { onSelectReplyTarget(comment) },
+                    onToggleLike = { onToggleCommentLike(comment) }
+                )
+
+                repliesByParent[comment.id].orEmpty().forEach { reply ->
+                    CommentRow(
+                        comment = reply,
+                        currentUserId = currentUserId,
+                        currentUserAvatarUrl = currentUserAvatarUrl,
+                        showReplyAction = false,
+                        modifier = Modifier.padding(start = 48.dp),
+                        onReply = {},
+                        onToggleLike = { onToggleCommentLike(reply) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentInputBar(
+    text: String,
+    replyTarget: Comment?,
+    onTextChange: (String) -> Unit,
+    onCancelReply: () -> Unit,
+    onSend: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.96f))
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .navigationBarsPadding()
+            .imePadding(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        replyTarget?.let { target ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.Reply,
+                    contentDescription = null,
+                    tint = Color(0xFFF6E29A),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Đang trả lời ${target.userName.ifBlank { "Người dùng" }}",
+                    color = Color.White.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                IconButton(
+                    onClick = onCancelReply,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Hủy trả lời",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
                 value = text,
-                onValueChange = { text = it },
+                onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Viết bình luận...", color = Color.White.copy(alpha = 0.5f)) },
+                placeholder = {
+                    Text(
+                        if (replyTarget == null) "Viết bình luận..." else "Viết câu trả lời...",
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                },
                 colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
-                    unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.08f),
                     unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
                     focusedBorderColor = Color(0xFFF6E29A)
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                maxLines = 3
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
-                onClick = {
-                    onPostComment(text)
-                    text = ""
-                },
+                onClick = onSend,
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A), contentColor = Color.Black)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFF6E29A),
+                    contentColor = Color.Black
+                )
             ) {
                 Text("Gửi", fontWeight = FontWeight.Bold)
             }
         }
-        
-        Spacer(modifier = Modifier.height(10.dp))
-        
-        if (comments.isEmpty()) {
-            Text("Chưa có bình luận nào.", color = Color.White.copy(alpha = 0.5f))
-        } else {
-            comments.forEach { comment ->
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF262626)),
-                        contentAlignment = Alignment.Center
+    }
+}
+
+@Composable
+private fun CommentRow(
+    comment: Comment,
+    currentUserId: String?,
+    currentUserAvatarUrl: String,
+    showReplyAction: Boolean,
+    modifier: Modifier = Modifier,
+    onReply: () -> Unit,
+    onToggleLike: () -> Unit
+) {
+    val avatarUrl = comment.resolvedAvatarUrl(currentUserId, currentUserAvatarUrl)
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF262626)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (avatarUrl.isNotBlank()) {
+                com.example.alphacinema.ui.components.AlphaCinemaImage(
+                    model = avatarUrl,
+                    contentDescription = comment.userName.ifBlank { "Người dùng" },
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = comment.userName.firstOrNull()?.uppercase() ?: "?",
+                    color = Color(0xFFF6E29A),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = comment.userName.ifBlank { "Người dùng" },
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = comment.replyContentLabel(),
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                IconButton(
+                    onClick = onToggleLike,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = if (comment.isLikedBy(currentUserId)) {
+                            Icons.Rounded.Favorite
+                        } else {
+                            Icons.Rounded.FavoriteBorder
+                        },
+                        contentDescription = "Thả tim",
+                        tint = if (comment.isLikedBy(currentUserId)) {
+                            Color(0xFFFF5C7A)
+                        } else {
+                            Color.White.copy(alpha = 0.58f)
+                        },
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                val likeCount = comment.visibleLikeCount()
+                if (likeCount > 0L) {
+                    Text(
+                        text = likeCount.toString(),
+                        color = Color.White.copy(alpha = 0.62f),
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
+                if (showReplyAction) {
+                    TextButton(
+                        onClick = onReply,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
-                        Text(
-                            text = comment.userName.firstOrNull()?.uppercase() ?: "?",
-                            color = Color(0xFFF6E29A),
-                            fontWeight = FontWeight.Bold
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Reply,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.62f),
+                            modifier = Modifier.size(16.dp)
                         )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.06f))
-                            .padding(12.dp)
-                    ) {
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = comment.userName.ifBlank { "Người dùng" },
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = comment.content,
-                            color = Color.White.copy(alpha = 0.8f),
-                            style = MaterialTheme.typography.bodyMedium
+                            text = "Trả lời",
+                            color = Color.White.copy(alpha = 0.62f),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             }
         }
+    }
+}
+
+private fun Comment.createdAtMillis(): Long {
+    return createdAt?.toDate()?.time ?: 0L
+}
+
+private fun Comment.visibleLikeCount(): Long {
+    return if (likedBy.isNotEmpty()) likedBy.size.toLong() else likes.coerceAtLeast(0L)
+}
+
+private fun Comment.isLikedBy(userId: String?): Boolean {
+    return !userId.isNullOrBlank() && userId in likedBy
+}
+
+private fun Comment.resolvedAvatarUrl(currentUserId: String?, currentUserAvatarUrl: String): String {
+    return if (userId == currentUserId && currentUserAvatarUrl.isNotBlank()) {
+        currentUserAvatarUrl
+    } else {
+        userAvatar
+    }
+}
+
+private fun Comment.replyContentLabel(): String {
+    return if (parentCommentId.isNotBlank() && replyToUserName.isNotBlank()) {
+        "@$replyToUserName $content"
+    } else {
+        content
     }
 }
 
