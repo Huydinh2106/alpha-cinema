@@ -51,7 +51,10 @@ data class Comment(
     val userName: String = "",
     val userAvatar: String = "",
     val content: String = "",
+    val parentCommentId: String = "",
+    val replyToUserName: String = "",
     val likes: Long = 0,
+    val likedBy: List<String> = emptyList(),
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
 )

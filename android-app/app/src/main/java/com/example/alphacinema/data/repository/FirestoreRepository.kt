@@ -201,11 +201,13 @@ class FirestoreRepository {
         episodeId: String,
         episodeName: String,
         progress: Long,
-        duration: Long
+        duration: Long,
+        isKidsMode: Boolean = false
     ) {
         if (userId.isBlank() || movieSlug.isBlank()) return
         val historyRef = db.collection("users").document(userId)
-            .collection("watch_history").document(movieSlug)
+            .collection(WATCH_HISTORY_COLLECTION)
+            .document(watchHistoryDocumentId(movieSlug, isKidsMode))
 
         val historyItem = mapOf(
             "movieId" to movieSlug,
@@ -216,12 +218,13 @@ class FirestoreRepository {
             "episodeName" to episodeName,
             "progress" to progress,
             "duration" to duration,
+            "profileMode" to if (isKidsMode) WATCH_HISTORY_MODE_KIDS else WATCH_HISTORY_MODE_DEFAULT,
             "lastWatchedAt" to FieldValue.serverTimestamp()
         )
         historyRef.set(historyItem, com.google.firebase.firestore.SetOptions.merge()).await()
     }
 
-    fun getWatchHistory(userId: String): Flow<List<WatchHistoryItem>> = callbackFlow {
+    fun getWatchHistory(userId: String, isKidsMode: Boolean = false): Flow<List<WatchHistoryItem>> = callbackFlow {
         if (userId.isBlank()) {
             trySend(emptyList())
             close()
@@ -229,20 +232,43 @@ class FirestoreRepository {
         }
 
         val listener = db.collection("users").document(userId)
-            .collection("watch_history")
+            .collection(WATCH_HISTORY_COLLECTION)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    android.util.Log.w("FirestoreRepository", "getWatchHistory failed", error)
+                    trySend(emptyList())
+                    close()
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
-                    val items = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(WatchHistoryItem::class.java)?.apply { this.movieId = doc.id } 
-                    }.sortedByDescending { item -> item.lastWatchedAt?.toDate()?.time ?: 0L }
+                    val items = snapshot.documents
+                        .filter { doc -> isKidsWatchHistoryDocument(doc.id) == isKidsMode }
+                        .mapNotNull { doc ->
+                            doc.toObject(WatchHistoryItem::class.java)?.apply {
+                                movieId = watchHistoryMovieId(doc.id, movieId)
+                            }
+                        }
+                        .sortedByDescending { item -> item.lastWatchedAt?.toDate()?.time ?: 0L }
                     trySend(items)
                 }
             }
         awaitClose { listener.remove() }
+    }
+
+    private fun watchHistoryDocumentId(movieSlug: String, isKidsMode: Boolean): String {
+        return if (isKidsMode) "$KIDS_WATCH_HISTORY_DOCUMENT_PREFIX$movieSlug" else movieSlug
+    }
+
+    private fun isKidsWatchHistoryDocument(documentId: String): Boolean {
+        return documentId.startsWith(KIDS_WATCH_HISTORY_DOCUMENT_PREFIX)
+    }
+
+    private fun watchHistoryMovieId(documentId: String, storedMovieId: String): String {
+        return if (isKidsWatchHistoryDocument(documentId)) {
+            storedMovieId.ifBlank { documentId.removePrefix(KIDS_WATCH_HISTORY_DOCUMENT_PREFIX) }
+        } else {
+            documentId
+        }
     }
 
     suspend fun toggleFavorite(
@@ -298,7 +324,9 @@ class FirestoreRepository {
         userId: String,
         userName: String,
         userAvatar: String,
-        content: String
+        content: String,
+        parentCommentId: String = "",
+        replyToUserName: String = ""
     ) {
         if (movieId.isBlank() || userId.isBlank() || content.isBlank()) return
         
@@ -309,9 +337,50 @@ class FirestoreRepository {
             userId = userId,
             userName = userName,
             userAvatar = userAvatar,
-            content = content
+            content = content,
+            parentCommentId = parentCommentId,
+            replyToUserName = replyToUserName,
+            likedBy = emptyList()
         )
         commentsRef.add(comment).await()
+    }
+
+    suspend fun toggleCommentLike(
+        movieId: String,
+        commentId: String,
+        userId: String
+    ) {
+        if (movieId.isBlank() || commentId.isBlank() || userId.isBlank()) return
+
+        val commentRef = db.collection("movies").document(movieId)
+            .collection("comments").document(commentId)
+
+        db.runTransaction { transaction ->
+            val snapshot = transaction.get(commentRef)
+            if (!snapshot.exists()) {
+                throw IllegalStateException("Comment does not exist")
+            }
+            val likedBy = snapshot.get("likedBy")
+                .let { value -> value as? List<*> }
+                ?.mapNotNull { it as? String }
+                .orEmpty()
+
+            val updatedLikedBy = if (userId in likedBy) {
+                likedBy.filterNot { it == userId }
+            } else {
+                likedBy + userId
+            }
+
+            transaction.set(
+                commentRef,
+                mapOf(
+                    "likedBy" to updatedLikedBy,
+                    "likes" to updatedLikedBy.size.toLong(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+        }.await()
     }
 
     fun getComments(movieId: String): Flow<List<Comment>> = callbackFlow {
@@ -609,3 +678,8 @@ class FirestoreRepository {
         db.collection("home_categories").document(categoryId).delete().await()
     }
 }
+
+private const val WATCH_HISTORY_COLLECTION = "watch_history"
+private const val KIDS_WATCH_HISTORY_DOCUMENT_PREFIX = "__kids__"
+private const val WATCH_HISTORY_MODE_DEFAULT = "default"
+private const val WATCH_HISTORY_MODE_KIDS = "kids"

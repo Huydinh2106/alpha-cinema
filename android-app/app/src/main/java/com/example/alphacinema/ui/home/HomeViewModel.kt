@@ -3,6 +3,7 @@ package com.example.alphacinema.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.api.RetrofitClient
+import com.example.alphacinema.data.local.SettingsManager
 import com.example.alphacinema.data.model.WatchHistoryItem
 import com.example.alphacinema.data.model.TmdbVideo
 import com.example.alphacinema.data.repository.FirestoreRepository
@@ -21,13 +22,14 @@ class HomeViewModel : ViewModel() {
     private val repository = MovieRepository()
     private val firestoreRepo = FirestoreRepository()
     private val auth = FirebaseAuth.getInstance()
+    private val settingsManager = SettingsManager.getInstance()
     private val phimApi = RetrofitClient.instance
     private val tmdbApi = RetrofitClient.tmdbApi
     private var watchHistoryJob: Job? = null
     private val continueWatchingOriginNameCache = mutableMapOf<String, String>()
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-        observeContinueWatching(firebaseAuth.currentUser?.uid)
+        observeContinueWatching(firebaseAuth.currentUser?.uid, _isKidsMode.value)
     }
 
     // Loading states
@@ -37,7 +39,7 @@ class HomeViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    private val _isKidsMode = MutableStateFlow(false)
+    private val _isKidsMode = MutableStateFlow(settingsManager.isKidsModeEnabled.value)
     val isKidsMode: StateFlow<Boolean> = _isKidsMode.asStateFlow()
 
     // Movie sections
@@ -112,11 +114,12 @@ class HomeViewModel : ViewModel() {
 
     init {
         auth.addAuthStateListener(authListener)
-        observeContinueWatching(auth.currentUser?.uid)
+        observeContinueWatching(auth.currentUser?.uid, _isKidsMode.value)
 
         viewModelScope.launch {
-            com.example.alphacinema.data.local.SettingsManager.getInstance().isKidsModeEnabled.collect { kidsMode ->
+            settingsManager.isKidsModeEnabled.collect { kidsMode ->
                 _isKidsMode.value = kidsMode
+                observeContinueWatching(auth.currentUser?.uid, kidsMode)
                 loadData()
             }
         }
@@ -146,15 +149,15 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    private fun observeContinueWatching(userId: String?) {
+    private fun observeContinueWatching(userId: String?, isKidsMode: Boolean) {
         watchHistoryJob?.cancel()
+        _continueWatching.value = emptyList()
         if (userId.isNullOrBlank()) {
-            _continueWatching.value = emptyList()
             return
         }
 
         watchHistoryJob = viewModelScope.launch {
-            firestoreRepo.getWatchHistory(userId)
+            firestoreRepo.getWatchHistory(userId, isKidsMode)
                 .catch { error ->
                     android.util.Log.w("HomeViewModel", "Continue watching load failed", error)
                     _continueWatching.value = emptyList()
