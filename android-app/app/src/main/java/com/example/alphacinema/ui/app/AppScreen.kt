@@ -625,7 +625,7 @@ fun MainContent(
                 }
 
                 if (detailLoading || detailMovie == null && detailError == null) {
-                        RouteLoadingState(message = "Đang tải chi tiết phim...")
+                        RouteLoadingState()
                 } else if (detailMovie != null) {
                     MovieDetailScreen(
                         movie = detailMovie,
@@ -738,7 +738,7 @@ fun MainContent(
                 }
 
                 if (detailLoading || playerMovie == null && detailError == null) {
-                    RouteLoadingState(message = "Đang chuẩn bị trình phát...")
+                    RouteLoadingState()
                 } else if (playerMovie != null) {
                     val episode = playerMovie.episodes.firstOrNull { it.id == route.episodeId }
                         ?: playerMovie.episodes.firstOrNull()
@@ -900,7 +900,7 @@ fun MainContent(
                         onBack = ::leaveWatchParty
                     )
                 } else if (detailLoading || playerMovie == null) {
-                    RouteLoadingState(message = "Đang chuẩn bị phòng xem chung...")
+                    RouteLoadingState()
                 } else {
                     val episode = wpRoom?.episodeId?.let { epId ->
                         playerMovie.episodes.firstOrNull { it.id == epId }
@@ -1065,22 +1065,14 @@ fun MainContent(
 }
 
 @Composable
-private fun RouteLoadingState(message: String) {
+private fun RouteLoadingState() {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            LottieLoadingIndicator(size = 120.dp)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = message,
-                color = Color.White.copy(alpha = 0.7f),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
+        LottieLoadingIndicator(size = 120.dp)
     }
 }
 

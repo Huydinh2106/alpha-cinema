@@ -40,6 +40,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FileDownload
@@ -107,6 +108,14 @@ private enum class PaymentPackageId {
     PREMIUM
 }
 
+private fun PaymentPackageId.selectionColor(): Color {
+    return when (this) {
+        PaymentPackageId.BASIC -> Color(0xFFD8DEE9)
+        PaymentPackageId.COUPLE -> Color(0xFFFF8AB8)
+        PaymentPackageId.PREMIUM -> Color(0xFFF6E29A)
+    }
+}
+
 private data class PaymentPackageUi(
     val id: PaymentPackageId,
     val name: String,
@@ -159,7 +168,6 @@ fun PaymentScreen(
 
     val momoResponse by viewModel.paymentResponse.collectAsState()
     val paymentConfirmed by viewModel.paymentConfirmed.collectAsState()
-    val paymentStatusMessage by viewModel.paymentStatusMessage.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
 
@@ -188,7 +196,6 @@ fun PaymentScreen(
     if (paymentStatus == PaymentStatus.QR_DISPLAYED && momoResponse != null) {
         MomoQrPayment(
             response = momoResponse!!,
-            statusMessage = paymentStatusMessage,
             onCancel = {
                 paymentStatus = PaymentStatus.IDLE
                 viewModel.clearPaymentResponse()
@@ -229,7 +236,7 @@ fun PaymentScreen(
                 PaymentStatus.IDLE,
                 PaymentStatus.SUCCESS,
                 PaymentStatus.FAILED -> {
-                    PaymentHero(currentPackage = currentPackage)
+                    PaymentHero()
 
                     PricingSection(
                         packages = packages,
@@ -261,7 +268,7 @@ fun PaymentScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AccentGold,
                             contentColor = Color(0xFF060914),
@@ -373,7 +380,6 @@ fun PaymentScreen(
 @Composable
 private fun MomoQrPayment(
     response: MomoPaymentResponse,
-    statusMessage: String?,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -554,21 +560,13 @@ private fun MomoQrPayment(
                         .background(Color(0xFFF7F1F5))
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     CircularProgressIndicator(
                         color = MomoPrimary,
                         trackColor = MomoPrimary.copy(alpha = 0.12f),
                         strokeWidth = 2.dp,
                         modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = statusMessage ?: "Đang chờ MoMo xác nhận giao dịch",
-                        color = Color(0xFF3D2A37),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.weight(1f)
                     )
                 }
 
@@ -891,7 +889,7 @@ private fun PaymentTopBar(
 }
 
 @Composable
-private fun PaymentHero(currentPackage: PaymentPackageUi?) {
+private fun PaymentHero() {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = "Nâng cấp trải nghiệm xem phim",
@@ -906,42 +904,6 @@ private fun PaymentHero(currentPackage: PaymentPackageUi?) {
             style = MaterialTheme.typography.bodyMedium,
             lineHeight = 21.sp
         )
-
-        CurrentPackageState(currentPackage = currentPackage)
-    }
-}
-
-@Composable
-private fun CurrentPackageState(currentPackage: PaymentPackageUi?) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.11f), RoundedCornerShape(18.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.WorkspacePremium,
-            contentDescription = null,
-            tint = if (currentPackage == null) Color.White.copy(alpha = 0.55f) else AccentGold,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Trạng thái người dùng",
-                color = Color.White.copy(alpha = 0.58f),
-                style = MaterialTheme.typography.labelMedium
-            )
-            Text(
-                text = currentPackage?.let { "Đã nâng cấp gói ${it.name}" } ?: "Chưa có gói trả phí",
-                color = Color.White,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
     }
 }
 
@@ -990,21 +952,28 @@ private fun PricingCard(
 ) {
     val shape = RoundedCornerShape(28.dp)
     val isPremium = packageUi.id == PaymentPackageId.PREMIUM
-    val backgroundBrush = if (isPremium) {
-        Brush.linearGradient(
+    val selectionColor = packageUi.id.selectionColor()
+    val backgroundBrush = when {
+        selected -> Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF1E1E1E),
+                selectionColor.copy(alpha = 0.16f),
+                Color(0xFF101010)
+            )
+        )
+        isPremium -> Brush.linearGradient(
             colors = listOf(
                 Color(0xFF1F1F1F),
                 Color(0xFF242424),
                 Color(0xFF171717)
             )
         )
-    } else {
-        Brush.linearGradient(
+        else -> Brush.linearGradient(
             colors = listOf(SurfaceDark, Color(0xFF101010))
         )
     }
     val borderBrush = when {
-        selected -> Brush.linearGradient(listOf(AccentGold, AccentTeal))
+        selected -> Brush.linearGradient(listOf(selectionColor, selectionColor.copy(alpha = 0.45f), Color.White.copy(alpha = 0.12f)))
         isPremium -> Brush.linearGradient(listOf(AccentGold.copy(alpha = 0.95f), Color(0xFFFF7D8A).copy(alpha = 0.65f)))
         else -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.07f)))
     }
@@ -1034,15 +1003,17 @@ private fun PricingCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = packageUi.description,
-                    color = Color.White.copy(alpha = 0.66f),
+                    color = Color.White,
                     style = MaterialTheme.typography.bodySmall,
                     lineHeight = 18.sp
                 )
             }
 
-            if (isPremium) {
-                PremiumIcon()
-            }
+            PlanSelectionIndicator(
+                selected = selected,
+                color = selectionColor,
+                onClick = onSelect
+            )
         }
 
         Row(
@@ -1050,14 +1021,11 @@ private fun PricingCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             packageUi.badge?.let { BadgePill(text = it) }
-            if (selected) {
-                SelectedPill()
-            }
         }
 
         Text(
             text = packageUi.price,
-            color = AccentGold,
+            color = Color.White,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold
         )
@@ -1068,23 +1036,34 @@ private fun PricingCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(2.dp))
+    }
+}
 
-        Button(
-            onClick = onSelect,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (selected || isPremium) AccentGold else SurfaceMuted,
-                contentColor = if (selected || isPremium) Color(0xFF060914) else Color.White
+@Composable
+private fun PlanSelectionIndicator(
+    selected: Boolean,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(if (selected) color else Color.White.copy(alpha = 0.08f))
+            .border(
+                width = 1.dp,
+                color = if (selected) color else Color.White.copy(alpha = 0.18f),
+                shape = CircleShape
             )
-        ) {
-            Text(
-                text = packageUi.buttonText,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = "Gói đang được chọn",
+                tint = Color(0xFF060914),
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -1299,20 +1278,6 @@ private fun ProcessingPaymentState() {
             strokeWidth = 4.dp,
             modifier = Modifier.size(54.dp)
         )
-        Text(
-            text = "Đang kết nối MoMo...",
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            text = "Vui lòng chờ trong giây lát hệ thống đang tạo mã thanh toán.",
-            color = Color.White.copy(alpha = 0.62f),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp
-        )
     }
 }
 
@@ -1452,12 +1417,13 @@ private fun PremiumIcon() {
 private fun BadgePill(text: String) {
     Text(
         text = text,
-        color = Color.Black,
+        color = Color.White,
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.ExtraBold,
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(Brush.horizontalGradient(listOf(AccentGold, Color(0xFFFFD1A1))))
+            .background(Color.White.copy(alpha = 0.10f))
+            .border(1.dp, AccentGold.copy(alpha = 0.42f), RoundedCornerShape(999.dp))
             .padding(horizontal = 10.dp, vertical = 5.dp)
     )
 }
@@ -1496,7 +1462,7 @@ private fun FeatureRow(
         )
         Text(
             text = text,
-            color = Color.White.copy(alpha = 0.82f),
+            color = Color.White,
             style = MaterialTheme.typography.bodyMedium,
             lineHeight = 20.sp
         )

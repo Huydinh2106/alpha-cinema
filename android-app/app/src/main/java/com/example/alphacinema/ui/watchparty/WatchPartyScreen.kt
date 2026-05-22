@@ -77,6 +77,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -314,6 +315,18 @@ fun WatchPartyScreen(
         }
     }
 
+    fun toggleMicWithPermission() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            viewModel.toggleMic()
+        } else {
+            permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     BackHandler {
         when {
             isImeVisible -> focusManager.clearFocus()
@@ -367,6 +380,14 @@ fun WatchPartyScreen(
                         )
 
                         // Episode selector button
+                        val micBtn = findViewById<android.widget.ImageButton>(com.example.alphacinema.R.id.btn_mic_toggle)
+                        micBtn?.visibility = android.view.View.VISIBLE
+                        micBtn?.setImageResource(
+                            if (isMicMuted) com.example.alphacinema.R.drawable.ic_mic_off
+                            else com.example.alphacinema.R.drawable.ic_mic
+                        )
+                        micBtn?.setOnClickListener { toggleMicWithPermission() }
+
                         val epBtn = findViewById<android.widget.ImageButton>(com.example.alphacinema.R.id.btn_episode_selector)
                         if (isHost && episodes.size > 1) {
                             epBtn?.visibility = android.view.View.VISIBLE
@@ -374,7 +395,14 @@ fun WatchPartyScreen(
                         }
                     }
                 },
-                update = { it.player = exoPlayer },
+                update = { playerView ->
+                    playerView.player = exoPlayer
+                    playerView.findViewById<android.widget.ImageButton>(com.example.alphacinema.R.id.btn_mic_toggle)
+                        ?.setImageResource(
+                            if (isMicMuted) com.example.alphacinema.R.drawable.ic_mic_off
+                            else com.example.alphacinema.R.drawable.ic_mic
+                        )
+                },
                 modifier = Modifier.fillMaxSize()
             )
             // Brightness dim overlay (pass-through touches)
@@ -456,7 +484,7 @@ fun WatchPartyScreen(
                             verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(msg.displayName.split(" ").lastOrNull() ?: "", color = Color(0xFFF6E29A), fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text(msg.text, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(msg.text, color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -481,7 +509,7 @@ fun WatchPartyScreen(
                             .clickable(enabled = false) {}
                     ) {
                         Text(
-                            "Chọn tập (${episodes.size} tập)",
+                            "Chọn tập",
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleSmall
@@ -600,52 +628,57 @@ fun WatchPartyScreen(
                 if (room != null) {
                     val hasMovie = room!!.movieSlug.isNotBlank()
                     RoomInfoBar(
-                        roomId = room!!.roomId,
-                        movieTitle = if (hasMovie) room!!.movieTitle else "Chưa chọn phim",
-                        hasMovie = hasMovie,
-                        isHost = isHost,
-                        isMicMuted = isMicMuted,
-                        onToggleMic = {
-                            val hasPermission = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                            if (hasPermission) {
-                                viewModel.toggleMic()
-                            } else {
-                                permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                            }
-                        },
-                        onCopyId = {
-                            clipboardManager.setText(AnnotatedString(room!!.roomId))
-                            android.widget.Toast.makeText(context, "Đã sao chép mã phòng", android.widget.Toast.LENGTH_SHORT).show()
-                        },
-                        onShare = { showInviteDialog = true },
-                        onChangeMovie = onChangeMovieClick
+                        movieTitle = if (hasMovie) room!!.movieTitle else "Chưa chọn phim"
                     )
 
                     // Invite popup
                     if (showInviteDialog) {
-                        androidx.compose.material3.AlertDialog(
+                        androidx.compose.ui.window.Dialog(
                             onDismissRequest = { showInviteDialog = false },
-                            containerColor = Color(0xFF1F1F1F),
-                            title = {
-                                Text("Mời bạn bè", color = Color.White, fontWeight = FontWeight.Bold)
-                            },
-                            text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            properties = androidx.compose.ui.window.DialogProperties(
+                                usePlatformDefaultWidth = false
+                            )
+                        ) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(0.9f),
+                                shape = RoundedCornerShape(30.dp),
+                                color = Color(0xFF1F1F1F),
+                                shadowElevation = 0.dp,
+                                tonalElevation = 0.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 26.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Text(
+                                        "Mời bạn bè",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 22.sp,
+                                        lineHeight = 28.sp
+                                    )
+
                                     // Option 1: Copy room code
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(Color.White.copy(alpha = 0.08f))
                                             .clickable {
                                                 clipboardManager.setText(AnnotatedString(room!!.roomId))
                                                 android.widget.Toast.makeText(context, "Đã sao chép mã phòng", android.widget.Toast.LENGTH_SHORT).show()
                                                 showInviteDialog = false
                                             }
-                                            .padding(16.dp),
+                                            .padding(vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Rounded.ContentCopy, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White.copy(alpha = 0.08f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.ContentCopy, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        }
                                         Spacer(modifier = Modifier.width(16.dp))
                                         Column {
                                             Text("Sao chép mã phòng", color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -657,39 +690,58 @@ fun WatchPartyScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(Color.White.copy(alpha = 0.08f))
                                             .clickable {
+                                                val deepLink = "alphacinema://watchparty/${room!!.roomId}"
                                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                                     type = "text/plain"
-                                                    putExtra(Intent.EXTRA_TEXT, "Tham gia xem chung phim trên Alpha Cinema cùng mình! Mã phòng: ${room!!.roomId}")
+                                                    putExtra(Intent.EXTRA_TEXT, deepLink)
+                                                    putExtra(Intent.EXTRA_TITLE, "Mời bạn bè")
                                                 }
                                                 context.startActivity(Intent.createChooser(intent, "Chia sẻ qua"))
                                                 showInviteDialog = false
                                             }
-                                            .padding(16.dp),
+                                            .padding(vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Rounded.Share, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White.copy(alpha = 0.08f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Rounded.Share, contentDescription = null, tint = Color(0xFFF6E29A))
+                                        }
                                         Spacer(modifier = Modifier.width(16.dp))
                                         Column {
                                             Text("Chia sẻ qua ứng dụng", color = Color.White, fontWeight = FontWeight.SemiBold)
-                                            Text("Gửi lời mời trực tiếp", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                                            Text("Mở thẳng phòng xem chung", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
                                         }
                                     }
                                 }
-                            },
-                            confirmButton = {}
-                        )
+                            }
+                        }
                     }
                 }
 
-                // Episode selector (host only, compact)
-                if (isHost && episodes.size > 1) {
+                val showEpisodeSelector = isHost && episodes.size > 1
+                if (showEpisodeSelector) {
                     EpisodeSelector(
                         episodes = episodes,
                         currentEpisodeId = currentEpisodeId,
                         onSelectEpisode = { ep -> viewModel.changeEpisode(ep.id, ep.name) }
+                    )
+                }
+
+                if (room != null) {
+                    val hasMovie = room!!.movieSlug.isNotBlank()
+                    WatchPartyActionRow(
+                        hasMovie = hasMovie,
+                        isHost = isHost,
+                        isMicMuted = isMicMuted,
+                        onToggleMic = ::toggleMicWithPermission,
+                        onShare = { showInviteDialog = true },
+                        onChangeMovie = onChangeMovieClick
                     )
                 }
 
@@ -719,15 +771,7 @@ fun WatchPartyScreen(
 
 @Composable
 private fun RoomInfoBar(
-    roomId: String,
-    movieTitle: String,
-    hasMovie: Boolean = true,
-    isHost: Boolean,
-    isMicMuted: Boolean,
-    onToggleMic: () -> Unit,
-    onCopyId: () -> Unit,
-    onShare: () -> Unit,
-    onChangeMovie: () -> Unit
+    movieTitle: String
 ) {
     Column(
         modifier = Modifier
@@ -743,90 +787,96 @@ private fun RoomInfoBar(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Actions
+@Composable
+private fun WatchPartyActionRow(
+    hasMovie: Boolean,
+    isHost: Boolean,
+    isMicMuted: Boolean,
+    onToggleMic: () -> Unit,
+    onShare: () -> Unit,
+    onChangeMovie: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(top = 14.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            // Mic button
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(if (isMicMuted) Color.Red.copy(alpha = 0.15f) else Color(0xFFF6E29A).copy(alpha = 0.15f))
-                    .clickable { onToggleMic() }
-                    .padding(12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    if (isMicMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
-                    contentDescription = "Mic",
-                    tint = if (isMicMuted) Color.Red else Color(0xFFF6E29A),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            WatchPartyActionButton(
+                icon = if (isMicMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                label = if (isMicMuted) "Tắt mic" else "Mic",
+                tint = if (isMicMuted) Color.Red else Color(0xFFF6E29A),
+                onClick = onToggleMic
+            )
 
-            // Invite button
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFFF6E29A).copy(alpha = 0.12f))
-                    .clickable { onShare() }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    Icons.Rounded.Share,
-                    contentDescription = "Mời bạn bè",
-                    tint = Color(0xFFF6E29A),
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Mời bạn bè",
-                    color = Color(0xFFF6E29A),
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+            WatchPartyActionButton(
+                icon = Icons.Rounded.Share,
+                label = "Mời bạn bè",
+                tint = Color(0xFFF6E29A),
+                onClick = onShare
+            )
 
             // Change / Choose Movie button
             if (isHost) {
                 val btnLabel = if (hasMovie) "Đổi phim" else "Chọn phim"
                 val btnTint = if (hasMovie) Color.White else Color(0xFFF6E29A)
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(
-                            if (hasMovie) Color.White.copy(alpha = 0.08f)
-                            else Color(0xFFF6E29A).copy(alpha = 0.15f)
-                        )
-                        .clickable { onChangeMovie() }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Rounded.Movie,
-                        contentDescription = btnLabel,
-                        tint = btnTint,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = btnLabel,
-                        color = btnTint,
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+                WatchPartyActionButton(
+                    icon = Icons.Rounded.Movie,
+                    label = btnLabel,
+                    tint = btnTint,
+                    onClick = onChangeMovie
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun WatchPartyActionButton(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .widthIn(min = 54.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.10f))
+                .border(1.dp, tint.copy(alpha = 0.28f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = 0.75f),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -844,7 +894,7 @@ private fun MembersList(
             .padding(top = 16.dp)
     ) {
         Text(
-            text = "Thành viên (${members.size}/5)",
+            text = "Thành viên",
             color = Color.White,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold
@@ -956,7 +1006,7 @@ private fun EpisodeSelector(
             .padding(top = 16.dp)
     ) {
         Text(
-            text = "Chọn tập (${episodes.size} tập)",
+            text = "Chọn tập",
             color = Color.White,
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold
@@ -1061,29 +1111,10 @@ private fun ChatSection(
                 .fillMaxWidth()
                 .weight(1f)
                 .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF101010))
+                .background(Color.Black)
         ) {
             if (messages.isEmpty()) {
-                // Empty state
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.Send,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.12f),
-                        modifier = Modifier.size(36.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Bắt đầu trò chuyện!",
-                        color = Color.White.copy(alpha = 0.25f),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+                Spacer(modifier = Modifier.fillMaxSize())
             } else {
                 LazyColumn(
                     state = listState,
@@ -1266,8 +1297,8 @@ private fun ChatBubble(
                     Text(
                         text = message.text,
                         color = if (isMe) Color.Black else Color.White,
-                        style = MaterialTheme.typography.bodySmall,
-                        lineHeight = 18.sp
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
                     )
                     // Timestamp on last message of group
                     if (isLastInGroup && timeText.isNotEmpty()) {

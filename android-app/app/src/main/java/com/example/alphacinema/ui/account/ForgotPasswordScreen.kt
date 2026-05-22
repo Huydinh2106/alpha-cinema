@@ -354,7 +354,12 @@ fun ForgotPasswordScreen(
 @Composable
 private fun forgotTextFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+    errorTextColor = Color.White,
     focusedLabelColor = GoldAccent, unfocusedLabelColor = Color.White.copy(0.6f),
+    errorLabelColor = ErrorRed,
     focusedBorderColor = GoldAccent, unfocusedBorderColor = Color.White.copy(0.2f),
-    cursorColor = GoldAccent
+    errorBorderColor = ErrorRed,
+    cursorColor = GoldAccent,
+    errorCursorColor = ErrorRed,
+    errorSupportingTextColor = ErrorRed
 )
