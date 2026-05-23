@@ -49,6 +49,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.toRoute
+import com.example.alphacinema.BuildConfig
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
@@ -89,6 +90,11 @@ import com.example.alphacinema.util.formatFirestoreDate
 
 private const val ANIM_DURATION = 350
 private const val ANIM_DURATION_FAST = 250
+private val AD_FREE_PLANS = setOf("basic", "couple", "premium")
+
+internal fun isAdFreePlan(plan: String?): Boolean {
+    return plan?.trim()?.lowercase() in AD_FREE_PLANS
+}
 
 // ── Splash State ────────────────────────────────────────────────────────────
 
@@ -757,6 +763,8 @@ fun MainContent(
                             videoUrl = videoUrl,
                             episodeVideoUrls = episodeVideoUrls,
                             startPositionMs = route.startPositionMs,
+                            adTagUrl = BuildConfig.IMA_AD_TAG_URL,
+                            adsEnabled = !isAdFreePlan(demoCurrentPlan),
                             onSelectEpisode = { ep ->
                                 // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
                                 navController.navigate(

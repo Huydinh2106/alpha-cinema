@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -62,20 +63,28 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.AdOverlayInfo
+import androidx.media3.common.AdViewProvider
 import androidx.media3.common.C
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.exoplayer.ima.ImaAdsLoader
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ads.AdsLoader
 import androidx.media3.ui.PlayerView
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailUi
+import com.google.ads.interactivemedia.v3.api.AdEvent
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 private const val BRIGHTNESS_GESTURE_WIDTH_RATIO = 0.5f
+private const val IMA_LOG_TAG = "AlphaCinemaIMA"
 
 fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
@@ -84,6 +93,7 @@ fun Context.findActivity(): Activity? = when (this) {
 }
 
 internal fun PlayerView.installBrightnessGesture(
+    shouldHandleGesture: () -> Boolean = { true },
     onBrightnessDelta: (Float) -> Unit
 ) {
     val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -96,6 +106,9 @@ internal fun PlayerView.installBrightnessGesture(
     setOnTouchListener { view, event ->
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (!shouldHandleGesture()) {
+                    return@setOnTouchListener false
+                }
                 downX = event.x
                 downY = event.y
                 lastY = event.y
@@ -141,6 +154,18 @@ internal fun PlayerView.installBrightnessGesture(
     }
 }
 
+private class PlayerViewAdViewProvider : AdViewProvider {
+    var playerView: PlayerView? = null
+
+    override fun getAdViewGroup(): ViewGroup? {
+        return playerView?.adViewGroup
+    }
+
+    override fun getAdOverlayInfos(): List<AdOverlayInfo> {
+        return playerView?.adOverlayInfos ?: emptyList()
+    }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
@@ -150,6 +175,8 @@ fun PlayerScreen(
     videoUrl: String = "",
     episodeVideoUrls: Map<String, String> = emptyMap(),
     startPositionMs: Long = 0L,
+    adTagUrl: String = "",
+    adsEnabled: Boolean = false,
     onSelectEpisode: (EpisodeUi) -> Unit = {},
     viewModel: PlayerViewModel = viewModel()
 ) {
@@ -159,9 +186,39 @@ fun PlayerScreen(
     val currentEpisode by rememberUpdatedState(episode)
     val currentMovie by rememberUpdatedState(movie)
     val currentVideoUrl by rememberUpdatedState(videoUrl)
+    val shouldUseAds = shouldAttachPrerollAds(
+        adsEnabled = adsEnabled,
+        adTagUrl = adTagUrl
+    )
+    val adViewProvider = remember { PlayerViewAdViewProvider() }
+    val adsLoader = remember(context, shouldUseAds) {
+        if (!shouldUseAds) {
+            null
+        } else {
+            ImaAdsLoader.Builder(context)
+                .setAdEventListener { event ->
+                    if (event.type != AdEvent.AdEventType.AD_PROGRESS) {
+                        Log.d(IMA_LOG_TAG, "IMA event: ${event.type}")
+                    }
+                }
+                .build()
+        }
+    }
+    val mediaSourceFactory = remember(context, adsLoader) {
+        val dataSourceFactory = DefaultDataSource.Factory(context)
+        DefaultMediaSourceFactory(dataSourceFactory).apply {
+            if (adsLoader != null) {
+                setLocalAdInsertionComponents(
+                    AdsLoader.Provider { adsLoader },
+                    adViewProvider
+                )
+            }
+        }
+    }
 
-    val exoPlayer = remember {
+    val exoPlayer = remember(context, mediaSourceFactory) {
         ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setSeekBackIncrementMs(10_000)
             .setSeekForwardIncrementMs(10_000)
             .build().apply {
@@ -172,9 +229,22 @@ fun PlayerScreen(
     var playerView: PlayerView? by remember {
         mutableStateOf(null)
     }
+    var isPlayingAd by remember {
+        mutableStateOf(false)
+    }
 
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                isPlayingAd = player.isPlayingAd
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (exoPlayer.isPlayingAd) {
+                    Log.w(IMA_LOG_TAG, "Ad playback error", error)
+                }
+            }
+
             override fun onMediaItemTransition(
                 mediaItem: MediaItem?,
                 reason: Int
@@ -211,12 +281,22 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(movie.episodes, episodeVideoUrls, episode?.id, startPositionMs) {
+    LaunchedEffect(
+        movie.episodes,
+        episodeVideoUrls,
+        episode?.id,
+        startPositionMs,
+        adTagUrl,
+        adsEnabled
+    ) {
         val mediaItems = viewModel.buildEpisodeMediaItems(
             movie = movie,
-            episodeVideoUrls = episodeVideoUrls
+            episodeVideoUrls = episodeVideoUrls,
+            adTagUrl = adTagUrl,
+            adsEnabled = adsEnabled
         )
 
+        adsLoader?.setPlayer(exoPlayer)
         exoPlayer.setMediaItems(mediaItems)
         exoPlayer.prepare()
 
@@ -247,21 +327,25 @@ fun PlayerScreen(
         if (videoUrl.isBlank()) return@LaunchedEffect
 
         delay(1_000)
-        viewModel.saveWatchProgress(
-            movie = currentMovie,
-            episode = currentEpisode,
-            progress = exoPlayer.currentPosition,
-            duration = normalizedDurationMs(exoPlayer.duration)
-        )
-
-        while (true) {
-            delay(10_000)
+        if (!exoPlayer.isPlayingAd) {
             viewModel.saveWatchProgress(
                 movie = currentMovie,
                 episode = currentEpisode,
                 progress = exoPlayer.currentPosition,
                 duration = normalizedDurationMs(exoPlayer.duration)
             )
+        }
+
+        while (true) {
+            delay(10_000)
+            if (!exoPlayer.isPlayingAd) {
+                viewModel.saveWatchProgress(
+                    movie = currentMovie,
+                    episode = currentEpisode,
+                    progress = exoPlayer.currentPosition,
+                    duration = normalizedDurationMs(exoPlayer.duration)
+                )
+            }
         }
     }
 
@@ -270,10 +354,11 @@ fun PlayerScreen(
         hideSystemBars(context.findActivity())
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(exoPlayer, adsLoader) {
         activity?.requestedOrientation =
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
+        adsLoader?.setPlayer(exoPlayer)
         hideSystemBars(activity)
 
         onDispose {
@@ -282,7 +367,7 @@ fun PlayerScreen(
 
             showSystemBars(activity)
 
-            if (currentVideoUrl.isNotBlank()) {
+            if (currentVideoUrl.isNotBlank() && !exoPlayer.isPlayingAd) {
                 viewModel.saveWatchProgress(
                     movie = currentMovie,
                     episode = currentEpisode,
@@ -291,7 +376,10 @@ fun PlayerScreen(
                 )
             }
 
+            adsLoader?.setPlayer(null)
             exoPlayer.release()
+            adsLoader?.release()
+            adViewProvider.playerView = null
         }
     }
 
@@ -300,6 +388,13 @@ fun PlayerScreen(
     var showBrightnessIndicator by remember { mutableStateOf(false) }
     var showPlayerChrome by remember { mutableStateOf(true) }
     val overlayAlpha = (1f - brightness).coerceIn(0f, 0.85f)
+
+    LaunchedEffect(isPlayingAd) {
+        if (isPlayingAd) {
+            showBrightnessIndicator = false
+            showEpisodeDialog = false
+        }
+    }
 
     LaunchedEffect(showBrightnessIndicator) {
         if (showBrightnessIndicator) {
@@ -319,13 +414,17 @@ fun PlayerScreen(
                 inflatedView.apply {
                     player = exoPlayer
                     useController = true
+                    setControllerHideDuringAds(true)
                     showController()
-                    installBrightnessGesture { delta ->
+                    installBrightnessGesture(
+                        shouldHandleGesture = { !exoPlayer.isPlayingAd }
+                    ) { delta ->
                         brightness = (brightness + delta).coerceIn(0.05f, 1f)
                         showBrightnessIndicator = true
                     }
 
                     playerView = this
+                    adViewProvider.playerView = this
 
                     // Force custom 10s icons (Media3 overrides them by default)
                     val applyCustomIcons = {
@@ -361,12 +460,14 @@ fun PlayerScreen(
             },
             update = { view ->
                 view.player = exoPlayer
+                view.setControllerHideDuringAds(true)
                 playerView = view
+                adViewProvider.playerView = view
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        if (overlayAlpha > 0.01f) {
+        if (!isPlayingAd && overlayAlpha > 0.01f) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -375,7 +476,7 @@ fun PlayerScreen(
         }
 
         AnimatedVisibility(
-            visible = showBrightnessIndicator,
+            visible = showBrightnessIndicator && !isPlayingAd,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -428,7 +529,7 @@ fun PlayerScreen(
         }
 
         AnimatedVisibility(
-            visible = showPlayerChrome,
+            visible = showPlayerChrome && !isPlayingAd,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopCenter)
@@ -470,7 +571,7 @@ fun PlayerScreen(
         }
 
         // Episode picker dialog overlay
-        if (showEpisodeDialog) {
+        if (showEpisodeDialog && !isPlayingAd) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

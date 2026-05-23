@@ -782,7 +782,8 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 features = listOf(
                     "Xem phim không giới hạn",
                     "Lưu danh sách phim yêu thích",
-                    "Chất lượng HD"
+                    "Chất lượng HD",
+                    "Không quảng cáo"
                 ),
                 buttonText = "Chọn gói Basic"
             ),
@@ -797,7 +798,8 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                     "Tất cả tính năng của Basic",
                     "Tạo phòng xem chung",
                     "Đồng bộ thời gian xem phim",
-                    "Chat trong phòng xem"
+                    "Chat trong phòng xem",
+                    "Không quảng cáo"
                 ),
                 buttonText = "Chọn gói Couple"
             ),

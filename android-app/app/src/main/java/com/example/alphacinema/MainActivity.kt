@@ -21,6 +21,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.alphacinema.payment.MomoSdkCoordinator
 import com.example.alphacinema.ui.app.AppScreen
 import com.example.alphacinema.ui.theme.AlphaCinemaTheme
+import com.google.ads.interactivemedia.v3.api.ImaSdkFactory
 import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : ComponentActivity() {
@@ -44,6 +45,8 @@ class MainActivity : ComponentActivity() {
         )
 
         super.onCreate(savedInstanceState)
+
+        initializeImaSdk()
 
         // Xin quyền thông báo cho Android 13+
         requestNotificationPermission()
@@ -146,6 +149,11 @@ class MainActivity : ComponentActivity() {
                 requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+
+    private fun initializeImaSdk() {
+        val sdkFactory = ImaSdkFactory.getInstance()
+        sdkFactory.initialize(this, sdkFactory.createImaSdkSettings())
     }
 
     private fun updateTokenInFirestore(token: String) {
