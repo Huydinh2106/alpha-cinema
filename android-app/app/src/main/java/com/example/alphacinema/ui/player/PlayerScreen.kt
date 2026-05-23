@@ -9,6 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewConfiguration
+import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -81,6 +82,7 @@ import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailUi
 import com.google.ads.interactivemedia.v3.api.AdEvent
 import kotlinx.coroutines.delay
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
 private const val BRIGHTNESS_GESTURE_WIDTH_RATIO = 0.5f
@@ -186,6 +188,17 @@ fun PlayerScreen(
     val currentEpisode by rememberUpdatedState(episode)
     val currentMovie by rememberUpdatedState(movie)
     val currentVideoUrl by rememberUpdatedState(videoUrl)
+    val currentOnBack by rememberUpdatedState(onBack)
+    val backRequestConsumed = remember { AtomicBoolean(false) }
+    var isBackRequestPending by remember { mutableStateOf(false) }
+
+    fun requestBackOnce() {
+        if (backRequestConsumed.compareAndSet(false, true)) {
+            isBackRequestPending = true
+            currentOnBack()
+        }
+    }
+
     val shouldUseAds = shouldAttachPrerollAds(
         adsEnabled = adsEnabled,
         adTagUrl = adTagUrl
@@ -403,6 +416,10 @@ fun PlayerScreen(
         }
     }
 
+    BackHandler {
+        requestBackOnce()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -553,7 +570,8 @@ fun PlayerScreen(
                 )
 
                 IconButton(
-                    onClick = onBack,
+                    onClick = ::requestBackOnce,
+                    enabled = !isBackRequestPending,
                     modifier = Modifier
                         .statusBarsPadding()
                         .padding(top = 8.dp, start = 16.dp)
