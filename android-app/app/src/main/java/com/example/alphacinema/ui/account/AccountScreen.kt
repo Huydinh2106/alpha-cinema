@@ -36,21 +36,27 @@ import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RemoveRedEye
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material.icons.rounded.WatchLater
 import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -95,6 +101,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
+import com.example.alphacinema.data.model.PlaylistMovieItem
+import com.example.alphacinema.data.model.UserPlaylist
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -123,6 +131,7 @@ private val AccountAccentGold = Color(0xFFF6E29A)
 private enum class AccountMenuAction {
     WATCH_HISTORY,
     MOVIE_LIBRARY,
+    PLAYLISTS,
     FAVORITES,
     POLICY,
     FEEDBACK,
@@ -132,6 +141,7 @@ private enum class AccountMenuAction {
 
 private enum class AccountPanelType {
     MOVIE_LIBRARY,
+    PLAYLISTS,
     FAVORITES,
     POLICY,
     FEEDBACK
@@ -330,6 +340,10 @@ fun AccountScreen(
         currentUser?.uid?.let(firestoreRepository::getFavorites) ?: flowOf(emptyList())
     }
     val favorites by favoritesFlow.collectAsState(initial = emptyList())
+    val playlistsFlow = remember(currentUser?.uid) {
+        currentUser?.uid?.let(firestoreRepository::getPlaylists) ?: flowOf(emptyList())
+    }
+    val playlists by playlistsFlow.collectAsState(initial = emptyList())
 
     var showPinDialog by remember { mutableStateOf(false) }
     var showResetPinDialog by remember { mutableStateOf(false) }
@@ -341,6 +355,18 @@ fun AccountScreen(
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
     var activePanel by remember { mutableStateOf<AccountPanelType?>(null) }
+    var selectedPlaylist by remember { mutableStateOf<UserPlaylist?>(null) }
+    val selectedPlaylistId = selectedPlaylist?.id
+    val playlistItemsFlow = remember(currentUser?.uid, selectedPlaylistId) {
+        val uid = currentUser?.uid
+        val playlistId = selectedPlaylistId
+        if (uid != null && !playlistId.isNullOrBlank()) {
+            firestoreRepository.getPlaylistItems(uid, playlistId)
+        } else {
+            flowOf(emptyList())
+        }
+    }
+    val playlistItems by playlistItemsFlow.collectAsState(initial = emptyList())
     var feedbackInput by remember { mutableStateOf("") }
     var showPlanManagement by remember { mutableStateOf(false) }
     var showCancelRenewDialog by remember { mutableStateOf(false) }
@@ -348,6 +374,15 @@ fun AccountScreen(
     val isLoggedIn = currentUser != null
     val profileStartedDate = formatFirestoreDate(userProfile?.subscriptionStartedAt)
     val profileExpiredDate = formatFirestoreDate(userProfile?.subscriptionExpiresAt)
+
+    LaunchedEffect(activePanel, playlists, selectedPlaylistId) {
+        if (activePanel != AccountPanelType.PLAYLISTS) {
+            selectedPlaylist = null
+            return@LaunchedEffect
+        }
+        val currentId = selectedPlaylistId ?: return@LaunchedEffect
+        selectedPlaylist = playlists.firstOrNull { it.id == currentId }
+    }
     val demoMembershipPlan = remember(
         isLoggedIn,
         currentPlan,
@@ -394,6 +429,7 @@ fun AccountScreen(
 
     val menuItems = mutableListOf(
         AccountMenuItemUi("Lịch sử xem", { Icon(Icons.Rounded.History, contentDescription = null) }),
+        AccountMenuItemUi("Danh sách phát", { Icon(Icons.Rounded.VideoLibrary, contentDescription = null) }),
         AccountMenuItemUi("Yêu thích", { Icon(Icons.Rounded.FavoriteBorder, contentDescription = null) }),
         AccountMenuItemUi("Chính sách", { Icon(Icons.Rounded.Info, contentDescription = null) }),
         AccountMenuItemUi("Góp ý", { Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null) })
@@ -423,6 +459,7 @@ fun AccountScreen(
             AccountMenuAction.MOVIE_LIBRARY -> {
                 if (isLoggedIn) openPanel(AccountPanelType.MOVIE_LIBRARY) else showLoginRequiredDialog = true
             }
+            AccountMenuAction.PLAYLISTS -> openPanel(AccountPanelType.PLAYLISTS, requiresLogin = true)
             AccountMenuAction.FAVORITES -> openPanel(AccountPanelType.FAVORITES, requiresLogin = true)
             AccountMenuAction.POLICY -> openPanel(AccountPanelType.POLICY)
             AccountMenuAction.FEEDBACK -> openPanel(AccountPanelType.FEEDBACK)
@@ -504,6 +541,7 @@ fun AccountScreen(
         return item.action ?: when (item.title) {
             "Lịch sử xem" -> AccountMenuAction.WATCH_HISTORY
             "Danh sách phim" -> AccountMenuAction.MOVIE_LIBRARY
+            "Danh sách phát" -> AccountMenuAction.PLAYLISTS
             "Yêu thích" -> AccountMenuAction.FAVORITES
             "Xem chung" -> AccountMenuAction.WATCH_TOGETHER
             "Chính sách" -> AccountMenuAction.POLICY
@@ -790,6 +828,9 @@ fun AccountScreen(
             AccountPanelBottomSheet(
                 panel = activePanel!!,
                 favorites = favorites,
+                playlists = playlists,
+                selectedPlaylist = selectedPlaylist,
+                playlistItems = playlistItems,
                 feedbackInput = feedbackInput,
                 onDismiss = { activePanel = null },
                 onFeedbackChange = { feedbackInput = it },
@@ -806,6 +847,60 @@ fun AccountScreen(
                 onOpenMovieDetail = { slug ->
                     activePanel = null
                     onOpenMovieDetail(slug)
+                },
+                onOpenPlaylist = { playlist ->
+                    selectedPlaylist = playlist
+                },
+                onBackToPlaylists = {
+                    selectedPlaylist = null
+                },
+                onRenamePlaylist = { playlistId, playlistName ->
+                    val uid = currentUser?.uid
+                    if (uid == null) {
+                        showLoginRequiredDialog = true
+                    } else {
+                        scope.launch {
+                            try {
+                                firestoreRepository.renamePlaylist(uid, playlistId, playlistName)
+                                android.widget.Toast.makeText(context, "Đã đổi tên danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Không thể đổi tên danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                onDeletePlaylist = { playlist ->
+                    val uid = currentUser?.uid
+                    if (uid == null) {
+                        showLoginRequiredDialog = true
+                    } else {
+                        scope.launch {
+                            try {
+                                firestoreRepository.deletePlaylist(uid, playlist.id)
+                                if (selectedPlaylist?.id == playlist.id) {
+                                    selectedPlaylist = null
+                                }
+                                android.widget.Toast.makeText(context, "Đã xóa danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Không thể xóa danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                onRemoveFromPlaylist = { playlist, movieId ->
+                    val uid = currentUser?.uid
+                    if (uid == null) {
+                        showLoginRequiredDialog = true
+                    } else {
+                        scope.launch {
+                            try {
+                                firestoreRepository.removeMovieFromPlaylist(uid, playlist.id, movieId)
+                                android.widget.Toast.makeText(context, "Đã xóa khỏi danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Không thể xóa phim khỏi danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
                 },
                 onOpenMovieList = { title, filterKind, slug ->
                     activePanel = null
@@ -1973,19 +2068,31 @@ internal fun PlanInfoRow(
 private fun AccountPanelBottomSheet(
     panel: AccountPanelType,
     favorites: List<com.example.alphacinema.data.model.FavoriteItem>,
+    playlists: List<UserPlaylist>,
+    selectedPlaylist: UserPlaylist?,
+    playlistItems: List<PlaylistMovieItem>,
     feedbackInput: String,
     onDismiss: () -> Unit,
     onFeedbackChange: (String) -> Unit,
     onSubmitFeedback: () -> Unit,
     onOpenMovieDetail: (String) -> Unit,
+    onOpenPlaylist: (UserPlaylist) -> Unit,
+    onBackToPlaylists: () -> Unit,
+    onRenamePlaylist: (String, String) -> Unit,
+    onDeletePlaylist: (UserPlaylist) -> Unit,
+    onRemoveFromPlaylist: (UserPlaylist, String) -> Unit,
     onOpenMovieList: (String, FilterKind, String) -> Unit
 ) {
     val sheetTitle = when (panel) {
         AccountPanelType.MOVIE_LIBRARY -> "Danh sách phim"
+        AccountPanelType.PLAYLISTS -> selectedPlaylist?.name ?: "Danh sách phát"
         AccountPanelType.FAVORITES -> "Yêu thích"
         AccountPanelType.POLICY -> "Chính sách"
         AccountPanelType.FEEDBACK -> "Góp ý"
     }
+    var playlistToRename by remember { mutableStateOf<UserPlaylist?>(null) }
+    var renamePlaylistName by remember { mutableStateOf("") }
+    var playlistToDelete by remember { mutableStateOf<UserPlaylist?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -2016,6 +2123,13 @@ private fun AccountPanelBottomSheet(
                     Text(
                         text = when (panel) {
                             AccountPanelType.MOVIE_LIBRARY -> "Mở nhanh các danh sách phim phổ biến"
+                            AccountPanelType.PLAYLISTS -> {
+                                if (selectedPlaylist == null) {
+                                    "Các danh sách phát riêng tư của bạn"
+                                } else {
+                                    "${playlistItems.size} phim đã lưu"
+                                }
+                            }
                             AccountPanelType.FAVORITES -> "Những phim bạn đã lưu yêu thích"
                             AccountPanelType.POLICY -> "Thông tin sử dụng và quyền riêng tư"
                             AccountPanelType.FEEDBACK -> "Chia sẻ góp ý để cải thiện AlphaCinema"
@@ -2055,6 +2169,53 @@ private fun AccountPanelBottomSheet(
                         description = "Các chương trình và nội dung giải trí",
                         onClick = { onOpenMovieList("TV Shows", FilterKind.MOVIE_TYPE, "tvshows") }
                     )
+                }
+
+                AccountPanelType.PLAYLISTS -> {
+                    if (selectedPlaylist == null) {
+                        if (playlists.isEmpty()) {
+                            AccountEmptyState("Bạn chưa có danh sách phát nào. Hãy bấm “Thêm vào” ở màn chi tiết phim để tạo danh sách mới.")
+                        } else {
+                            playlists.forEach { playlist ->
+                                AccountPlaylistRow(
+                                    playlist = playlist,
+                                    onOpen = { onOpenPlaylist(playlist) },
+                                    onRename = {
+                                        playlistToRename = playlist
+                                        renamePlaylistName = playlist.name
+                                    },
+                                    onDelete = { playlistToDelete = playlist }
+                                )
+                            }
+                        }
+                    } else {
+                        val activePlaylist = selectedPlaylist
+                        OutlinedButton(
+                            onClick = onBackToPlaylists,
+                            modifier = Modifier.fillMaxWidth(),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                Color.White.copy(alpha = 0.18f)
+                            ),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("Quay lại danh sách phát")
+                        }
+
+                        if (playlistItems.isEmpty()) {
+                            AccountEmptyState("Danh sách phát này chưa có phim nào.")
+                        } else {
+                            playlistItems.forEach { item ->
+                                AccountPlaylistMovieRow(
+                                    item = item,
+                                    onOpen = { onOpenMovieDetail(item.movieId) },
+                                    onRemove = { onRemoveFromPlaylist(activePlaylist, item.movieId) }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 AccountPanelType.FAVORITES -> {
@@ -2115,6 +2276,238 @@ private fun AccountPanelBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
+
+    playlistToRename?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { playlistToRename = null },
+            containerColor = Color(0xFF1E1E1E),
+            title = { Text("Đổi tên danh sách", color = Color.White) },
+            text = {
+                OutlinedTextField(
+                    value = renamePlaylistName,
+                    onValueChange = { renamePlaylistName = it.take(60) },
+                    singleLine = true,
+                    label = { Text("Tên danh sách phát") },
+                    colors = authTextFieldColors()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRenamePlaylist(playlist.id, renamePlaylistName)
+                        playlistToRename = null
+                    },
+                    enabled = renamePlaylistName.trim().isNotBlank()
+                ) {
+                    Text("Lưu", color = AccountAccentGold, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistToRename = null }) {
+                    Text("Hủy", color = Color.White.copy(alpha = 0.72f))
+                }
+            }
+        )
+    }
+
+    playlistToDelete?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { playlistToDelete = null },
+            containerColor = Color(0xFF1E1E1E),
+            title = { Text("Xóa danh sách phát?", color = Color.White) },
+            text = {
+                Text(
+                    text = "Danh sách \"${playlist.name}\" và toàn bộ phim trong đó sẽ bị xóa vĩnh viễn.",
+                    color = Color.White.copy(alpha = 0.76f)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeletePlaylist(playlist)
+                        playlistToDelete = null
+                    }
+                ) {
+                    Text("Xóa", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistToDelete = null }) {
+                    Text("Hủy", color = Color.White.copy(alpha = 0.72f))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun AccountPlaylistRow(
+    playlist: UserPlaylist,
+    onOpen: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onOpen)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        PlaylistCover(
+            posterUrl = playlist.coverPosterUrl,
+            contentDescription = playlist.name
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
+        ) {
+            Text(
+                text = playlist.name,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Riêng tư",
+                color = Color.White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                text = "${playlist.itemCount} phim",
+                color = AccountAccentGold,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = "Quản lý danh sách phát",
+                    tint = Color.White.copy(alpha = 0.72f)
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                containerColor = Color(0xFF2A2A2A)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Đổi tên", color = Color.White) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Edit, null, tint = Color.White.copy(alpha = 0.76f))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Xóa", color = Color(0xFFFF6B6B)) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Delete, null, tint = Color(0xFFFF6B6B))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountPlaylistMovieRow(
+    item: PlaylistMovieItem,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onOpen)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.example.alphacinema.ui.components.AlphaCinemaImage(
+                    model = item.posterUrl,
+                    contentDescription = item.movieName,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Column(modifier = Modifier.padding(start = 12.dp)) {
+                    Text(
+                        text = item.movieName,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Mở lại chi tiết phim",
+                        color = AccountAccentGold,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+        }
+        IconButton(onClick = onRemove) {
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = "Xóa khỏi danh sách phát",
+                tint = Color.White.copy(alpha = 0.72f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistCover(
+    posterUrl: String,
+    contentDescription: String
+) {
+    if (posterUrl.isNotBlank()) {
+        com.example.alphacinema.ui.components.AlphaCinemaImage(
+            model = posterUrl,
+            contentDescription = contentDescription,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.VideoLibrary,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.52f)
+            )
         }
     }
 }

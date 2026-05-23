@@ -1,5 +1,6 @@
 package com.example.alphacinema.ui.movie.detail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.api.RetrofitClient
@@ -10,8 +11,13 @@ import com.example.alphacinema.data.model.MovieDetail
 import com.example.alphacinema.data.model.MovieDetailResponse
 import com.example.alphacinema.data.model.MovieItem
 import com.example.alphacinema.data.model.MovieStats
+import com.example.alphacinema.data.model.PlaylistMovieItem
+import com.example.alphacinema.data.model.UserPlaylist
 import com.example.alphacinema.data.repository.FirestoreRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestoreException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +45,17 @@ class MovieDetailViewModel : ViewModel() {
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
 
+    private val _playlists = MutableStateFlow<List<UserPlaylist>>(emptyList())
+    val playlists: StateFlow<List<UserPlaylist>> = _playlists.asStateFlow()
+
+    private val _playlistIdsForCurrentMovie = MutableStateFlow<Set<String>>(emptySet())
+    val playlistIdsForCurrentMovie: StateFlow<Set<String>> =
+        _playlistIdsForCurrentMovie.asStateFlow()
+
+    private val _playlistActionInProgress = MutableStateFlow(false)
+    val playlistActionInProgress: StateFlow<Boolean> =
+        _playlistActionInProgress.asStateFlow()
+
     private val _movieStats = MutableStateFlow<MovieStats?>(null)
     val movieStats: StateFlow<MovieStats?> = _movieStats.asStateFlow()
 
@@ -50,6 +67,8 @@ class MovieDetailViewModel : ViewModel() {
 
     private var activeUserId: String? = null
     private var activeMovieSlug: String? = null
+    private var playlistsJob: Job? = null
+    private var moviePlaylistIdsJob: Job? = null
 
     fun initFirebaseListeners(slug: String, userId: String?) {
         activeMovieSlug = slug
@@ -76,8 +95,24 @@ class MovieDetailViewModel : ViewModel() {
                     _userRating.value = rating?.score
                 }
             }
+            playlistsJob?.cancel()
+            playlistsJob = viewModelScope.launch {
+                firestoreRepository.getPlaylists(userId).collect { playlists ->
+                    _playlists.value = playlists
+                }
+            }
+            moviePlaylistIdsJob?.cancel()
+            moviePlaylistIdsJob = viewModelScope.launch {
+                firestoreRepository.getPlaylistIdsForMovie(userId, slug).collect { playlistIds ->
+                    _playlistIdsForCurrentMovie.value = playlistIds
+                }
+            }
         } else {
             _userRating.value = null
+            _playlists.value = emptyList()
+            _playlistIdsForCurrentMovie.value = emptySet()
+            playlistsJob?.cancel()
+            moviePlaylistIdsJob?.cancel()
         }
     }
 
@@ -98,6 +133,208 @@ class MovieDetailViewModel : ViewModel() {
                 _isFavorite.value = currentFavState
                 onResult(false, "Lỗi cập nhật yêu thích")
             }
+        }
+    }
+
+    fun createPlaylistAndAddMovie(
+        playlistName: String,
+        movie: MovieDetailUi,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        val uid = activeUserId
+        if (uid == null) {
+            onResult(false, "Vui lòng đăng nhập để lưu vào danh sách phát")
+            return
+        }
+        val normalizedName = validatePlaylistName(playlistName, onResult) ?: return
+
+        viewModelScope.launch {
+            _playlistActionInProgress.value = true
+            try {
+                firestoreRepository.createPlaylist(
+                    userId = uid,
+                    name = normalizedName,
+                    firstMovie = movie.toPlaylistMovieItem()
+                )
+                onResult(true, "Đã lưu vào $normalizedName")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                onResult(
+                    false,
+                    playlistErrorMessage(
+                        operation = "createPlaylistAndAddMovie",
+                        error = e,
+                        fallback = "Không thể tạo danh sách phát"
+                    )
+                )
+            } finally {
+                _playlistActionInProgress.value = false
+            }
+        }
+    }
+
+    fun toggleMovieInPlaylist(
+        playlistId: String,
+        movie: MovieDetailUi,
+        isInPlaylist: Boolean,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        val uid = activeUserId
+        if (uid == null) {
+            onResult(false, "Vui lòng đăng nhập để lưu vào danh sách phát")
+            return
+        }
+        val playlist = _playlists.value.firstOrNull { it.id == playlistId }
+        val playlistName = playlist?.name.orEmpty().ifBlank { "danh sách phát" }
+        val previousIds = _playlistIdsForCurrentMovie.value
+
+        viewModelScope.launch {
+            _playlistActionInProgress.value = true
+            _playlistIdsForCurrentMovie.value = if (isInPlaylist) {
+                previousIds - playlistId
+            } else {
+                previousIds + playlistId
+            }
+            try {
+                if (isInPlaylist) {
+                    firestoreRepository.removeMovieFromPlaylist(uid, playlistId, movie.id)
+                    onResult(true, "Đã bỏ khỏi $playlistName")
+                } else {
+                    firestoreRepository.addMovieToPlaylist(
+                        userId = uid,
+                        playlistId = playlistId,
+                        movie = movie.toPlaylistMovieItem()
+                    )
+                    onResult(true, "Đã lưu vào $playlistName")
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _playlistIdsForCurrentMovie.value = previousIds
+                onResult(
+                    false,
+                    playlistErrorMessage(
+                        operation = "toggleMovieInPlaylist",
+                        error = e,
+                        fallback = "Lỗi cập nhật danh sách phát"
+                    )
+                )
+            } finally {
+                _playlistActionInProgress.value = false
+            }
+        }
+    }
+
+    fun renamePlaylist(
+        playlistId: String,
+        playlistName: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        val uid = activeUserId
+        if (uid == null) {
+            onResult(false, "Vui lòng đăng nhập để sửa danh sách phát")
+            return
+        }
+        val normalizedName = validatePlaylistName(playlistName, onResult) ?: return
+
+        viewModelScope.launch {
+            _playlistActionInProgress.value = true
+            try {
+                firestoreRepository.renamePlaylist(uid, playlistId, normalizedName)
+                onResult(true, "Đã đổi tên danh sách phát")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                onResult(
+                    false,
+                    playlistErrorMessage(
+                        operation = "renamePlaylist",
+                        error = e,
+                        fallback = "Không thể đổi tên danh sách phát"
+                    )
+                )
+            } finally {
+                _playlistActionInProgress.value = false
+            }
+        }
+    }
+
+    fun deletePlaylist(
+        playlistId: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        val uid = activeUserId
+        if (uid == null) {
+            onResult(false, "Vui lòng đăng nhập để xóa danh sách phát")
+            return
+        }
+
+        viewModelScope.launch {
+            _playlistActionInProgress.value = true
+            val previousIds = _playlistIdsForCurrentMovie.value
+            _playlistIdsForCurrentMovie.value = previousIds - playlistId
+            try {
+                firestoreRepository.deletePlaylist(uid, playlistId)
+                onResult(true, "Đã xóa danh sách phát")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _playlistIdsForCurrentMovie.value = previousIds
+                onResult(
+                    false,
+                    playlistErrorMessage(
+                        operation = "deletePlaylist",
+                        error = e,
+                        fallback = "Không thể xóa danh sách phát"
+                    )
+                )
+            } finally {
+                _playlistActionInProgress.value = false
+            }
+        }
+    }
+
+    private fun MovieDetailUi.toPlaylistMovieItem(): PlaylistMovieItem {
+        return PlaylistMovieItem(
+            movieId = id,
+            movieName = title,
+            posterUrl = posterUrl
+        )
+    }
+
+    private fun validatePlaylistName(
+        playlistName: String,
+        onResult: (Boolean, String) -> Unit
+    ): String? {
+        val normalizedName = playlistName.trim()
+        return when {
+            normalizedName.isBlank() -> {
+                onResult(false, "Vui lòng nhập tên danh sách phát")
+                null
+            }
+            normalizedName.length > PLAYLIST_NAME_MAX_LENGTH -> {
+                onResult(false, "Tên danh sách phát tối đa $PLAYLIST_NAME_MAX_LENGTH ký tự")
+                null
+            }
+            else -> normalizedName
+        }
+    }
+
+    private fun playlistErrorMessage(
+        operation: String,
+        error: Exception,
+        fallback: String
+    ): String {
+        Log.e(TAG, "$operation failed", error)
+        val message = error.message.orEmpty()
+        val firestoreError = error as? FirebaseFirestoreException
+        return when {
+            firestoreError?.code == FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                "Không có quyền lưu danh sách phát. Vui lòng đăng nhập lại"
+            firestoreError?.code == FirebaseFirestoreException.Code.UNAUTHENTICATED ->
+                "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại"
+            message.contains("API key", ignoreCase = true) ||
+                message.contains("SERVICE_DISABLED", ignoreCase = true) ||
+                message.contains("PROJECT_DISABLED", ignoreCase = true) ->
+                "Cấu hình Firebase đang bị chặn. Vui lòng kiểm tra lại project"
+            else -> fallback
         }
     }
 
@@ -396,3 +633,6 @@ class MovieDetailViewModel : ViewModel() {
             .trim()
     }
 }
+
+private const val PLAYLIST_NAME_MAX_LENGTH = 60
+private const val TAG = "MovieDetailViewModel"

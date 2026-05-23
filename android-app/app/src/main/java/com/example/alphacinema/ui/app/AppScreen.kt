@@ -193,6 +193,9 @@ fun MainContent(
     val detailError by movieDetailViewModel.error.collectAsState()
     val episodeVideoUrls by movieDetailViewModel.episodeVideoUrls.collectAsState()
     val isFavorite by movieDetailViewModel.isFavorite.collectAsState()
+    val playlists by movieDetailViewModel.playlists.collectAsState()
+    val playlistIdsForCurrentMovie by movieDetailViewModel.playlistIdsForCurrentMovie.collectAsState()
+    val playlistActionInProgress by movieDetailViewModel.playlistActionInProgress.collectAsState()
     val movieStats by movieDetailViewModel.movieStats.collectAsState()
     val comments by movieDetailViewModel.comments.collectAsState()
     val userRating by movieDetailViewModel.userRating.collectAsState()
@@ -662,6 +665,9 @@ fun MainContent(
                         movieStats = movieStats,
                         userRating = userRating,
                         comments = comments,
+                        playlists = playlists,
+                        playlistIdsForMovie = playlistIdsForCurrentMovie,
+                        playlistActionInProgress = playlistActionInProgress,
                         currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
                         currentUserAvatarUrl = currentCommentAvatarUrl(
                             com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -670,6 +676,31 @@ fun MainContent(
                             movieDetailViewModel.toggleFavorite(movie.title, movie.posterUrl) { _, msg ->
                                 showToast(msg)
                             }
+                        },
+                        onCreatePlaylist = { playlistName, movie ->
+                            movieDetailViewModel.createPlaylistAndAddMovie(playlistName, movie) { _, msg ->
+                                showToast(msg)
+                            }
+                        },
+                        onTogglePlaylistMovie = { playlistId, isInPlaylist, movie ->
+                            movieDetailViewModel.toggleMovieInPlaylist(
+                                playlistId = playlistId,
+                                movie = movie,
+                                isInPlaylist = isInPlaylist
+                            ) { _, msg -> showToast(msg) }
+                        },
+                        onRenamePlaylist = { playlistId, playlistName ->
+                            movieDetailViewModel.renamePlaylist(playlistId, playlistName) { _, msg ->
+                                showToast(msg)
+                            }
+                        },
+                        onDeletePlaylist = { playlistId ->
+                            movieDetailViewModel.deletePlaylist(playlistId) { _, msg ->
+                                showToast(msg)
+                            }
+                        },
+                        onAddToListLoginRequired = {
+                            showToast("Vui lòng đăng nhập để lưu vào danh sách phát")
                         },
                         onPostComment = { content ->
                             val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
