@@ -8,6 +8,195 @@ const db = admin.firestore();
 
 const REGION = "asia-southeast1";
 const BASE_URL = "https://phimapi.com";
+const WEB_APP_ORIGIN = "https://alpha-cinema-39dfb.web.app";
+const ANDROID_PACKAGE_NAME = "com.example.alphacinema";
+
+type PhimApiCategory = {
+    name?: string;
+};
+
+type PhimApiMovie = {
+    name?: string;
+    slug?: string;
+    origin_name?: string;
+    content?: string;
+    poster_url?: string;
+    thumb_url?: string;
+    year?: number | string;
+    episode_current?: string;
+    quality?: string;
+    category?: PhimApiCategory[];
+};
+
+type PhimApiMovieDetailResponse = {
+    status?: boolean;
+    movie?: PhimApiMovie | null;
+};
+
+type MoviePreviewRequest = {
+    query: Record<string, unknown>;
+    path?: string;
+    originalUrl?: string;
+    url?: string;
+};
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function stripHtml(value: string): string {
+    return value
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function truncateText(value: string, maxLength: number): string {
+    if (value.length <= maxLength) {
+        return value;
+    }
+    return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function normalizePhimImageUrl(url: string | undefined): string {
+    const trimmed = valueAsString(url).trim();
+    if (!trimmed) {
+        return "";
+    }
+    return trimmed.startsWith("http") ? trimmed : `https://phimimg.com/${trimmed}`;
+}
+
+function decodePathSegment(segment: string): string {
+    try {
+        return decodeURIComponent(segment);
+    } catch {
+        return segment;
+    }
+}
+
+function extractMovieSlugFromPath(path: string): string | null {
+    const cleanPath = path.split("?")[0];
+    const segments = cleanPath.split("/")
+        .filter((segment) => segment.trim().length > 0)
+        .map(decodePathSegment);
+    if (segments[0] === "movie") {
+        return segments[1] || null;
+    }
+    return segments[0] || null;
+}
+
+function getMovieShareSlug(req: MoviePreviewRequest): string | null {
+    const querySlug = valueAsString(req.query.slug).trim();
+    if (querySlug) {
+        return querySlug;
+    }
+
+    const pathSources = [
+        valueAsString(req.path),
+        valueAsString(req.originalUrl),
+        valueAsString(req.url),
+    ];
+    return pathSources
+        .map(extractMovieSlugFromPath)
+        .find((slug) => slug !== null && slug.trim().length > 0) || null;
+}
+
+function buildMoviePreviewHtml(params: {
+    canonicalUrl: string;
+    deepLink: string;
+    title: string;
+    description: string;
+    imageUrl: string;
+    subtitle: string;
+}): string {
+    const title = escapeHtml(params.title);
+    const description = escapeHtml(params.description);
+    const canonicalUrl = escapeHtml(params.canonicalUrl);
+    const deepLink = escapeHtml(params.deepLink);
+    const imageUrl = escapeHtml(params.imageUrl);
+    const subtitle = escapeHtml(params.subtitle);
+    const imageTags = imageUrl ? `
+    <meta property="og:image" content="${imageUrl}">
+    <meta property="og:image:secure_url" content="${imageUrl}">
+    <meta name="twitter:image" content="${imageUrl}">` : "";
+    const imageMarkup = imageUrl ? `<img src="${imageUrl}" alt="${title}">` : "";
+
+    return `<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${title}</title>
+    <meta name="description" content="${description}">
+    <link rel="canonical" href="${canonicalUrl}">
+    <meta property="og:type" content="video.movie">
+    <meta property="og:site_name" content="Alpha Cinema">
+    <meta property="og:title" content="${title}">
+    <meta property="og:description" content="${description}">
+    <meta property="og:url" content="${canonicalUrl}">${imageTags}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${title}">
+    <meta name="twitter:description" content="${description}">
+    <meta property="al:android:app_name" content="Alpha Cinema">
+    <meta property="al:android:package" content="${ANDROID_PACKAGE_NAME}">
+    <meta property="al:android:url" content="${deepLink}">
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #050505;
+            color: #fff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        main {
+            width: min(92vw, 720px);
+            padding: 32px 0;
+        }
+        img {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 14px;
+            background: #181818;
+        }
+        h1 {
+            margin: 18px 0 6px;
+            font-size: clamp(28px, 5vw, 44px);
+            line-height: 1.08;
+        }
+        p {
+            margin: 0 0 20px;
+            color: #cfcfcf;
+            line-height: 1.5;
+        }
+        a {
+            display: inline-block;
+            padding: 12px 18px;
+            border-radius: 999px;
+            background: #f6e29a;
+            color: #080808;
+            font-weight: 700;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        ${imageMarkup}
+        <h1>${title}</h1>
+        <p>${subtitle || description}</p>
+        <a href="${deepLink}">Mở trong Alpha Cinema</a>
+    </main>
+</body>
+</html>`;
+}
 
 // --- API Movies (v2) ---
 export const getLatestMovies = onRequest({ cors: true, region: REGION, maxInstances: 10 }, async (req, res) => {
@@ -64,6 +253,256 @@ export const getMovieDetail = onRequest({ cors: true, region: REGION, maxInstanc
         res.status(200).json(data);
     } catch (error) {
         logger.error("Error in getMovieDetail", error);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+export const movieSharePreview = onRequest({ region: REGION, maxInstances: 10 }, async (req, res) => {
+    try {
+        const slug = getMovieShareSlug(req);
+        if (!slug) {
+            res.status(400).send("Missing movie slug");
+            return;
+        }
+
+        const response = await fetch(`${BASE_URL}/phim/${encodeURIComponent(slug)}`);
+        if (!response.ok) {
+            res.status(response.status).send("Movie not found");
+            return;
+        }
+
+        const data = await response.json() as PhimApiMovieDetailResponse;
+        const movie = data.movie;
+        if (!movie?.name) {
+            res.status(404).send("Movie not found");
+            return;
+        }
+
+        const canonicalUrl = `${WEB_APP_ORIGIN}/movie/${encodeURIComponent(slug)}`;
+        const deepLink = `alphacinema://movie/${encodeURIComponent(slug)}`;
+        const metadataParts = [
+            movie.origin_name,
+            valueAsString(movie.year),
+            movie.quality,
+            movie.episode_current,
+            ...(movie.category ?? []).map((category) => category.name),
+        ].map((value) => valueAsString(value).trim()).filter(Boolean);
+        const subtitle = metadataParts.join(" · ");
+        const description = truncateText(
+            stripHtml(valueAsString(movie.content)) ||
+                subtitle ||
+                `Xem ${movie.name} trên Alpha Cinema.`,
+            180
+        );
+        const imageUrl = normalizePhimImageUrl(movie.thumb_url) ||
+            normalizePhimImageUrl(movie.poster_url);
+
+        res.set("Cache-Control", "public, max-age=300, s-maxage=3600");
+        res.set("Content-Type", "text/html; charset=utf-8");
+        res.status(200).send(buildMoviePreviewHtml({
+            canonicalUrl,
+            deepLink,
+            title: movie.name,
+            description,
+            imageUrl,
+            subtitle,
+        }));
+    } catch (error) {
+        logger.error("Error in movieSharePreview", error);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+// --- Watch Party Share Preview (v2) ---
+
+function extractWatchPartyRoomIdFromPath(path: string): string | null {
+    const cleanPath = path.split("?")[0];
+    const segments = cleanPath.split("/")
+        .filter((segment) => segment.trim().length > 0)
+        .map(decodePathSegment);
+    if (segments[0] === "watchparty") {
+        return segments[1] || null;
+    }
+    return segments[0] || null;
+}
+
+function getWatchPartyRoomId(req: MoviePreviewRequest): string | null {
+    const queryRoomId = valueAsString(req.query.roomId).trim();
+    if (queryRoomId) {
+        return queryRoomId;
+    }
+
+    const pathSources = [
+        valueAsString(req.path),
+        valueAsString(req.originalUrl),
+        valueAsString(req.url),
+    ];
+    return pathSources
+        .map(extractWatchPartyRoomIdFromPath)
+        .find((id) => id !== null && id.trim().length > 0) || null;
+}
+
+function buildWatchPartyPreviewHtml(params: {
+    canonicalUrl: string;
+    deepLink: string;
+    title: string;
+    description: string;
+    imageUrl: string;
+    subtitle: string;
+}): string {
+    const title = escapeHtml(params.title);
+    const description = escapeHtml(params.description);
+    const canonicalUrl = escapeHtml(params.canonicalUrl);
+    const deepLink = escapeHtml(params.deepLink);
+    const imageUrl = escapeHtml(params.imageUrl);
+    const subtitle = escapeHtml(params.subtitle);
+    const imageTags = imageUrl ? `
+    <meta property="og:image" content="${imageUrl}">
+    <meta property="og:image:secure_url" content="${imageUrl}">
+    <meta name="twitter:image" content="${imageUrl}">` : "";
+    const imageMarkup = imageUrl ? `<img src="${imageUrl}" alt="${title}">` : "";
+
+    return `<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${title}</title>
+    <meta name="description" content="${description}">
+    <link rel="canonical" href="${canonicalUrl}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Alpha Cinema">
+    <meta property="og:title" content="${title}">
+    <meta property="og:description" content="${description}">
+    <meta property="og:url" content="${canonicalUrl}">${imageTags}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${title}">
+    <meta name="twitter:description" content="${description}">
+    <meta property="al:android:app_name" content="Alpha Cinema">
+    <meta property="al:android:package" content="${ANDROID_PACKAGE_NAME}">
+    <meta property="al:android:url" content="${deepLink}">
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #050505;
+            color: #fff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        main {
+            width: min(92vw, 720px);
+            padding: 32px 0;
+        }
+        img {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border-radius: 14px;
+            background: #181818;
+        }
+        h1 {
+            margin: 18px 0 6px;
+            font-size: clamp(28px, 5vw, 44px);
+            line-height: 1.08;
+        }
+        p {
+            margin: 0 0 20px;
+            color: #cfcfcf;
+            line-height: 1.5;
+        }
+        a {
+            display: inline-block;
+            padding: 12px 18px;
+            border-radius: 999px;
+            background: #f6e29a;
+            color: #080808;
+            font-weight: 700;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        ${imageMarkup}
+        <h1>${title}</h1>
+        <p>${subtitle || description}</p>
+        <a href="${deepLink}">Mở trong Alpha Cinema</a>
+    </main>
+</body>
+</html>`;
+}
+
+export const watchPartySharePreview = onRequest({ region: REGION, maxInstances: 10 }, async (req, res) => {
+    try {
+        const roomId = getWatchPartyRoomId(req);
+        if (!roomId) {
+            res.status(400).send("Missing room ID");
+            return;
+        }
+
+        const rtdb = admin.database();
+        const snapshot = await rtdb.ref(`watchParty/${roomId}`).get();
+        if (!snapshot.exists()) {
+            res.status(404).send("Phòng không tồn tại hoặc đã kết thúc");
+            return;
+        }
+
+        const roomData = snapshot.val() as Record<string, unknown>;
+        const movieTitle = valueAsString(roomData.movieTitle).trim();
+        const moviePosterUrl = valueAsString(roomData.moviePosterUrl).trim();
+        const hostName = valueAsString(roomData.hostName).trim();
+        const movieSlug = valueAsString(roomData.movieSlug).trim();
+
+        // Count members
+        const membersData = roomData.members as Record<string, unknown> | undefined;
+        const memberCount = membersData ? Object.keys(membersData).length : 0;
+
+        const title = movieTitle
+            ? `Xem chung: ${movieTitle}`
+            : "Phòng xem chung Alpha Cinema";
+        const subtitle = [
+            hostName ? `Chủ phòng: ${hostName}` : "",
+            memberCount > 0 ? `${memberCount}/5 thành viên` : "",
+        ].filter(Boolean).join(" · ");
+        const description = movieTitle
+            ? `Tham gia xem chung "${movieTitle}" trên Alpha Cinema.`
+            : "Tham gia phòng xem chung trên Alpha Cinema.";
+
+        // Use movie poster as image; if movie has a slug, try thumb from phimimg
+        let imageUrl = "";
+        if (moviePosterUrl) {
+            imageUrl = normalizePhimImageUrl(moviePosterUrl);
+        } else if (movieSlug) {
+            // Fallback: try to fetch movie info from phimapi for the thumb
+            try {
+                const movieRes = await fetch(`${BASE_URL}/phim/${encodeURIComponent(movieSlug)}`);
+                if (movieRes.ok) {
+                    const movieData = await movieRes.json() as PhimApiMovieDetailResponse;
+                    imageUrl = normalizePhimImageUrl(movieData.movie?.thumb_url) ||
+                        normalizePhimImageUrl(movieData.movie?.poster_url);
+                }
+            } catch {
+                // Ignore – no image fallback
+            }
+        }
+
+        const canonicalUrl = `${WEB_APP_ORIGIN}/watchparty/${encodeURIComponent(roomId)}`;
+        const deepLink = `alphacinema://watchparty/${encodeURIComponent(roomId)}`;
+
+        res.set("Cache-Control", "public, max-age=30, s-maxage=60");
+        res.set("Content-Type", "text/html; charset=utf-8");
+        res.status(200).send(buildWatchPartyPreviewHtml({
+            canonicalUrl,
+            deepLink,
+            title,
+            description,
+            imageUrl,
+            subtitle,
+        }));
+    } catch (error) {
+        logger.error("Error in watchPartySharePreview", error);
         res.status(500).send("Internal Server Error");
     }
 });
@@ -843,4 +1282,3 @@ export const momoIpn = onRequest(
 
 // --- Push Notifications ---
 export * from "./notifications";
-

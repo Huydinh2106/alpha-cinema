@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Check
@@ -73,6 +74,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import com.example.alphacinema.data.model.Comment
 import com.example.alphacinema.data.model.MovieStats
 import com.example.alphacinema.data.model.UserPlaylist
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -125,6 +127,7 @@ fun MovieDetailScreen(
     onBack: () -> Unit,
     onPlayMovie: (MovieDetailUi, EpisodeUi?) -> Unit,
     onOpenMovie: (String) -> Unit,
+    onShareMovie: (MovieDetailUi) -> Unit = {},
     onWatchTogether: () -> Unit = {}
 ) {
     val hasMultipleEpisodes = remember(movie.episodes) {
@@ -172,6 +175,7 @@ fun MovieDetailScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .clearFocusOnTapOutside()
     ) {
         LazyColumn(
             state = listState,
@@ -240,8 +244,8 @@ fun MovieDetailScreen(
                                         showSaveToPlaylistSheet = true
                                     }
                                 }
+                                MovieDetailAction.SHARE -> onShareMovie(movie)
                                 MovieDetailAction.WATCH_TOGETHER -> onWatchTogether()
-                                else -> {}
                             }
                         }
                     )
@@ -607,6 +611,7 @@ private fun SaveToPlaylistSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .clearFocusOnTapOutside()
                 .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -719,6 +724,7 @@ private fun SaveToPlaylistSheet(
     playlistToRename?.let { playlist ->
         AlertDialog(
             onDismissRequest = { playlistToRename = null },
+            modifier = Modifier.clearFocusOnTapOutside(),
             containerColor = Color(0xFF1E1E1E),
             title = { Text("Đổi tên danh sách", color = Color.White) },
             text = {
@@ -1551,19 +1557,25 @@ private fun CommentInputBar(
                     unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
                     focusedBorderColor = Color(0xFFF6E29A)
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(28.dp),
                 maxLines = 3
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onSend,
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(56.dp),
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFF6E29A),
                     contentColor = Color.Black
                 )
             ) {
-                Text("Gửi", fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.Send,
+                    contentDescription = "Gửi bình luận",
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }

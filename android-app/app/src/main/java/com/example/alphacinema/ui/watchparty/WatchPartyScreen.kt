@@ -78,12 +78,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,6 +112,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.mutableFloatStateOf
 import com.example.alphacinema.data.model.WatchPartyChatMessage
 import com.example.alphacinema.data.model.WatchPartyMember
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.player.findActivity
 import com.example.alphacinema.ui.player.installBrightnessGesture
@@ -559,9 +558,7 @@ fun WatchPartyScreen(
             .fillMaxSize()
             .statusBarsPadding()
             .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { focusManager.clearFocus() })
-            }
+            .clearFocusOnTapOutside()
     ) {
         // Video player with built-in fullscreen button
         Box(
@@ -691,11 +688,13 @@ fun WatchPartyScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                val deepLink = "alphacinema://watchparty/${room!!.roomId}"
+                                                val shareLink = com.example.alphacinema.ui.app.watchPartyShareLink(room!!.roomId)
+                                                val movieTitle = room!!.movieTitle.ifBlank { "Xem chung" }
                                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                                     type = "text/plain"
-                                                    putExtra(Intent.EXTRA_TEXT, deepLink)
-                                                    putExtra(Intent.EXTRA_TITLE, "Mời bạn bè")
+                                                    putExtra(Intent.EXTRA_TEXT, shareLink)
+                                                    putExtra(Intent.EXTRA_TITLE, movieTitle)
+                                                    putExtra(Intent.EXTRA_SUBJECT, movieTitle)
                                                 }
                                                 context.startActivity(Intent.createChooser(intent, "Chia sẻ qua"))
                                                 showInviteDialog = false

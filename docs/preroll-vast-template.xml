@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VAST version="3.0">
+  <Ad id="alpha-cinema-preroll-001">
+    <InLine>
+      <AdSystem>Alpha Cinema</AdSystem>
+      <AdTitle>Alpha Cinema Pre-roll</AdTitle>
+      <Description>Pre-roll video ad for Alpha Cinema</Description>
+
+      <Impression><![CDATA[https://pub-4b788b261da64da9a9779f20f831052e.r2.dev/preroll-vast-template.xml]]></Impression>
+
+      <Creatives>
+        <Creative id="alpha-cinema-preroll-creative-001">
+          <Linear skipoffset="00:00:05">
+            <Duration>00:08:00</Duration>
+
+            <VideoClicks>
+              <ClickThrough><![CDATA[https://pub-4b788b261da64da9a9779f20f831052e.r2.dev]]></ClickThrough>
+            </VideoClicks>
+
+            <MediaFiles>
+              <MediaFile
+                delivery="progressive"
+                type="video/mp4"
+                width="1280"
+                height="720"
+                bitrate="1500"
+                scalable="true"
+                maintainAspectRatio="true"><![CDATA[https://pub-4b788b261da64da9a9779f20f831052e.r2.dev/preroll.mp4]]></MediaFile>
+            </MediaFiles>
+          </Linear>
+        </Creative>
+      </Creatives>
+    </InLine>
+  </Ad>
+</VAST>

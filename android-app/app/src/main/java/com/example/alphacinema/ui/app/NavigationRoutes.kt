@@ -38,3 +38,6 @@ data object ProfileSettingsNavRoute
 
 @Serializable
 data object WatchHistoryNavRoute
+
+@Serializable
+data object PlaylistsNavRoute

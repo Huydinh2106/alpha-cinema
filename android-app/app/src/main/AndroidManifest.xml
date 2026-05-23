@@ -55,6 +55,27 @@
                     android:scheme="alphacinema"
                     android:host="watchparty" />
             </intent-filter>
+
+            <!-- Deep link for Movie Detail -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="alphacinema"
+                    android:host="movie" />
+            </intent-filter>
+
+            <!-- Clickable web link for shared Movie Detail -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="alpha-cinema-39dfb.web.app"
+                    android:pathPrefix="/movie/" />
+            </intent-filter>
         </activity>
 
         <!-- Firebase Cloud Messaging Service -->

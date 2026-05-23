@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.alphacinema.data.model.HomeCategory
 import com.example.alphacinema.data.model.MovieItem
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +60,7 @@ fun AdminScreen(
     }
 
     Scaffold(
+        modifier = Modifier.clearFocusOnTapOutside(),
         topBar = {
             TopAppBar(
                 title = { Text("Quản trị hệ thống", fontWeight = FontWeight.Bold) },
@@ -128,6 +130,7 @@ fun AddMovieTab(viewModel: AdminViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .clearFocusOnTapOutside()
             .padding(16.dp)
     ) {
         OutlinedTextField(
@@ -287,6 +290,7 @@ fun CategoryEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.clearFocusOnTapOutside(),
         containerColor = Color(0xFF141414),
         titleContentColor = Color.White,
         title = { Text(if (isNew) "Thêm Danh Mục" else "Sửa Danh Mục") },

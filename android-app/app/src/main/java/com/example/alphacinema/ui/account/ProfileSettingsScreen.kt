@@ -46,6 +46,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.storage.FirebaseStorage
 import com.example.alphacinema.util.formatFirestoreDate
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
@@ -116,6 +117,7 @@ fun ProfileSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .clearFocusOnTapOutside()
     ) {
         AnimatedContent(
             targetState = currentPage,
@@ -459,6 +461,7 @@ private fun EditProfilePage(
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
+            .clearFocusOnTapOutside()
             .padding(horizontal = 20.dp)
     ) {
         // Top bar
@@ -663,6 +666,7 @@ private fun ChangePasswordPage(
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
+            .clearFocusOnTapOutside()
             .padding(horizontal = 20.dp)
     ) {
         // Top bar

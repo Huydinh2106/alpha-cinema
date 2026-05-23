@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.alphacinema.ui.components.LottieLoadingIndicator
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 
 private enum class LobbyTab { CREATE, JOIN }
 
@@ -77,6 +78,7 @@ fun WatchPartyLobbySheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .clearFocusOnTapOutside()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally

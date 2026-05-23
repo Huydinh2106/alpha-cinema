@@ -2,6 +2,8 @@
 
 package com.example.alphacinema.ui.app
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -53,6 +55,7 @@ import com.example.alphacinema.BuildConfig
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
+import com.example.alphacinema.ui.account.AccountPlaylistsScreen
 import com.example.alphacinema.ui.account.AccountScreen
 import com.example.alphacinema.ui.account.ProfileSettingsScreen
 import com.example.alphacinema.ui.account.WatchHistoryScreen
@@ -65,6 +68,7 @@ import com.example.alphacinema.ui.home.MovieTypeScreen
 import com.example.alphacinema.ui.home.MovieUi
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailScreen
+import com.example.alphacinema.ui.movie.detail.MovieDetailUi
 import com.example.alphacinema.ui.movie.detail.MovieDetailViewModel
 import com.example.alphacinema.ui.movie.list.MovieListScreen
 import com.example.alphacinema.ui.payment.PaymentScreen
@@ -93,10 +97,53 @@ private const val ANIM_DURATION = 220
 private const val ANIM_DURATION_FAST = 120
 private const val MAIN_RETURN_ANIM_DURATION = 90
 private const val TAB_SWITCH_ANIM_DURATION = 90
+private const val ALPHA_CINEMA_WEB_LINK_HOST = "alpha-cinema-39dfb.web.app"
+private const val MOVIE_LINK_SEGMENT = "movie"
+private const val WATCH_PARTY_LINK_SEGMENT = "watchparty"
 private val AD_FREE_PLANS = setOf("basic", "couple", "premium")
 
 internal fun isAdFreePlan(plan: String?): Boolean {
     return plan?.trim()?.lowercase() in AD_FREE_PLANS
+}
+
+private fun movieShareLink(slug: String): String {
+    return Uri.Builder()
+        .scheme("https")
+        .authority(ALPHA_CINEMA_WEB_LINK_HOST)
+        .appendPath(MOVIE_LINK_SEGMENT)
+        .appendPath(slug)
+        .appendQueryParameter("v", BuildConfig.VERSION_CODE.toString())
+        .build()
+        .toString()
+}
+
+internal fun watchPartyShareLink(roomId: String): String {
+    return Uri.Builder()
+        .scheme("https")
+        .authority(ALPHA_CINEMA_WEB_LINK_HOST)
+        .appendPath(WATCH_PARTY_LINK_SEGMENT)
+        .appendPath(roomId)
+        .appendQueryParameter("v", BuildConfig.VERSION_CODE.toString())
+        .build()
+        .toString()
+}
+
+private fun Uri.movieSlugFromDeepLink(): String? {
+    return when {
+        scheme == "alphacinema" && host == MOVIE_LINK_SEGMENT -> pathSegments.firstOrNull()
+        scheme == "https" && host == ALPHA_CINEMA_WEB_LINK_HOST &&
+            pathSegments.firstOrNull() == MOVIE_LINK_SEGMENT -> pathSegments.getOrNull(1)
+        else -> null
+    }?.takeIf { it.isNotBlank() }
+}
+
+private fun Uri.watchPartyRoomIdFromDeepLink(): String? {
+    return when {
+        scheme == "alphacinema" && host == WATCH_PARTY_LINK_SEGMENT -> pathSegments.firstOrNull()
+        scheme == "https" && host == ALPHA_CINEMA_WEB_LINK_HOST &&
+            pathSegments.firstOrNull() == WATCH_PARTY_LINK_SEGMENT -> pathSegments.getOrNull(1)
+        else -> null
+    }?.takeIf { it.isNotBlank() }
 }
 
 // ── Splash State ────────────────────────────────────────────────────────────
@@ -373,6 +420,27 @@ fun MainContent(
         navController.navigate(MovieDetailNavRoute(slug = slug))
     }
 
+    fun shareMovie(movie: MovieDetailUi) {
+        if (movie.id.isBlank()) {
+            showToast("Không tìm thấy phim để chia sẻ.")
+            return
+        }
+
+        val shareText = movieShareLink(movie.id)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, shareText)
+            putExtra(Intent.EXTRA_TITLE, movie.title)
+            putExtra(Intent.EXTRA_SUBJECT, movie.title)
+        }
+
+        runCatching {
+            context.startActivity(Intent.createChooser(intent, "Chia sẻ phim"))
+        }.onFailure {
+            showToast("Không tìm thấy ứng dụng để chia sẻ.")
+        }
+    }
+
     fun openPlayer(
         slug: String,
         episodeId: String? = null,
@@ -462,18 +530,26 @@ fun MainContent(
         popBackStackSafely()
     }
 
-    // Handle deep link: alphacinema://watchparty/{roomId}
+    // Handle deep links from custom scheme and clickable HTTPS share links.
     val deepLinkHandled = remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!deepLinkHandled.value) {
             val activity = (context as? android.app.Activity)
             val data = activity?.intent?.data
-            if (data != null && data.scheme == "alphacinema" && data.host == "watchparty") {
-                val roomId = data.pathSegments?.firstOrNull()
-                if (!roomId.isNullOrBlank()) {
-                    deepLinkHandled.value = true
-                    watchPartyViewModel.joinRoom(context, roomId) {
-                        openWatchParty(roomId)
+            if (data != null) {
+                val roomId = data.watchPartyRoomIdFromDeepLink()
+                val slug = data.movieSlugFromDeepLink()
+
+                when {
+                    roomId != null -> {
+                        deepLinkHandled.value = true
+                        watchPartyViewModel.joinRoom(context, roomId) {
+                            openWatchParty(roomId)
+                        }
+                    }
+                    slug != null -> {
+                        deepLinkHandled.value = true
+                        openMovieDetail(slug)
                     }
                 }
             }
@@ -590,6 +666,7 @@ fun MainContent(
                             onOpenAdminPanel = { navController.navigate(AdminNavRoute) },
                             onOpenMovieDetail = ::openMovieDetail,
                             onOpenWatchHistoryPage = { navController.navigate(WatchHistoryNavRoute) },
+                            onOpenPlaylistsPage = { navController.navigate(PlaylistsNavRoute) },
                             onOpenMovieList = { title, filterKind, slug ->
                                 navController.navigate(
                                     MovieListNavRoute(
@@ -761,6 +838,7 @@ fun MainContent(
                                 showWatchPartyLobby = true
                             }
                         },
+                        onShareMovie = ::shareMovie,
                         onOpenMovie = ::openMovieDetail
                     )
                 } else if (detailError != null) {
@@ -919,6 +997,13 @@ fun MainContent(
                             startPositionMs = startPositionMs
                         )
                     }
+                )
+            }
+
+            composable<PlaylistsNavRoute> {
+                AccountPlaylistsScreen(
+                    onBack = { popBackStackSafely() },
+                    onOpenMovieDetail = ::openMovieDetail
                 )
             }
 
