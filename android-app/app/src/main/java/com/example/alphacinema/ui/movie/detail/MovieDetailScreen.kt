@@ -86,6 +86,7 @@ import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.example.alphacinema.ui.components.GradientPlayButton
+import com.example.alphacinema.ui.movie.detail.playlist.PlaylistBottomSheet
 
 @Composable
 fun MovieDetailScreen(
@@ -143,6 +144,8 @@ fun MovieDetailScreen(
     val activeEpisode = movie.episodes.find { it.id == activeEpisodeId }
     var commentDraft by rememberSaveable(movie.id) { mutableStateOf("") }
     var replyTarget by remember(movie.id) { mutableStateOf<Comment?>(null) }
+    
+    var showPlaylistSheet by rememberSaveable { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -209,6 +212,7 @@ fun MovieDetailScreen(
                             when(action) {
                                 MovieDetailAction.FAVORITE -> onToggleFavorite(movie)
                                 MovieDetailAction.WATCH_TOGETHER -> onWatchTogether()
+                                MovieDetailAction.ADD_TO_LIST -> showPlaylistSheet = true
                                 else -> {}
                             }
                         }
@@ -293,6 +297,15 @@ fun MovieDetailScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+        
+        if (showPlaylistSheet) {
+            PlaylistBottomSheet(
+                movie = movie,
+                onDismissRequest = { showPlaylistSheet = false },
+                onOpenMovie = onOpenMovie,
+                onBack = onBack
+            )
+        }
     }
 }
 
@@ -337,8 +350,15 @@ private fun DetailTopBanner(
                 )
         )
 
+        var isBackClicked by remember { mutableStateOf(false) }
+
         IconButton(
-            onClick = onBack,
+            onClick = {
+                if (!isBackClicked) {
+                    isBackClicked = true //Khóa ngay lập tức
+                    onBack()
+                }
+            },
             modifier = Modifier
                 .padding(start = 12.dp, top = 40.dp)
                 .clip(CircleShape)
@@ -1373,7 +1393,7 @@ private fun RatingsTab(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            // Display 5 pair blocks for 10 scores? Actually let's just make 5 stars that act as 10 scores (half stars) or simply 10 stars in a scrollable or wrapped row. 
+            // Display 5 pair blocks for 10 scores? Actually let's just make 5 stars that act as 10 scores (half stars) or simply 10 stars in a row might be too dense, but we can fit it.
             // 10 stars in a row might be too dense, but we can fit it.
             for (i in 1..10) {
                 Icon(

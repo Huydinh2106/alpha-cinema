@@ -106,7 +106,7 @@ sealed interface SplashState {
 
 @Composable
 fun AppScreen(
-    modifier: Modifier = Modifier, 
+    modifier: Modifier = Modifier,
     initialShowNotification: Boolean = false,
     initialNotificationType: String? = null,
     initialMovieId: String? = null,
@@ -952,12 +952,12 @@ fun MainContent(
                                         val response = api.getMovieDetail(slug)
                                         val movie = response.movie
                                         val firstEp = response.episodes?.firstOrNull()?.server_data?.firstOrNull()
-                                        
+
                                         if (movie != null) {
                                             val posterUrl = movie.thumb_url?.let {
                                                 if (it.startsWith("http")) it else "https://phimimg.com/$it"
                                             } ?: movie.getFullPosterUrl()
-                                            
+
                                             watchPartyViewModel.changeMovie(
                                                 movieSlug = slug,
                                                 movieTitle = movie.name,
@@ -977,7 +977,7 @@ fun MainContent(
                             }
                         }
                     )
-                    
+
                     if (isChangingMovie) {
                         Box(
                             modifier = Modifier
@@ -1035,7 +1035,7 @@ fun MainContent(
                 state = appAuthStateHolder.uiState,
                 isLoading = appAuthLoading,
                 errorMessage = appAuthError,
-                onEvent = { event -> 
+                onEvent = { event ->
                     appAuthError = null
                     appAuthStateHolder.onEvent(event)
                 },
