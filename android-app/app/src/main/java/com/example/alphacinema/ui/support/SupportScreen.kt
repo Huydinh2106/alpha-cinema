@@ -3,6 +3,7 @@ package com.example.alphacinema.ui.support
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -26,6 +26,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -61,10 +63,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -99,6 +103,7 @@ private val BotBubbleShape = RoundedCornerShape(
     bottomStart = 8.dp,
     bottomEnd = 22.dp
 )
+private val BottomNavigationAvoidancePadding = 84.dp
 
 private fun resolveSupportUserName(
     auth: FirebaseAuth,
@@ -142,17 +147,17 @@ fun SupportScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val focusManager = LocalFocusManager.current
     val auth = remember { FirebaseAuth.getInstance() }
     val profileCache = remember(context) { UserProfileCache(context) }
     var userDisplayName by remember { mutableStateOf(resolveSupportUserName(auth, profileCache)) }
     val hasStartedChat = messages.isNotEmpty()
     val isLoading = messages.any { it.sender == SupportMessageSender.LOADING }
     val imeBottomPadding = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    val bottomBarPadding = if (imeBottomPadding > 0.dp) {
-        0.dp
-    } else {
-        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 84.dp
-    }
+    val bottomNavigationPadding =
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+            BottomNavigationAvoidancePadding
+    val bottomContentPadding = maxOf(imeBottomPadding, bottomNavigationPadding)
 
     DisposableEffect(auth, profileCache) {
         val listener = FirebaseAuth.AuthStateListener {
@@ -177,7 +182,7 @@ fun SupportScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = bottomBarPadding)
+                .padding(bottom = bottomContentPadding)
         ) {
             ChatHeader(
                 hasStartedChat = hasStartedChat,
@@ -193,6 +198,12 @@ fun SupportScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        focusManager.clearFocus()
+                    }
             ) {
                 if (hasStartedChat) {
                     ChatMessageList(
@@ -885,7 +896,6 @@ private fun ChatInputBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .imePadding()
             .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -926,18 +936,21 @@ private fun ChatInputBar(
 
                 BasicTextField(
                     value = value,
-                    onValueChange = {
-                        if (!isLoading) {
-                            onValueChange(it)
-                        }
-                    },
-                    enabled = !isLoading,
+                    onValueChange = onValueChange,
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 42.dp),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
                         color = Color.White,
                         lineHeight = 20.sp
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            if (!isLoading && value.isNotBlank()) {
+                                onSend()
+                            }
+                        }
                     ),
                     cursorBrush = SolidColor(Color(0xFFF6E29A)),
                     maxLines = 4,
