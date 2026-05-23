@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.alphacinema.R
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 
 // ── UI data class ────────────────────────────────────────────────────────────
 data class SearchMovieUi(
@@ -101,7 +102,12 @@ fun SearchScreen(
         if (shouldLoadMore.value && isSearchActive) viewModel.loadMore()
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clearFocusOnTapOutside()
+    ) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(minSize = 100.dp),

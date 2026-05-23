@@ -38,6 +38,22 @@ data class FavoriteItem(
     @ServerTimestamp val addedAt: Timestamp? = null
 )
 
+data class UserPlaylist(
+    var id: String = "",
+    val name: String = "",
+    val coverPosterUrl: String = "",
+    val itemCount: Long = 0,
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
+data class PlaylistMovieItem(
+    var movieId: String = "",
+    val movieName: String = "",
+    val posterUrl: String = "",
+    @ServerTimestamp val addedAt: Timestamp? = null
+)
+
 data class MovieStats(
     var movieId: String = "", // Same as slug
     val averageRating: Double = 0.0,

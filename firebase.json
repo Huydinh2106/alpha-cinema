@@ -1,4 +1,28 @@
 {
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/movie/**",
+        "function": {
+          "functionId": "movieSharePreview",
+          "region": "asia-southeast1"
+        }
+      },
+      {
+        "source": "/watchparty/**",
+        "function": {
+          "functionId": "watchPartySharePreview",
+          "region": "asia-southeast1"
+        }
+      }
+    ]
+  },
   "firestore": {
     "rules": "firestore.rules"
   },

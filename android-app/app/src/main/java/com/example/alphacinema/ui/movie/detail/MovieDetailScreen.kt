@@ -34,11 +34,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Reply
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.StarBorder
@@ -47,21 +53,28 @@ import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import com.example.alphacinema.data.model.Comment
 import com.example.alphacinema.data.model.MovieStats
+import com.example.alphacinema.data.model.UserPlaylist
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +100,8 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.example.alphacinema.ui.components.GradientPlayButton
 
+private const val PLAYLIST_NAME_MAX_LENGTH = 60
+
 @Composable
 fun MovieDetailScreen(
     movie: MovieDetailUi,
@@ -94,9 +109,17 @@ fun MovieDetailScreen(
     movieStats: MovieStats?,
     userRating: Int?,
     comments: List<Comment>,
+    playlists: List<UserPlaylist> = emptyList(),
+    playlistIdsForMovie: Set<String> = emptySet(),
+    playlistActionInProgress: Boolean = false,
     currentUserId: String? = null,
     currentUserAvatarUrl: String = "",
     onToggleFavorite: (MovieDetailUi) -> Unit,
+    onCreatePlaylist: (String, MovieDetailUi) -> Unit = { _, _ -> },
+    onTogglePlaylistMovie: (String, Boolean, MovieDetailUi) -> Unit = { _, _, _ -> },
+    onRenamePlaylist: (String, String) -> Unit = { _, _ -> },
+    onDeletePlaylist: (String) -> Unit = {},
+    onAddToListLoginRequired: () -> Unit = {},
     onPostComment: (String) -> Unit,
     onReplyComment: (Comment, String) -> Unit = { _, _ -> },
     onToggleCommentLike: (Comment) -> Unit = {},
@@ -104,6 +127,7 @@ fun MovieDetailScreen(
     onBack: () -> Unit,
     onPlayMovie: (MovieDetailUi, EpisodeUi?) -> Unit,
     onOpenMovie: (String) -> Unit,
+    onShareMovie: (MovieDetailUi) -> Unit = {},
     onWatchTogether: () -> Unit = {}
 ) {
     val hasMultipleEpisodes = remember(movie.episodes) {
@@ -128,6 +152,9 @@ fun MovieDetailScreen(
     var descriptionExpanded by rememberSaveable(movie.id) {
         mutableStateOf(false)
     }
+    var showSaveToPlaylistSheet by rememberSaveable(movie.id) {
+        mutableStateOf(false)
+    }
 
     val selectedTab = visibleTabs.firstOrNull { it.name == selectedTabName }
         ?: visibleTabs.first()
@@ -148,6 +175,7 @@ fun MovieDetailScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .clearFocusOnTapOutside()
     ) {
         LazyColumn(
             state = listState,
@@ -205,11 +233,19 @@ fun MovieDetailScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                     ActionRow(
                         isFavorite = isFavorite,
+                        isInPlaylist = playlistIdsForMovie.isNotEmpty(),
                         onActionClick = { action ->
                             when(action) {
                                 MovieDetailAction.FAVORITE -> onToggleFavorite(movie)
+                                MovieDetailAction.ADD_TO_LIST -> {
+                                    if (currentUserId == null) {
+                                        onAddToListLoginRequired()
+                                    } else {
+                                        showSaveToPlaylistSheet = true
+                                    }
+                                }
+                                MovieDetailAction.SHARE -> onShareMovie(movie)
                                 MovieDetailAction.WATCH_TOGETHER -> onWatchTogether()
-                                else -> {}
                             }
                         }
                     )
@@ -270,6 +306,28 @@ fun MovieDetailScreen(
                     )
                 }
             }
+        }
+
+        if (showSaveToPlaylistSheet) {
+            SaveToPlaylistSheet(
+                movie = movie,
+                playlists = playlists,
+                selectedPlaylistIds = playlistIdsForMovie,
+                actionInProgress = playlistActionInProgress,
+                onDismiss = { showSaveToPlaylistSheet = false },
+                onTogglePlaylist = { playlist ->
+                    onTogglePlaylistMovie(
+                        playlist.id,
+                        playlist.id in playlistIdsForMovie,
+                        movie
+                    )
+                },
+                onCreatePlaylist = { playlistName ->
+                    onCreatePlaylist(playlistName, movie)
+                },
+                onRenamePlaylist = onRenamePlaylist,
+                onDeletePlaylist = onDeletePlaylist
+            )
         }
 
         if (selectedTab == MovieDetailTab.COMMENTS) {
@@ -473,6 +531,7 @@ private fun ButtonRow(
 @Composable
 private fun ActionRow(
     isFavorite: Boolean,
+    isInPlaylist: Boolean,
     onActionClick: (MovieDetailAction) -> Unit
 ) {
     val actions = MovieDetailAction.entries
@@ -484,6 +543,8 @@ private fun ActionRow(
     ) {
         actions.forEach { action ->
             val isFavActive = action == MovieDetailAction.FAVORITE && isFavorite
+            val isPlaylistActive = action == MovieDetailAction.ADD_TO_LIST && isInPlaylist
+            val isActionActive = isFavActive || isPlaylistActive
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -494,13 +555,21 @@ private fun ActionRow(
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.10f))
-                        .border(1.dp, if (isFavActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.2f), CircleShape),
+                        .border(
+                            1.dp,
+                            if (isActionActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.2f),
+                            CircleShape
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isFavActive) Icons.Rounded.Favorite else actionIcon(action),
+                        imageVector = when {
+                            isFavActive -> Icons.Rounded.Favorite
+                            isPlaylistActive -> Icons.Rounded.Bookmark
+                            else -> actionIcon(action)
+                        },
                         contentDescription = action.label,
-                        tint = if (isFavActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.85f)
+                        tint = if (isActionActive) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.85f)
                     )
                 }
                 Text(
@@ -512,6 +581,332 @@ private fun ActionRow(
         }
     }
 }
+
+@Composable
+private fun SaveToPlaylistSheet(
+    movie: MovieDetailUi,
+    playlists: List<UserPlaylist>,
+    selectedPlaylistIds: Set<String>,
+    actionInProgress: Boolean,
+    onDismiss: () -> Unit,
+    onTogglePlaylist: (UserPlaylist) -> Unit,
+    onCreatePlaylist: (String) -> Unit,
+    onRenamePlaylist: (String, String) -> Unit,
+    onDeletePlaylist: (String) -> Unit
+) {
+    var showCreateInput by remember { mutableStateOf(playlists.isEmpty()) }
+    var newPlaylistName by remember { mutableStateOf("") }
+    var playlistToRename by remember { mutableStateOf<UserPlaylist?>(null) }
+    var renamePlaylistName by remember { mutableStateOf("") }
+    var playlistToDelete by remember { mutableStateOf<UserPlaylist?>(null) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Color(0xFF1E1E1E),
+        scrimColor = Color.Black.copy(alpha = 0.62f),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .clearFocusOnTapOutside()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Lưu vào...",
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.weight(1f)
+                )
+                if (actionInProgress) {
+                    CircularProgressIndicator(
+                        color = Color(0xFFF6E29A),
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            if (playlists.isEmpty()) {
+                Text(
+                    text = "Bạn chưa có danh sách phát nào.",
+                    color = Color.White.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                playlists.forEach { playlist ->
+                    PlaylistSaveRow(
+                        playlist = playlist,
+                        isSelected = playlist.id in selectedPlaylistIds,
+                        actionInProgress = actionInProgress,
+                        onToggle = { onTogglePlaylist(playlist) },
+                        onRename = {
+                            playlistToRename = playlist
+                            renamePlaylistName = playlist.name
+                        },
+                        onDelete = { playlistToDelete = playlist }
+                    )
+                }
+            }
+
+            if (showCreateInput) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newPlaylistName,
+                        onValueChange = { newPlaylistName = it.take(PLAYLIST_NAME_MAX_LENGTH) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Tên danh sách phát") },
+                        colors = playlistTextFieldColors()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                showCreateInput = false
+                                newPlaylistName = ""
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !actionInProgress
+                        ) {
+                            Text("Hủy")
+                        }
+                        Button(
+                            onClick = {
+                                onCreatePlaylist(newPlaylistName)
+                                newPlaylistName = ""
+                                showCreateInput = false
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = newPlaylistName.trim().isNotBlank() && !actionInProgress,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFF6E29A),
+                                contentColor = Color.Black
+                            )
+                        ) {
+                            Text("Tạo", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else {
+                Button(
+                    onClick = { showCreateInput = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    enabled = !actionInProgress,
+                    shape = RoundedCornerShape(999.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.12f),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Danh sách phát mới", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+
+    playlistToRename?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { playlistToRename = null },
+            modifier = Modifier.clearFocusOnTapOutside(),
+            containerColor = Color(0xFF1E1E1E),
+            title = { Text("Đổi tên danh sách", color = Color.White) },
+            text = {
+                OutlinedTextField(
+                    value = renamePlaylistName,
+                    onValueChange = { renamePlaylistName = it.take(PLAYLIST_NAME_MAX_LENGTH) },
+                    singleLine = true,
+                    label = { Text("Tên danh sách phát") },
+                    colors = playlistTextFieldColors()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRenamePlaylist(playlist.id, renamePlaylistName)
+                        playlistToRename = null
+                    },
+                    enabled = renamePlaylistName.trim().isNotBlank() && !actionInProgress
+                ) {
+                    Text("Lưu", color = Color(0xFFF6E29A), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistToRename = null }) {
+                    Text("Hủy", color = Color.White.copy(alpha = 0.72f))
+                }
+            }
+        )
+    }
+
+    playlistToDelete?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { playlistToDelete = null },
+            containerColor = Color(0xFF1E1E1E),
+            title = { Text("Xóa danh sách phát?", color = Color.White) },
+            text = {
+                Text(
+                    text = "Danh sách \"${playlist.name}\" và toàn bộ phim trong đó sẽ bị xóa vĩnh viễn.",
+                    color = Color.White.copy(alpha = 0.76f)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeletePlaylist(playlist.id)
+                        playlistToDelete = null
+                    },
+                    enabled = !actionInProgress
+                ) {
+                    Text("Xóa", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistToDelete = null }) {
+                    Text("Hủy", color = Color.White.copy(alpha = 0.72f))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PlaylistSaveRow(
+    playlist: UserPlaylist,
+    isSelected: Boolean,
+    actionInProgress: Boolean,
+    onToggle: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(enabled = !actionInProgress, onClick = onToggle)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (playlist.coverPosterUrl.isNotBlank()) {
+            com.example.alphacinema.ui.components.AlphaCinemaImage(
+                model = playlist.coverPosterUrl,
+                contentDescription = playlist.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(width = 88.dp, height = 52.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(width = 88.dp, height = 52.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Bookmark,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.5f)
+                )
+            }
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 14.dp)
+        ) {
+            Text(
+                text = playlist.name,
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Riêng tư · ${playlist.itemCount} phim",
+                color = Color.White.copy(alpha = 0.58f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        IconButton(
+            onClick = onToggle,
+            enabled = !actionInProgress
+        ) {
+            Icon(
+                imageVector = if (isSelected) Icons.Rounded.Check else Icons.Rounded.Bookmark,
+                contentDescription = null,
+                tint = if (isSelected) Color(0xFFF6E29A) else Color.White.copy(alpha = 0.86f)
+            )
+        }
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = "Quản lý danh sách phát",
+                    tint = Color.White.copy(alpha = 0.72f)
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                containerColor = Color(0xFF2A2A2A)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Đổi tên", color = Color.White) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Edit, null, tint = Color.White.copy(alpha = 0.76f))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Xóa", color = Color(0xFFFF6B6B)) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Delete, null, tint = Color(0xFFFF6B6B))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun playlistTextFieldColors() =
+    androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        focusedBorderColor = Color(0xFFF6E29A),
+        unfocusedBorderColor = Color.White.copy(alpha = 0.24f),
+        focusedLabelColor = Color(0xFFF6E29A),
+        unfocusedLabelColor = Color.White.copy(alpha = 0.64f),
+        cursorColor = Color(0xFFF6E29A)
+    )
 
 @Composable
 private fun EpisodeTab(
@@ -1162,19 +1557,25 @@ private fun CommentInputBar(
                     unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
                     focusedBorderColor = Color(0xFFF6E29A)
                 ),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(28.dp),
                 maxLines = 3
             )
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onSend,
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(56.dp),
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFF6E29A),
                     contentColor = Color.Black
                 )
             ) {
-                Text("Gửi", fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.Send,
+                    contentDescription = "Gửi bình luận",
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }

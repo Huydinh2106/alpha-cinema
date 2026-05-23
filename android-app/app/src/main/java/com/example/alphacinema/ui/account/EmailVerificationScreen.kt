@@ -67,7 +67,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,6 +74,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import kotlinx.coroutines.delay
 
 // ── Color constants (consistent with AccountScreen) ──────────────────────────
@@ -114,7 +114,6 @@ fun EmailVerificationScreen(
     var resendCountdown by remember { mutableIntStateOf(30) }
     var canResend by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
 
     // ── Xóa mã OTP khi trigger thay đổi (thường là khi nhập sai) ────────────
     LaunchedEffect(clearTrigger) {
@@ -164,10 +163,7 @@ fun EmailVerificationScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBackground)
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { focusManager.clearFocus() }
+            .clearFocusOnTapOutside()
     ) {
         Column(
             modifier = Modifier

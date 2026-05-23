@@ -3,7 +3,9 @@ package com.example.alphacinema.data.repository
 import com.example.alphacinema.data.model.Comment
 import com.example.alphacinema.data.model.FavoriteItem
 import com.example.alphacinema.data.model.MovieStats
+import com.example.alphacinema.data.model.PlaylistMovieItem
 import com.example.alphacinema.data.model.Rating
+import com.example.alphacinema.data.model.UserPlaylist
 import com.example.alphacinema.data.model.WatchHistoryItem
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseUser
@@ -15,6 +17,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.Calendar
 
@@ -315,8 +318,249 @@ class FirestoreRepository {
                     }
                     trySend(items)
                 }
+        }
+        awaitClose { listener.remove() }
+    }
+
+    fun getPlaylists(userId: String): Flow<List<UserPlaylist>> = callbackFlow {
+        if (userId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val listener = db.collection("users").document(userId)
+            .collection(PLAYLISTS_COLLECTION)
+            .orderBy("updatedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    android.util.Log.w("FirestoreRepository", "getPlaylists failed", error)
+                    trySend(emptyList())
+                    close()
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val items = snapshot.documents.mapNotNull { doc ->
+                        doc.toObject(UserPlaylist::class.java)?.apply { id = doc.id }
+                    }
+                    trySend(items)
+                }
             }
         awaitClose { listener.remove() }
+    }
+
+    fun getPlaylistItems(
+        userId: String,
+        playlistId: String
+    ): Flow<List<PlaylistMovieItem>> = callbackFlow {
+        if (userId.isBlank() || playlistId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val listener = playlistItemsRef(userId, playlistId)
+            .orderBy("addedAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    android.util.Log.w("FirestoreRepository", "getPlaylistItems failed", error)
+                    trySend(emptyList())
+                    close()
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val items = snapshot.documents.mapNotNull { doc ->
+                        doc.toObject(PlaylistMovieItem::class.java)?.apply { movieId = doc.id }
+                    }
+                    trySend(items)
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun getPlaylistIdsForMovie(
+        userId: String,
+        movieSlug: String
+    ): Flow<Set<String>> = callbackFlow {
+        if (userId.isBlank() || movieSlug.isBlank()) {
+            trySend(emptySet())
+            close()
+            return@callbackFlow
+        }
+
+        val listener = db.collection("users").document(userId)
+            .collection(PLAYLISTS_COLLECTION)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    android.util.Log.w("FirestoreRepository", "getPlaylistIdsForMovie failed", error)
+                    trySend(emptySet())
+                    close()
+                    return@addSnapshotListener
+                }
+                val playlistIds = snapshot?.documents?.map { it.id }.orEmpty()
+                launch {
+                    try {
+                        val matchingIds = playlistIds.mapNotNull { playlistId ->
+                            val item = playlistItemsRef(userId, playlistId)
+                                .document(movieSlug)
+                                .get()
+                                .await()
+                            playlistId.takeIf { item.exists() }
+                        }.toSet()
+                        trySend(matchingIds)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        android.util.Log.w(
+                            "FirestoreRepository",
+                            "getPlaylistIdsForMovie item lookup failed",
+                            e
+                        )
+                        trySend(emptySet())
+                    }
+                }
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun createPlaylist(
+        userId: String,
+        name: String,
+        firstMovie: PlaylistMovieItem? = null
+    ): String {
+        if (userId.isBlank()) return ""
+        val normalizedName = name.trim()
+        if (normalizedName.isBlank()) return ""
+
+        val playlistRef = db.collection("users").document(userId)
+            .collection(PLAYLISTS_COLLECTION)
+            .document()
+        val playlistData = mapOf(
+            "name" to normalizedName,
+            "coverPosterUrl" to (firstMovie?.posterUrl.orEmpty()),
+            "itemCount" to if (firstMovie != null) 1L else 0L,
+            "createdAt" to FieldValue.serverTimestamp(),
+            "updatedAt" to FieldValue.serverTimestamp()
+        )
+
+        val batch = db.batch()
+        batch.set(playlistRef, playlistData)
+        if (firstMovie != null && firstMovie.movieId.isNotBlank()) {
+            batch.set(
+                playlistRef.collection(PLAYLIST_ITEMS_COLLECTION).document(firstMovie.movieId),
+                mapOf(
+                    "movieId" to firstMovie.movieId,
+                    "movieName" to firstMovie.movieName,
+                    "posterUrl" to firstMovie.posterUrl,
+                    "addedAt" to FieldValue.serverTimestamp()
+                )
+            )
+        }
+        batch.commit().await()
+        return playlistRef.id
+    }
+
+    suspend fun renamePlaylist(userId: String, playlistId: String, name: String) {
+        if (userId.isBlank() || playlistId.isBlank()) return
+        val normalizedName = name.trim()
+        if (normalizedName.isBlank()) return
+
+        db.collection("users").document(userId)
+            .collection(PLAYLISTS_COLLECTION)
+            .document(playlistId)
+            .set(
+                mapOf(
+                    "name" to normalizedName,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+            .await()
+    }
+
+    suspend fun deletePlaylist(userId: String, playlistId: String) {
+        if (userId.isBlank() || playlistId.isBlank()) return
+        val playlistRef = db.collection("users").document(userId)
+            .collection(PLAYLISTS_COLLECTION)
+            .document(playlistId)
+        val itemRefs = playlistRef.collection(PLAYLIST_ITEMS_COLLECTION)
+            .get()
+            .await()
+            .documents
+            .map { it.reference }
+        val refsToDelete = itemRefs + playlistRef
+
+        refsToDelete.chunked(FIRESTORE_BATCH_LIMIT).forEach { refs ->
+            val batch = db.batch()
+            refs.forEach(batch::delete)
+            batch.commit().await()
+        }
+    }
+
+    suspend fun addMovieToPlaylist(
+        userId: String,
+        playlistId: String,
+        movie: PlaylistMovieItem
+    ) {
+        if (userId.isBlank() || playlistId.isBlank() || movie.movieId.isBlank()) return
+        if (!playlistRef(userId, playlistId).get().await().exists()) return
+
+        playlistItemsRef(userId, playlistId)
+            .document(movie.movieId)
+            .set(
+                mapOf(
+                    "movieId" to movie.movieId,
+                    "movieName" to movie.movieName,
+                    "posterUrl" to movie.posterUrl,
+                    "addedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+            .await()
+        refreshPlaylistSummary(userId, playlistId)
+    }
+
+    suspend fun removeMovieFromPlaylist(
+        userId: String,
+        playlistId: String,
+        movieSlug: String
+    ) {
+        if (userId.isBlank() || playlistId.isBlank() || movieSlug.isBlank()) return
+        playlistItemsRef(userId, playlistId)
+            .document(movieSlug)
+            .delete()
+            .await()
+        refreshPlaylistSummary(userId, playlistId)
+    }
+
+    private fun playlistItemsRef(userId: String, playlistId: String) =
+        playlistRef(userId, playlistId)
+            .collection(PLAYLIST_ITEMS_COLLECTION)
+
+    private fun playlistRef(userId: String, playlistId: String) =
+        db.collection("users").document(userId)
+            .collection(PLAYLISTS_COLLECTION).document(playlistId)
+
+    private suspend fun refreshPlaylistSummary(userId: String, playlistId: String) {
+        val playlistRef = playlistRef(userId, playlistId)
+        if (!playlistRef.get().await().exists()) return
+
+        val items = playlistItemsRef(userId, playlistId)
+            .orderBy("addedAt", Query.Direction.ASCENDING)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { it.toObject(PlaylistMovieItem::class.java) }
+        val coverPosterUrl = items.firstOrNull()?.posterUrl.orEmpty()
+
+        playlistRef.set(
+            mapOf(
+                "coverPosterUrl" to coverPosterUrl,
+                "itemCount" to items.size.toLong(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            ),
+            SetOptions.merge()
+        ).await()
     }
 
     suspend fun postComment(
@@ -680,6 +924,9 @@ class FirestoreRepository {
 }
 
 private const val WATCH_HISTORY_COLLECTION = "watch_history"
+private const val PLAYLISTS_COLLECTION = "playlists"
+private const val PLAYLIST_ITEMS_COLLECTION = "items"
+private const val FIRESTORE_BATCH_LIMIT = 450
 private const val KIDS_WATCH_HISTORY_DOCUMENT_PREFIX = "__kids__"
 private const val WATCH_HISTORY_MODE_DEFAULT = "default"
 private const val WATCH_HISTORY_MODE_KIDS = "kids"

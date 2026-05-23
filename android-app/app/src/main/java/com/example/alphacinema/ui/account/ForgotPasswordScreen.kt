@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,7 +28,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,6 +37,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -75,7 +74,6 @@ fun ForgotPasswordScreen(
 
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(resendCountdown) {
@@ -92,10 +90,7 @@ fun ForgotPasswordScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBg)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { focusManager.clearFocus() }
+            .clearFocusOnTapOutside()
     ) {
         Column(
             modifier = Modifier

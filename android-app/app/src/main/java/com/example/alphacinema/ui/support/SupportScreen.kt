@@ -3,7 +3,6 @@ package com.example.alphacinema.ui.support
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,7 +62,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -85,6 +83,7 @@ import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.primaryAction
 import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.data.repository.SupportChatResponseParser
+import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import com.example.alphacinema.ui.components.GradientPlayButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -147,7 +146,6 @@ fun SupportScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val focusManager = LocalFocusManager.current
     val auth = remember { FirebaseAuth.getInstance() }
     val profileCache = remember(context) { UserProfileCache(context) }
     var userDisplayName by remember { mutableStateOf(resolveSupportUserName(auth, profileCache)) }
@@ -178,6 +176,7 @@ fun SupportScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .clearFocusOnTapOutside()
     ) {
         Column(
             modifier = Modifier
@@ -198,12 +197,7 @@ fun SupportScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        focusManager.clearFocus()
-                    }
+                    .clearFocusOnTapOutside()
             ) {
                 if (hasStartedChat) {
                     ChatMessageList(
