@@ -49,6 +49,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.toRoute
+import com.example.alphacinema.BuildConfig
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatRouteDestination
 import com.example.alphacinema.data.model.resolveRoute
@@ -84,11 +85,19 @@ import com.example.alphacinema.ui.account.AuthBottomSheet
 import com.example.alphacinema.ui.account.AuthMode
 import com.example.alphacinema.ui.account.rememberAccountAuthStateHolder
 import com.example.alphacinema.util.formatFirestoreDate
+import java.util.concurrent.atomic.AtomicBoolean
 
 // ── Animation Constants ─────────────────────────────────────────────────────
 
-private const val ANIM_DURATION = 350
-private const val ANIM_DURATION_FAST = 250
+private const val ANIM_DURATION = 220
+private const val ANIM_DURATION_FAST = 120
+private const val MAIN_RETURN_ANIM_DURATION = 90
+private const val TAB_SWITCH_ANIM_DURATION = 90
+private val AD_FREE_PLANS = setOf("basic", "couple", "premium")
+
+internal fun isAdFreePlan(plan: String?): Boolean {
+    return plan?.trim()?.lowercase() in AD_FREE_PLANS
+}
 
 // ── Splash State ────────────────────────────────────────────────────────────
 
@@ -153,7 +162,8 @@ fun AppScreen(
                     initialShowNotification = initialShowNotification,
                     initialNotificationType = initialNotificationType,
                     initialMovieId = initialMovieId,
-                    initialPlan = initialPlan
+                    initialPlan = initialPlan,
+                    homeViewModel = homeViewModel
                 )
             }
         }
@@ -166,11 +176,13 @@ fun MainContent(
     initialShowNotification: Boolean = false,
     initialNotificationType: String? = null,
     initialMovieId: String? = null,
-    initialPlan: String? = null
+    initialPlan: String? = null,
+    homeViewModel: HomeViewModel = viewModel()
 ) {
     val navController = rememberNavController()
     var currentMainScreen by remember { mutableStateOf(ScreenType.HOME) }
     val scope = rememberCoroutineScope()
+    val backNavigationLock = remember { AtomicBoolean(false) }
     val firestoreRepo = remember { com.example.alphacinema.data.repository.FirestoreRepository() }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -210,6 +222,30 @@ fun MainContent(
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    fun popBackStackSafely(): Boolean {
+        val currentDestination = navController.currentBackStackEntry?.destination
+        if (currentDestination == null) {
+            return false
+        }
+        if (currentDestination.hasRoute<MainRoute>()) {
+            return false
+        }
+        if (!backNavigationLock.compareAndSet(false, true)) {
+            return false
+        }
+
+        val popped = navController.popBackStack()
+        if (!popped) {
+            backNavigationLock.set(false)
+        } else {
+            scope.launch {
+                delay(ANIM_DURATION.toLong())
+                backNavigationLock.set(false)
+            }
+        }
+        return popped
     }
 
     fun currentCommentAvatarUrl(user: com.google.firebase.auth.FirebaseUser?): String {
@@ -363,11 +399,18 @@ fun MainContent(
 
     fun returnToMainScreen() {
         currentMainScreen = ScreenType.HOME
-        navController.navigate(MainRoute) {
-            popUpTo(navController.graph.startDestinationId) {
-                inclusive = false
+        val isAlreadyOnMain = navController.currentBackStackEntry
+            ?.destination
+            ?.hasRoute<MainRoute>() == true
+        val poppedToMain = if (isAlreadyOnMain) {
+            true
+        } else {
+            navController.popBackStack(navController.graph.startDestinationId, inclusive = false)
+        }
+        if (!poppedToMain) {
+            navController.navigate(MainRoute) {
+                launchSingleTop = true
             }
-            launchSingleTop = true
         }
     }
 
@@ -413,7 +456,7 @@ fun MainContent(
 
     fun leaveWatchParty() {
         watchPartyViewModel.leaveRoom()
-        navController.popBackStack()
+        popBackStackSafely()
     }
 
     // Handle deep link: alphacinema://watchparty/{roomId}
@@ -443,12 +486,7 @@ fun MainContent(
             destination?.hasRoute<WatchPartySearchNavRoute>() == true
 
         if (isOnWatchPartyRoute) {
-            navController.navigate(MainRoute) {
-                popUpTo(navController.graph.startDestinationId) {
-                    inclusive = false
-                }
-                launchSingleTop = true
-            }
+            returnToMainScreen()
         }
     }
 
@@ -494,32 +532,25 @@ fun MainContent(
         ) {
             // ── Main (Home / Search / Support / Account) ────────────────
             composable<MainRoute>(
-                enterTransition = { fadeIn(tween(300)) },
+                enterTransition = { fadeIn(tween(MAIN_RETURN_ANIM_DURATION)) },
                 exitTransition = {
-                    // Khi navigate đi: slide nhẹ sang trái + fade
-                    slideOutHorizontally(
-                        targetOffsetX = { -it / 4 },
-                        animationSpec = tween(ANIM_DURATION)
-                    ) + fadeOut(tween(ANIM_DURATION_FAST))
+                    fadeOut(tween(ANIM_DURATION_FAST))
                 },
                 popEnterTransition = {
-                    // Khi quay lại Main: slide nhẹ từ trái + fade in
-                    slideInHorizontally(
-                        initialOffsetX = { -it / 4 },
-                        animationSpec = tween(ANIM_DURATION)
-                    ) + fadeIn(tween(ANIM_DURATION))
+                    fadeIn(tween(MAIN_RETURN_ANIM_DURATION))
                 },
-                popExitTransition = { fadeOut(tween(200)) }
+                popExitTransition = { fadeOut(tween(ANIM_DURATION_FAST)) }
             ) {
                 // Giữ tab navigation bằng Crossfade bên trong MainRoute
                 Crossfade(
                     targetState = currentMainScreen,
-                    animationSpec = tween(220),
+                    animationSpec = tween(TAB_SWITCH_ANIM_DURATION),
                     modifier = Modifier.fillMaxSize(),
                     label = "TabTransition"
                 ) { screen ->
                     when (screen) {
                         ScreenType.HOME -> HomeScreen(
+                            viewModel = homeViewModel,
                             initialShowNotification = initialShowNotification,
                             onPlayMovie = ::openPlayerFromHome,
                             onOpenMovieDetail = ::openMovieDetail,
@@ -668,7 +699,7 @@ fun MainContent(
                                 showToast(msg)
                             }
                         },
-                        onBack = { navController.popBackStack() },
+                        onBack = { popBackStackSafely() },
                         onPlayMovie = { playingMovie, episode ->
                             openPlayer(
                                 slug = route.slug,
@@ -753,10 +784,12 @@ fun MainContent(
                         PlayerScreen(
                             movie = playerMovie,
                             episode = episode,
-                            onBack = { navController.popBackStack() },
+                            onBack = { popBackStackSafely() },
                             videoUrl = videoUrl,
                             episodeVideoUrls = episodeVideoUrls,
                             startPositionMs = route.startPositionMs,
+                            adTagUrl = BuildConfig.IMA_AD_TAG_URL,
+                            adsEnabled = !isAdFreePlan(demoCurrentPlan),
                             onSelectEpisode = { ep ->
                                 // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
                                 navController.navigate(
@@ -789,7 +822,7 @@ fun MainContent(
                     title = route.title,
                     filterKind = filterKind,
                     slug = route.slug,
-                    onBack = { navController.popBackStack() },
+                    onBack = { popBackStackSafely() },
                     onOpenMovieDetail = ::openMovieDetail
                 )
             }
@@ -800,7 +833,7 @@ fun MainContent(
                 MovieTypeScreen(
                     type = route.type,
                     title = route.title,
-                    onBack = { navController.popBackStack() },
+                    onBack = { popBackStackSafely() },
                     onOpenMovieDetail = ::openMovieDetail
                 )
             }
@@ -808,14 +841,14 @@ fun MainContent(
             // ── Admin ───────────────────────────────────────────────────
             composable<AdminNavRoute> {
                 AdminScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popBackStackSafely() },
                     viewModel = adminViewModel
                 )
             }
 
             composable<PaymentNavRoute> {
                 PaymentScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popBackStackSafely() },
                     onPaymentConfirmed = {
                         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                         if (user != null) {
@@ -834,7 +867,7 @@ fun MainContent(
             // ── Profile Settings ─────────────────────────────────────────
             composable<ProfileSettingsNavRoute> {
                 ProfileSettingsScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popBackStackSafely() },
                     onOpenPayment = { navController.navigate(PaymentNavRoute) },
                     onLogout = {
                         demoCurrentPlan = null
@@ -847,7 +880,7 @@ fun MainContent(
 
             composable<WatchHistoryNavRoute> {
                 WatchHistoryScreen(
-                    onBack = { navController.popBackStack() },
+                    onBack = { popBackStackSafely() },
                     onOpenWatchHistoryItem = { slug, episodeId, startPositionMs ->
                         openPlayer(
                             slug = slug,
@@ -940,7 +973,7 @@ fun MainContent(
                 Box(modifier = Modifier.fillMaxSize()) {
                     com.example.alphacinema.ui.search.SearchScreen(
                         showBackButton = true,
-                        onBackClick = { navController.popBackStack() },
+                        onBackClick = { popBackStackSafely() },
                         onOpenMovieDetail = { slug ->
                             if (!isChangingMovie) {
                                 isChangingMovie = true

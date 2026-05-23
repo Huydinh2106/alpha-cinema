@@ -38,6 +38,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SPOTIFY_CLIENT_ID", secretValue("SPOTIFY_CLIENT_ID").asBuildConfigString())
         buildConfigField("String", "SPOTIFY_CLIENT_SECRET", secretValue("SPOTIFY_CLIENT_SECRET").asBuildConfigString())
+        buildConfigField("String", "IMA_AD_TAG_URL", secretValue("IMA_AD_TAG_URL").asBuildConfigString())
     }
 
     buildTypes {
@@ -50,6 +51,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -60,6 +62,8 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -116,6 +120,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.media3.hls)
+    implementation(libs.media3.exoplayer.ima)
 
     // Agora Voice SDK
     implementation("io.agora.rtc:voice-rtc-basic:4.6.3")

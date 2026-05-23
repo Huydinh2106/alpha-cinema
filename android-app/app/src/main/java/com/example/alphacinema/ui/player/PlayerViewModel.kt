@@ -1,7 +1,9 @@
 package com.example.alphacinema.ui.player
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MediaItem
 import com.example.alphacinema.data.local.SettingsManager
 import com.example.alphacinema.data.repository.FirestoreRepository
 import com.example.alphacinema.ui.movie.detail.EpisodeUi
@@ -9,22 +11,54 @@ import com.example.alphacinema.ui.movie.detail.MovieDetailUi
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 
+internal fun shouldAttachPrerollAds(
+    adsEnabled: Boolean,
+    adTagUrl: String
+): Boolean = adsEnabled && adTagUrl.isNotBlank()
+
+internal fun buildEpisodeMediaItems(
+    movie: MovieDetailUi,
+    episodeVideoUrls: Map<String, String>,
+    adTagUrl: String = "",
+    adsEnabled: Boolean = false
+): List<MediaItem> {
+    val attachAds = shouldAttachPrerollAds(
+        adsEnabled = adsEnabled,
+        adTagUrl = adTagUrl
+    )
+    val normalizedAdTagUrl = adTagUrl.trim()
+
+    return movie.episodes.map { episode ->
+        val url = episodeVideoUrls[episode.id]
+        val builder = MediaItem.Builder()
+            .setMediaId(episode.id)
+            .setUri(url ?: "")
+
+        if (attachAds) {
+            builder.setAdsConfiguration(
+                MediaItem.AdsConfiguration.Builder(Uri.parse(normalizedAdTagUrl))
+                    .build()
+            )
+        }
+
+        builder.build()
+    }
+}
+
 class PlayerViewModel : ViewModel() {
     private val firestoreRepository = FirestoreRepository()
 
     fun buildEpisodeMediaItems(
         movie: MovieDetailUi,
-        episodeVideoUrls: Map<String, String>
-    ): List<androidx.media3.common.MediaItem> {
-        return movie.episodes.map { episode ->
-            val url = episodeVideoUrls[episode.id]
-
-            androidx.media3.common.MediaItem.Builder()
-                .setMediaId(episode.id)
-                .setUri(url ?: "")
-                .build()
-        }
-    }
+        episodeVideoUrls: Map<String, String>,
+        adTagUrl: String = "",
+        adsEnabled: Boolean = false
+    ): List<MediaItem> = com.example.alphacinema.ui.player.buildEpisodeMediaItems(
+        movie = movie,
+        episodeVideoUrls = episodeVideoUrls,
+        adTagUrl = adTagUrl,
+        adsEnabled = adsEnabled
+    )
 
     fun getEpisodeIndex(
         movie: MovieDetailUi,
