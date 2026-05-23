@@ -1047,7 +1047,7 @@ private fun PlanSelectionIndicator(
 ) {
     Box(
         modifier = Modifier
-            .size(42.dp)
+            .size(30.dp)
             .clip(CircleShape)
             .background(if (selected) color else Color.White.copy(alpha = 0.08f))
             .border(
@@ -1063,7 +1063,7 @@ private fun PlanSelectionIndicator(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = "Gói đang được chọn",
                 tint = Color(0xFF060914),
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
     }

@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.alphacinema.data.api.RetrofitClient
 import com.example.alphacinema.data.api.TmdbConfig
 import com.example.alphacinema.data.model.Comment
+import com.example.alphacinema.data.model.FirestoreMovie
 import com.example.alphacinema.data.model.MovieDetail
 import com.example.alphacinema.data.model.MovieDetailResponse
+import com.example.alphacinema.data.model.MovieItem
 import com.example.alphacinema.data.model.MovieStats
 import com.example.alphacinema.data.repository.FirestoreRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.Normalizer
 
 class MovieDetailViewModel : ViewModel() {
     private val api = RetrofitClient.instance
@@ -182,7 +185,7 @@ class MovieDetailViewModel : ViewModel() {
             _error.value = null
             initFirebaseListeners(slug, FirebaseAuth.getInstance().currentUser?.uid)
             try {
-                val response = api.getMovieDetail(slug)
+                val response = loadMovieDetailWithFallback(slug)
                 val movie = response.movie
                 val episodes = response.episodes
 
@@ -296,5 +299,100 @@ class MovieDetailViewModel : ViewModel() {
                 _isLoading.value = false
             }
         }
+    }
+
+    private suspend fun loadMovieDetailWithFallback(slug: String): MovieDetailResponse {
+        runCatching { api.getMovieDetail(slug) }
+            .getOrNull()
+            ?.takeIf { it.movie != null }
+            ?.let { return it }
+
+        val firestoreMovie = firestoreRepository.getMovieBySlug(slug)
+        val searchKeywords = listOfNotNull(
+            firestoreMovie?.title,
+            firestoreMovie?.originName,
+            slug.replace("-", " ")
+        )
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        for (keyword in searchKeywords) {
+            val candidates = runCatching {
+                val searchResponse = api.searchMovies(keyword = keyword, limit = 10)
+                searchResponse.data?.items ?: searchResponse.items ?: emptyList()
+            }.getOrDefault(emptyList())
+
+            val resolved = resolveFallbackCandidate(
+                candidates = candidates,
+                firestoreMovie = firestoreMovie,
+                requestedSlug = slug
+            ) ?: continue
+
+            runCatching { api.getMovieDetail(resolved.slug) }
+                .getOrNull()
+                ?.takeIf { it.movie != null }
+                ?.let { return it }
+        }
+
+        return MovieDetailResponse(status = false, movie = null, episodes = null)
+    }
+
+    private fun resolveFallbackCandidate(
+        candidates: List<MovieItem>,
+        firestoreMovie: FirestoreMovie?,
+        requestedSlug: String
+    ): MovieItem? {
+        if (candidates.isEmpty()) return null
+
+        val targetKeys = listOfNotNull(
+            firestoreMovie?.title,
+            firestoreMovie?.originName,
+            requestedSlug.replace("-", " ")
+        )
+            .map { it.normalizedMovieKey() }
+            .filter { it.isNotBlank() }
+
+        return candidates
+            .maxByOrNull { candidate ->
+                val candidateKeys = listOf(
+                    candidate.name,
+                    candidate.origin_name.orEmpty(),
+                    candidate.slug.replace("-", " ")
+                ).map { it.normalizedMovieKey() }
+
+                when {
+                    candidate.slug == requestedSlug -> 100
+                    candidateKeys.any { it in targetKeys } -> 90
+                    candidateKeys.any { candidateKey ->
+                        targetKeys.any { targetKey ->
+                            candidateKey.contains(targetKey) || targetKey.contains(candidateKey)
+                        }
+                    } -> 80
+                    else -> 0
+                }
+            }
+            ?.takeIf { candidate ->
+                val candidateKeys = listOf(
+                    candidate.name,
+                    candidate.origin_name.orEmpty(),
+                    candidate.slug.replace("-", " ")
+                ).map { it.normalizedMovieKey() }
+
+                candidate.slug == requestedSlug || candidateKeys.any { candidateKey ->
+                    targetKeys.any { targetKey ->
+                        candidateKey == targetKey || candidateKey.contains(targetKey) || targetKey.contains(candidateKey)
+                    }
+                }
+            }
+            ?: candidates.firstOrNull()
+    }
+
+    private fun String.normalizedMovieKey(): String {
+        return Normalizer.normalize(this, Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
     }
 }

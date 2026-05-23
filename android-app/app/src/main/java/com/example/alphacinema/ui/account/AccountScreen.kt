@@ -91,6 +91,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -115,6 +117,8 @@ private data class AccountMenuItemUi(
 )
 
 enum class PinDialogMode { SETUP, VERIFY }
+
+private val AccountAccentGold = Color(0xFFF6E29A)
 
 private enum class AccountMenuAction {
     WATCH_HISTORY,
@@ -328,6 +332,11 @@ fun AccountScreen(
     val favorites by favoritesFlow.collectAsState(initial = emptyList())
 
     var showPinDialog by remember { mutableStateOf(false) }
+    var showResetPinDialog by remember { mutableStateOf(false) }
+    var resetPinOtpSent by remember { mutableStateOf(false) }
+    var resetPinOtpInput by remember { mutableStateOf("") }
+    var resetPinError by remember { mutableStateOf<String?>(null) }
+    var resetPinLoading by remember { mutableStateOf(false) }
     var pinDialogMode by remember { mutableStateOf<PinDialogMode>(PinDialogMode.SETUP) }
     var pinInput by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -419,7 +428,74 @@ fun AccountScreen(
             AccountMenuAction.FEEDBACK -> openPanel(AccountPanelType.FEEDBACK)
             AccountMenuAction.ADMIN -> onOpenAdminPanel()
             AccountMenuAction.WATCH_TOGETHER -> {
-                if (isLoggedIn) onWatchTogether() else showLoginRequiredDialog = true
+                if (isLoggedIn) {
+                    onWatchTogether()
+                } else {
+                    authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+                }
+            }
+        }
+    }
+
+    fun resetPinVerificationState(clearOtp: Boolean = true) {
+        resetPinOtpSent = false
+        resetPinOtpInput = ""
+        resetPinError = null
+        resetPinLoading = false
+        if (clearOtp) {
+            EmailVerificationHelper.clearOtp()
+        }
+    }
+
+    fun sendResetPinOtp() {
+        val email = currentUser?.email.orEmpty()
+        if (email.isBlank()) {
+            resetPinError = "Tài khoản chưa có email để xác thực."
+            return
+        }
+
+        scope.launch {
+            resetPinLoading = true
+            resetPinError = null
+            val sent = EmailVerificationHelper.sendOtp(email, "Đặt lại mã PIN trẻ em")
+            resetPinLoading = false
+            if (sent) {
+                resetPinOtpSent = true
+            } else {
+                resetPinError = "Không thể gửi mã xác thực. Vui lòng thử lại."
+            }
+        }
+    }
+
+    fun verifyResetPinOtp() {
+        if (resetPinOtpInput.length < 6) {
+            resetPinError = "Vui lòng nhập đủ 6 số"
+            return
+        }
+
+        when (EmailVerificationHelper.verifyOtp(resetPinOtpInput)) {
+            OtpVerifyResult.SUCCESS -> {
+                settingsManager.setKidsModePin(null)
+                settingsManager.setKidsMode(false)
+                showResetPinDialog = false
+                resetPinVerificationState(clearOtp = false)
+                pinDialogMode = PinDialogMode.SETUP
+                pinInput = ""
+                pinError = null
+                showPinDialog = true
+            }
+            OtpVerifyResult.WRONG_CODE -> {
+                resetPinError = "Mã xác thực không đúng"
+                resetPinOtpInput = ""
+            }
+            OtpVerifyResult.EXPIRED -> {
+                resetPinError = "Mã xác thực đã hết hạn. Vui lòng gửi lại."
+                resetPinOtpInput = ""
+                resetPinOtpSent = false
+            }
+            OtpVerifyResult.NO_OTP_SENT -> {
+                resetPinError = "Chưa gửi mã xác thực."
+                resetPinOtpSent = false
             }
         }
     }
@@ -536,20 +612,29 @@ fun AccountScreen(
 
 
             if (showPinDialog) {
-                AlertDialog(
+                Dialog(
                     onDismissRequest = { showPinDialog = false },
-                    containerColor = Color(0xFF141414),
-                    titleContentColor = Color.White,
-                    textContentColor = Color.White.copy(alpha = 0.8f),
-                    title = {
-                        Text(if (pinDialogMode == PinDialogMode.SETUP) "Cài đặt mã PIN" else "Nhập mã PIN")
-                    },
-                    text = {
+                    properties = DialogProperties(usePlatformDefaultWidth = false)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(0.86f)
+                            .background(Color(0xFF141414), RoundedCornerShape(28.dp))
+                            .padding(horizontal = 14.dp, vertical = 22.dp)
+                    ) {
+                        Text(
+                            text = if (pinDialogMode == PinDialogMode.SETUP) "Cài đặt mã PIN" else "Nhập mã PIN",
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
                         Column {
                             Text(
                                 if (pinDialogMode == PinDialogMode.SETUP)
                                     "Thiết lập mã PIN 4 số để bảo vệ chế độ trẻ em."
-                                else "Nhập mã PIN để tắt chế độ trẻ em."
+                                else "Nhập mã PIN để tắt chế độ trẻ em.",
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodyLarge
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             OutlinedTextField(
@@ -561,36 +646,138 @@ fun AccountScreen(
                                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
                                 visualTransformation = PasswordVisualTransformation(),
                                 colors = authTextFieldColors(),
-                                supportingText = { if (pinError != null) Text(pinError!!) }
+                                supportingText = pinError?.let { error ->
+                                    { Text(error) }
+                                }
                             )
+                            if (pinDialogMode == PinDialogMode.VERIFY) {
+                                Text(
+                                    text = "Quên mã PIN?",
+                                    color = AccountAccentGold,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .align(Alignment.End)
+                                        .padding(top = 12.dp, end = 4.dp, bottom = 2.dp)
+                                        .clickable {
+                                            showPinDialog = false
+                                            pinInput = ""
+                                            pinError = null
+                                            resetPinVerificationState()
+                                            showResetPinDialog = true
+                                        }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Hủy",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable { showPinDialog = false }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                            Spacer(modifier = Modifier.width(22.dp))
+                            Text(
+                                text = "Xác nhận",
+                                color = AccountAccentGold,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .clickable {
+                                    if (pinInput.length < 4) {
+                                        pinError = "Mã PIN phải đủ 4 số"
+                                    } else {
+                                        if (pinDialogMode == PinDialogMode.SETUP) {
+                                            settingsManager.setKidsModePin(pinInput)
+                                            settingsManager.setKidsMode(true)
+                                            showPinDialog = false
+                                        } else {
+                                            if (pinInput == settingsManager.getKidsModePin()) {
+                                                settingsManager.setKidsMode(false)
+                                                showPinDialog = false
+                                            } else {
+                                                pinError = "Mã PIN không đúng"
+                                            }
+                                        }
+                                    }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (showResetPinDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showResetPinDialog = false
+                        resetPinVerificationState()
+                    },
+                    containerColor = Color(0xFF141414),
+                    titleContentColor = Color.White,
+                    textContentColor = Color.White.copy(alpha = 0.8f),
+                    title = { Text("Xác thực đặt lại PIN") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                if (resetPinOtpSent) {
+                                    "Nhập mã 6 số đã gửi tới ${currentUser?.email.orEmpty()} để đặt lại mã PIN."
+                                } else {
+                                    "Để đặt lại mã PIN trẻ em, bạn cần xác thực qua email tài khoản ${currentUser?.email.orEmpty()}."
+                                }
+                            )
+
+                            if (resetPinOtpSent) {
+                                OutlinedTextField(
+                                    value = resetPinOtpInput,
+                                    onValueChange = {
+                                        resetPinOtpInput = it.filter { c -> c.isDigit() }.take(6)
+                                        resetPinError = null
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                                    colors = authTextFieldColors(),
+                                    label = { Text("Mã xác thực") }
+                                )
+                            }
+
+                            resetPinError?.let { error ->
+                                Text(
+                                    text = error,
+                                    color = Color(0xFFFF6B6B),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                         }
                     },
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                if (pinInput.length < 4) {
-                                    pinError = "Mã PIN phải đủ 4 số"
-                                } else {
-                                    if (pinDialogMode == PinDialogMode.SETUP) {
-                                        settingsManager.setKidsModePin(pinInput)
-                                        settingsManager.setKidsMode(true)
-                                        showPinDialog = false
-                                    } else {
-                                        if (pinInput == settingsManager.getKidsModePin()) {
-                                            settingsManager.setKidsMode(false)
-                                            showPinDialog = false
-                                        } else {
-                                            pinError = "Mã PIN không đúng"
-                                        }
-                                    }
-                                }
-                            }
+                                if (resetPinOtpSent) verifyResetPinOtp() else sendResetPinOtp()
+                            },
+                            enabled = !resetPinLoading
                         ) {
-                            Text("Xác nhận", color = Color(0xFFF6E29A), fontWeight = FontWeight.Bold)
+                            Text(
+                                if (resetPinOtpSent) "Xác nhận" else "Gửi mã",
+                                color = AccountAccentGold,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showPinDialog = false }) {
+                        TextButton(
+                            onClick = {
+                                showResetPinDialog = false
+                                resetPinVerificationState()
+                            }
+                        ) {
                             Text("Hủy", color = Color.White.copy(alpha = 0.7f))
                         }
                     }
@@ -806,18 +993,25 @@ private fun KidsModeCard(
     onRequireLogin: () -> Unit,
     onToggleMode: (Boolean) -> Unit
 ) {
+    val titleColor = if (isKidsModeEnabled) AccountAccentGold else Color.White
+    val borderColor = if (isKidsModeEnabled) {
+        AccountAccentGold.copy(alpha = 0.38f)
+    } else {
+        Color.White.copy(alpha = 0.12f)
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
-            .border(1.dp, Color(0xFFF6E29A).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Chế độ trẻ em",
-                color = Color(0xFFF6E29A),
+                color = titleColor,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -844,7 +1038,7 @@ private fun KidsModeCard(
             },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.Black,
-                checkedTrackColor = Color(0xFFF6E29A),
+                checkedTrackColor = AccountAccentGold,
                 uncheckedThumbColor = Color.White,
                 uncheckedTrackColor = Color(0xFF333333)
             )
@@ -860,7 +1054,7 @@ private fun WatchTogetherHighlightCard(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
-            .border(1.dp, Color(0xFFF6E29A).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -873,7 +1067,7 @@ private fun WatchTogetherHighlightCard(
             Icon(
                 imageVector = Icons.Rounded.Groups,
                 contentDescription = null,
-                tint = Color(0xFFF6E29A)
+                tint = Color.White
             )
         }
 
@@ -882,12 +1076,18 @@ private fun WatchTogetherHighlightCard(
                 .padding(start = 12.dp)
                 .weight(1f)
         ) {
-            Text(
-                text = "Xem chung",
-                color = Color(0xFFF6E29A),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Xem chung",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                AccountFeatureBadge(text = "PRO")
+            }
         }
 
         Icon(
@@ -895,6 +1095,25 @@ private fun WatchTogetherHighlightCard(
             contentDescription = null,
             tint = Color.White.copy(alpha = 0.62f),
             modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
+@Composable
+private fun AccountFeatureBadge(text: String) {
+    Box(
+        modifier = Modifier
+            .border(1.dp, AccountAccentGold.copy(alpha = 0.72f), RoundedCornerShape(5.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = AccountAccentGold,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1
         )
     }
 }

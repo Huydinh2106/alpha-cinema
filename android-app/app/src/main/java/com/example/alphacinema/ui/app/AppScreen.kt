@@ -522,9 +522,7 @@ fun MainContent(
                         ScreenType.HOME -> HomeScreen(
                             initialShowNotification = initialShowNotification,
                             onPlayMovie = ::openPlayerFromHome,
-                            onOpenMovieDetail = { slug ->
-                                navController.navigate(MovieDetailNavRoute(slug = slug))
-                            },
+                            onOpenMovieDetail = ::openMovieDetail,
                             onNavigateToPlan = {
                                 navController.navigate(PaymentNavRoute)
                             },
