@@ -92,12 +92,6 @@ class FirestoreRepository {
             if (!snapshot.exists() || !existingData.containsKey("createdAt")) {
                 userData["createdAt"] = FieldValue.serverTimestamp()
             }
-            if (!existingData.containsKey("subscriptionPlan")) {
-                userData["subscriptionPlan"] = "free"
-            }
-            if (!existingData.containsKey("subscriptionStatus")) {
-                userData["subscriptionStatus"] = "inactive"
-            }
             if (!existingData.containsKey("notified3Days")) {
                 userData["notified3Days"] = false
             }
@@ -322,7 +316,7 @@ class FirestoreRepository {
         awaitClose { listener.remove() }
     }
 
-    fun getPlaylists(userId: String): Flow<List<UserPlaylist>> = callbackFlow {
+    fun getPlaylists(userId: String, isKidsMode: Boolean = false): Flow<List<UserPlaylist>> = callbackFlow {
         if (userId.isBlank()) {
             trySend(emptyList())
             close()
@@ -330,7 +324,7 @@ class FirestoreRepository {
         }
 
         val listener = db.collection("users").document(userId)
-            .collection(PLAYLISTS_COLLECTION)
+            .collection(playlistsCollectionName(isKidsMode))
             .orderBy("updatedAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -351,7 +345,8 @@ class FirestoreRepository {
 
     fun getPlaylistItems(
         userId: String,
-        playlistId: String
+        playlistId: String,
+        isKidsMode: Boolean = false
     ): Flow<List<PlaylistMovieItem>> = callbackFlow {
         if (userId.isBlank() || playlistId.isBlank()) {
             trySend(emptyList())
@@ -359,7 +354,7 @@ class FirestoreRepository {
             return@callbackFlow
         }
 
-        val listener = playlistItemsRef(userId, playlistId)
+        val listener = playlistItemsRef(userId, playlistId, isKidsMode)
             .orderBy("addedAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -380,7 +375,8 @@ class FirestoreRepository {
 
     fun getPlaylistIdsForMovie(
         userId: String,
-        movieSlug: String
+        movieSlug: String,
+        isKidsMode: Boolean = false
     ): Flow<Set<String>> = callbackFlow {
         if (userId.isBlank() || movieSlug.isBlank()) {
             trySend(emptySet())
@@ -389,7 +385,7 @@ class FirestoreRepository {
         }
 
         val listener = db.collection("users").document(userId)
-            .collection(PLAYLISTS_COLLECTION)
+            .collection(playlistsCollectionName(isKidsMode))
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     android.util.Log.w("FirestoreRepository", "getPlaylistIdsForMovie failed", error)
@@ -401,7 +397,7 @@ class FirestoreRepository {
                 launch {
                     try {
                         val matchingIds = playlistIds.mapNotNull { playlistId ->
-                            val item = playlistItemsRef(userId, playlistId)
+                            val item = playlistItemsRef(userId, playlistId, isKidsMode)
                                 .document(movieSlug)
                                 .get()
                                 .await()
@@ -426,14 +422,15 @@ class FirestoreRepository {
     suspend fun createPlaylist(
         userId: String,
         name: String,
-        firstMovie: PlaylistMovieItem? = null
+        firstMovie: PlaylistMovieItem? = null,
+        isKidsMode: Boolean = false
     ): String {
         if (userId.isBlank()) return ""
         val normalizedName = name.trim()
         if (normalizedName.isBlank()) return ""
 
         val playlistRef = db.collection("users").document(userId)
-            .collection(PLAYLISTS_COLLECTION)
+            .collection(playlistsCollectionName(isKidsMode))
             .document()
         val playlistData = mapOf(
             "name" to normalizedName,
@@ -460,13 +457,13 @@ class FirestoreRepository {
         return playlistRef.id
     }
 
-    suspend fun renamePlaylist(userId: String, playlistId: String, name: String) {
+    suspend fun renamePlaylist(userId: String, playlistId: String, name: String, isKidsMode: Boolean = false) {
         if (userId.isBlank() || playlistId.isBlank()) return
         val normalizedName = name.trim()
         if (normalizedName.isBlank()) return
 
         db.collection("users").document(userId)
-            .collection(PLAYLISTS_COLLECTION)
+            .collection(playlistsCollectionName(isKidsMode))
             .document(playlistId)
             .set(
                 mapOf(
@@ -478,10 +475,10 @@ class FirestoreRepository {
             .await()
     }
 
-    suspend fun deletePlaylist(userId: String, playlistId: String) {
+    suspend fun deletePlaylist(userId: String, playlistId: String, isKidsMode: Boolean = false) {
         if (userId.isBlank() || playlistId.isBlank()) return
         val playlistRef = db.collection("users").document(userId)
-            .collection(PLAYLISTS_COLLECTION)
+            .collection(playlistsCollectionName(isKidsMode))
             .document(playlistId)
         val itemRefs = playlistRef.collection(PLAYLIST_ITEMS_COLLECTION)
             .get()
@@ -500,12 +497,13 @@ class FirestoreRepository {
     suspend fun addMovieToPlaylist(
         userId: String,
         playlistId: String,
-        movie: PlaylistMovieItem
+        movie: PlaylistMovieItem,
+        isKidsMode: Boolean = false
     ) {
         if (userId.isBlank() || playlistId.isBlank() || movie.movieId.isBlank()) return
-        if (!playlistRef(userId, playlistId).get().await().exists()) return
+        if (!playlistRef(userId, playlistId, isKidsMode).get().await().exists()) return
 
-        playlistItemsRef(userId, playlistId)
+        playlistItemsRef(userId, playlistId, isKidsMode)
             .document(movie.movieId)
             .set(
                 mapOf(
@@ -517,35 +515,39 @@ class FirestoreRepository {
                 SetOptions.merge()
             )
             .await()
-        refreshPlaylistSummary(userId, playlistId)
+        refreshPlaylistSummary(userId, playlistId, isKidsMode)
     }
 
     suspend fun removeMovieFromPlaylist(
         userId: String,
         playlistId: String,
-        movieSlug: String
+        movieSlug: String,
+        isKidsMode: Boolean = false
     ) {
         if (userId.isBlank() || playlistId.isBlank() || movieSlug.isBlank()) return
-        playlistItemsRef(userId, playlistId)
+        playlistItemsRef(userId, playlistId, isKidsMode)
             .document(movieSlug)
             .delete()
             .await()
-        refreshPlaylistSummary(userId, playlistId)
+        refreshPlaylistSummary(userId, playlistId, isKidsMode)
     }
 
-    private fun playlistItemsRef(userId: String, playlistId: String) =
-        playlistRef(userId, playlistId)
+    private fun playlistItemsRef(userId: String, playlistId: String, isKidsMode: Boolean = false) =
+        playlistRef(userId, playlistId, isKidsMode)
             .collection(PLAYLIST_ITEMS_COLLECTION)
 
-    private fun playlistRef(userId: String, playlistId: String) =
+    private fun playlistRef(userId: String, playlistId: String, isKidsMode: Boolean = false) =
         db.collection("users").document(userId)
-            .collection(PLAYLISTS_COLLECTION).document(playlistId)
+            .collection(playlistsCollectionName(isKidsMode)).document(playlistId)
 
-    private suspend fun refreshPlaylistSummary(userId: String, playlistId: String) {
-        val playlistRef = playlistRef(userId, playlistId)
+    private fun playlistsCollectionName(isKidsMode: Boolean): String =
+        if (isKidsMode) PLAYLISTS_KIDS_COLLECTION else PLAYLISTS_COLLECTION
+
+    private suspend fun refreshPlaylistSummary(userId: String, playlistId: String, isKidsMode: Boolean = false) {
+        val playlistRef = playlistRef(userId, playlistId, isKidsMode)
         if (!playlistRef.get().await().exists()) return
 
-        val items = playlistItemsRef(userId, playlistId)
+        val items = playlistItemsRef(userId, playlistId, isKidsMode)
             .orderBy("addedAt", Query.Direction.ASCENDING)
             .get()
             .await()
@@ -925,6 +927,7 @@ class FirestoreRepository {
 
 private const val WATCH_HISTORY_COLLECTION = "watch_history"
 private const val PLAYLISTS_COLLECTION = "playlists"
+private const val PLAYLISTS_KIDS_COLLECTION = "playlists_kids"
 private const val PLAYLIST_ITEMS_COLLECTION = "items"
 private const val FIRESTORE_BATCH_LIMIT = 450
 private const val KIDS_WATCH_HISTORY_DOCUMENT_PREFIX = "__kids__"

@@ -780,10 +780,9 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 duration = "1 tháng",
                 description = "Dành cho người dùng cá nhân",
                 features = listOf(
-                    "Xem phim không giới hạn",
-                    "Lưu danh sách phim yêu thích",
-                    "Chất lượng HD",
-                    "Không quảng cáo"
+                    "Không quảng cáo",
+                    "Chế độ trẻ em",
+                    "Lưu video vào playlist"
                 ),
                 buttonText = "Chọn gói Basic"
             ),
@@ -795,11 +794,10 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 duration = "1 tháng",
                 description = "Dành cho 2 người xem chung",
                 features = listOf(
-                    "Tất cả tính năng của Basic",
-                    "Tạo phòng xem chung",
-                    "Đồng bộ thời gian xem phim",
-                    "Chat trong phòng xem",
-                    "Không quảng cáo"
+                    "Không quảng cáo",
+                    "Chế độ trẻ em",
+                    "Lưu video vào playlist",
+                    "Tạo phòng xem chung tối đa 2 người"
                 ),
                 buttonText = "Chọn gói Couple"
             ),
@@ -811,11 +809,11 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 duration = "1 tháng",
                 description = "Dành cho nhóm bạn / gia đình",
                 features = listOf(
-                    "Tất cả tính năng của Couple",
-                    "Tạo nhiều phòng xem chung",
-                    "Mời bạn bè tham gia bằng link",
-                    "Ưu tiên chất lượng Full HD / 4K",
-                    "Không quảng cáo"
+                    "Không quảng cáo",
+                    "Chế độ trẻ em",
+                    "Lưu video vào playlist",
+                    "Tạo phòng xem chung tối đa 10 người",
+                    "Mời bạn bè tham gia bằng link"
                 ),
                 buttonText = "Chọn gói Premium",
                 badge = "Phổ biến nhất"

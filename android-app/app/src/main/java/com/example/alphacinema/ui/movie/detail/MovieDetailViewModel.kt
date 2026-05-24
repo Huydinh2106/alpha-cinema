@@ -23,11 +23,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.text.Normalizer
+import com.example.alphacinema.data.local.SettingsManager
 
 class MovieDetailViewModel : ViewModel() {
     private val api = RetrofitClient.instance
     private val tmdbApi = RetrofitClient.tmdbApi
     private val firestoreRepository = FirestoreRepository()
+    private val settingsManager = SettingsManager.getInstance()
+
+    private val isKidsMode: Boolean
+        get() = settingsManager.isKidsModeEnabled.value
 
     private val _movieDetail = MutableStateFlow<MovieDetailUi?>(null)
     val movieDetail: StateFlow<MovieDetailUi?> = _movieDetail.asStateFlow()
@@ -97,13 +102,13 @@ class MovieDetailViewModel : ViewModel() {
             }
             playlistsJob?.cancel()
             playlistsJob = viewModelScope.launch {
-                firestoreRepository.getPlaylists(userId).collect { playlists ->
+                firestoreRepository.getPlaylists(userId, isKidsMode).collect { playlists ->
                     _playlists.value = playlists
                 }
             }
             moviePlaylistIdsJob?.cancel()
             moviePlaylistIdsJob = viewModelScope.launch {
-                firestoreRepository.getPlaylistIdsForMovie(userId, slug).collect { playlistIds ->
+                firestoreRepository.getPlaylistIdsForMovie(userId, slug, isKidsMode).collect { playlistIds ->
                     _playlistIdsForCurrentMovie.value = playlistIds
                 }
             }
@@ -154,7 +159,8 @@ class MovieDetailViewModel : ViewModel() {
                 firestoreRepository.createPlaylist(
                     userId = uid,
                     name = normalizedName,
-                    firstMovie = movie.toPlaylistMovieItem()
+                    firstMovie = movie.toPlaylistMovieItem(),
+                    isKidsMode = isKidsMode
                 )
                 onResult(true, "Đã lưu vào $normalizedName")
             } catch (e: Exception) {
@@ -197,13 +203,14 @@ class MovieDetailViewModel : ViewModel() {
             }
             try {
                 if (isInPlaylist) {
-                    firestoreRepository.removeMovieFromPlaylist(uid, playlistId, movie.id)
+                    firestoreRepository.removeMovieFromPlaylist(uid, playlistId, movie.id, isKidsMode)
                     onResult(true, "Đã bỏ khỏi $playlistName")
                 } else {
                     firestoreRepository.addMovieToPlaylist(
                         userId = uid,
                         playlistId = playlistId,
-                        movie = movie.toPlaylistMovieItem()
+                        movie = movie.toPlaylistMovieItem(),
+                        isKidsMode = isKidsMode
                     )
                     onResult(true, "Đã lưu vào $playlistName")
                 }
@@ -239,7 +246,7 @@ class MovieDetailViewModel : ViewModel() {
         viewModelScope.launch {
             _playlistActionInProgress.value = true
             try {
-                firestoreRepository.renamePlaylist(uid, playlistId, normalizedName)
+                firestoreRepository.renamePlaylist(uid, playlistId, normalizedName, isKidsMode)
                 onResult(true, "Đã đổi tên danh sách phát")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -272,7 +279,7 @@ class MovieDetailViewModel : ViewModel() {
             val previousIds = _playlistIdsForCurrentMovie.value
             _playlistIdsForCurrentMovie.value = previousIds - playlistId
             try {
-                firestoreRepository.deletePlaylist(uid, playlistId)
+                firestoreRepository.deletePlaylist(uid, playlistId, isKidsMode)
                 onResult(true, "Đã xóa danh sách phát")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e

@@ -59,6 +59,7 @@ fun WatchPartyLobbySheet(
     isJoining: Boolean,
     error: String?,
     joinOnly: Boolean = false,
+    maxMembers: Int = 2,
     onDismiss: () -> Unit,
     onCreateRoom: () -> Unit,
     onJoinRoom: (String) -> Unit
@@ -209,7 +210,7 @@ fun WatchPartyLobbySheet(
                                     maxLines = 2
                                 )
                                 Text(
-                                    text = "Tối đa 5 người",
+                                    text = "Tối đa $maxMembers người",
                                     color = Color.White.copy(alpha = 0.5f),
                                     style = MaterialTheme.typography.labelMedium
                                 )

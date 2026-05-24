@@ -1,8 +1,13 @@
 package com.example.alphacinema.data.repository
 
+import com.example.alphacinema.data.api.RetrofitClient
+import com.example.alphacinema.data.model.CreateWatchPartyRoomRequest
+import com.example.alphacinema.data.model.JoinWatchPartyRoomRequest
+import com.example.alphacinema.data.model.LeaveWatchPartyRoomRequest
 import com.example.alphacinema.data.model.WatchPartyChatMessage
 import com.example.alphacinema.data.model.WatchPartyMember
 import com.example.alphacinema.data.model.WatchPartyRoom
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -17,14 +22,11 @@ class WatchPartyRepository {
 
     private val db = FirebaseDatabase.getInstance()
     private val rootRef = db.getReference("watchParty")
+    private val auth = FirebaseAuth.getInstance()
+    private val api = RetrofitClient.watchPartyApi
 
     companion object {
-        const val MAX_MEMBERS = 5
-        private val ROOM_ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    }
-
-    private fun generateRoomId(): String {
-        return (1..6).map { ROOM_ID_CHARS.random() }.joinToString("")
+        const val MAX_MEMBERS = 10
     }
 
     // ── Create Room ─────────────────────────────────────────────────
@@ -39,38 +41,24 @@ class WatchPartyRepository {
         episodeId: String?,
         episodeName: String?
     ): String {
-        val roomId = generateRoomId()
-        val now = System.currentTimeMillis()
-
-        val roomData = mapOf(
-            "roomId" to roomId,
-            "hostId" to hostId,
-            "hostName" to hostName,
-            "movieSlug" to movieSlug,
-            "movieTitle" to movieTitle,
-            "moviePosterUrl" to moviePosterUrl,
-            "episodeId" to (episodeId ?: ""),
-            "episodeName" to (episodeName ?: ""),
-            "playbackState" to "paused",
-            "currentTimeSec" to 0.0,
-            "playStartedAt" to 0,
-            "lastUpdated" to ServerValue.TIMESTAMP,
-            "createdAt" to now,
-            "maxMembers" to MAX_MEMBERS
+        val idToken = requireIdToken()
+        val response = api.createRoom(
+            authorization = "Bearer $idToken",
+            request = CreateWatchPartyRoomRequest(
+                movieSlug = movieSlug,
+                movieTitle = movieTitle,
+                moviePosterUrl = moviePosterUrl,
+                episodeId = episodeId,
+                episodeName = episodeName
+            )
         )
 
-        val roomRef = rootRef.child(roomId)
-        roomRef.setValue(roomData).await()
+        if (!response.isSuccessful) {
+            throw Exception(response.functionErrorMessage("Không thể tạo phòng"))
+        }
 
-        // Add host as first member
-        val member = mapOf(
-            "uid" to hostId,
-            "displayName" to hostName,
-            "photoUrl" to hostPhotoUrl
-        )
-        roomRef.child("members").child(hostId).setValue(member).await()
-
-        return roomId
+        return response.body()?.roomId?.takeIf { it.isNotBlank() }
+            ?: throw Exception("Không nhận được mã phòng")
     }
 
     // ── Join Room ───────────────────────────────────────────────────
@@ -81,49 +69,40 @@ class WatchPartyRepository {
         displayName: String,
         photoUrl: String
     ): Result<WatchPartyRoom> {
-        val roomRef = rootRef.child(roomId)
-        val snapshot = roomRef.get().await()
+        return try {
+            val normalizedRoomId = roomId.uppercase().trim()
+            val idToken = requireIdToken()
+            val response = api.joinRoom(
+                authorization = "Bearer $idToken",
+                request = JoinWatchPartyRoomRequest(roomId = normalizedRoomId)
+            )
 
-        if (!snapshot.exists()) {
-            return Result.failure(Exception("Phòng không tồn tại"))
+            if (!response.isSuccessful) {
+                return Result.failure(Exception(response.functionErrorMessage("Không thể tham gia phòng")))
+            }
+
+            val snapshot = rootRef.child(normalizedRoomId).get().await()
+            if (!snapshot.exists()) {
+                Result.failure(Exception("Phòng không tồn tại"))
+            } else {
+                Result.success(snapshotToRoom(snapshot))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-
-        // Check member count
-        val membersSnapshot = snapshot.child("members")
-        val maxMembers = snapshot.child("maxMembers").getValue(Int::class.java) ?: MAX_MEMBERS
-
-        if (membersSnapshot.childrenCount >= maxMembers && !membersSnapshot.hasChild(uid)) {
-            return Result.failure(Exception("Phòng đã đầy ($maxMembers/$maxMembers người)"))
-        }
-
-        // Add member
-        val member = mapOf(
-            "uid" to uid,
-            "displayName" to displayName,
-            "photoUrl" to photoUrl
-        )
-        roomRef.child("members").child(uid).setValue(member).await()
-
-        val room = snapshotToRoom(snapshot)
-        return Result.success(room)
     }
 
     // ── Leave Room ──────────────────────────────────────────────────
 
     suspend fun leaveRoom(roomId: String, uid: String) {
-        val roomRef = rootRef.child(roomId)
-        val snapshot = roomRef.get().await()
-
-        if (!snapshot.exists()) return
-
-        val hostId = snapshot.child("hostId").getValue(String::class.java)
-
-        if (uid == hostId) {
-            // Host left → delete entire room
-            roomRef.removeValue().await()
-        } else {
-            // Guest left → remove member
-            roomRef.child("members").child(uid).removeValue().await()
+        if (roomId.isBlank()) return
+        val idToken = requireIdToken()
+        val response = api.leaveRoom(
+            authorization = "Bearer $idToken",
+            request = LeaveWatchPartyRoomRequest(roomId = roomId.uppercase().trim())
+        )
+        if (!response.isSuccessful) {
+            throw Exception(response.functionErrorMessage("Không thể rời phòng"))
         }
     }
 
@@ -319,5 +298,21 @@ class WatchPartyRepository {
         val ref = db.getReference(".info/serverTimeOffset")
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
+    }
+
+    private suspend fun requireIdToken(): String {
+        val user = auth.currentUser ?: throw Exception("Vui lòng đăng nhập để sử dụng xem chung")
+        return user.getIdToken(false).await().token
+            ?: throw Exception("Không lấy được phiên đăng nhập")
+    }
+
+    private fun retrofit2.Response<*>.functionErrorMessage(fallback: String): String {
+        val bodyMessage = runCatching {
+            errorBody()?.string()
+                ?.substringAfter("\"error\":\"", "")
+                ?.substringBefore("\"")
+                ?.takeIf { it.isNotBlank() }
+        }.getOrNull()
+        return bodyMessage ?: message().takeIf { it.isNotBlank() } ?: fallback
     }
 }

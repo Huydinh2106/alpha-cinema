@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 const db = admin.firestore();
+const rtdb = admin.database();
 
 const REGION = "asia-southeast1";
 const BASE_URL = "https://phimapi.com";
@@ -573,7 +574,35 @@ const MOMO_APP_PUBLIC_KEY = [
   "K+JRRq2w8PVmcbcvTr/adW4EL2yc1qk9Ec4HtiDhtSYd6/ov8xLVkKAQjLVt7Ex3/agRPfPrNwIDAQAB",
   "-----END PUBLIC KEY-----",
 ].join("\n");
-const MOMO_PAID_PLANS = new Set(["basic", "couple", "premium"]);
+
+type PaidPlanId = "basic" | "couple" | "premium";
+
+type PlanCatalogEntry = {
+  amount: number;
+  durationMonths: number;
+  watchPartyMaxMembers: number;
+};
+
+const PLAN_CATALOG: Record<PaidPlanId, PlanCatalogEntry> = {
+  basic: {
+    amount: 29000,
+    durationMonths: 1,
+    watchPartyMaxMembers: 0,
+  },
+  couple: {
+    amount: 59000,
+    durationMonths: 1,
+    watchPartyMaxMembers: 2,
+  },
+  premium: {
+    amount: 99000,
+    durationMonths: 1,
+    watchPartyMaxMembers: 10,
+  },
+};
+
+const MOMO_PAID_PLANS = new Set(Object.keys(PLAN_CATALOG));
+const WATCH_PARTY_ROOM_ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 type MomoCreatePaymentBody = {
   amount?: number | string;
@@ -592,7 +621,24 @@ type MomoOrderDoc = {
   uid: string;
   plan: string;
   amount: number;
+  durationMonths?: number;
   orderInfo: string;
+};
+
+type CreateWatchPartyRoomBody = {
+  movieSlug?: string;
+  movieTitle?: string;
+  moviePosterUrl?: string;
+  episodeId?: string | null;
+  episodeName?: string | null;
+};
+
+type JoinWatchPartyRoomBody = {
+  roomId?: string;
+};
+
+type LeaveWatchPartyRoomBody = {
+  roomId?: string;
 };
 
 function valueAsString(value: unknown): string {
@@ -602,6 +648,12 @@ function valueAsString(value: unknown): string {
 function normalizeMomoPlan(plan: unknown): string | null {
   const normalized = valueAsString(plan).trim().toLowerCase();
   return MOMO_PAID_PLANS.has(normalized) ? normalized : null;
+}
+
+function getPlanCatalogEntry(plan: string): PlanCatalogEntry | null {
+  return Object.prototype.hasOwnProperty.call(PLAN_CATALOG, plan) ?
+    PLAN_CATALOG[plan as PaidPlanId] :
+    null;
 }
 
 function getBearerToken(authorizationHeader: string | undefined): string | null {
@@ -762,6 +814,335 @@ function getSubscriptionExpiry(durationMonths = 1): admin.firestore.Timestamp {
   return admin.firestore.Timestamp.fromDate(expiresAt);
 }
 
+function getOrderDurationMonths(order: MomoOrderDoc): number {
+  return order.durationMonths ??
+    getPlanCatalogEntry(order.plan)?.durationMonths ??
+    1;
+}
+
+function timestampToMillis(value: unknown): number | null {
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toMillis();
+  }
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  if (typeof value === "object" && value !== null) {
+    const timestampLike = value as { toMillis?: () => number };
+    if (typeof timestampLike.toMillis === "function") {
+      const millis = timestampLike.toMillis();
+      return Number.isFinite(millis) ? millis : null;
+    }
+  }
+  return null;
+}
+
+function activePaidPlanFromProfile(
+  profileData: Record<string, unknown>
+): PaidPlanId | null {
+  const plan = normalizeMomoPlan(profileData.subscriptionPlan);
+  const status = valueAsString(profileData.subscriptionStatus)
+    .trim()
+    .toLowerCase();
+  const expiresAtMillis = timestampToMillis(profileData.subscriptionExpiresAt);
+  if (!plan || status !== "active" || !expiresAtMillis ||
+      expiresAtMillis <= Date.now()) {
+    return null;
+  }
+  return plan as PaidPlanId;
+}
+
+function watchPartyMaxMembersForProfile(
+  profileData: Record<string, unknown>
+): number {
+  const activePlan = activePaidPlanFromProfile(profileData);
+  if (!activePlan) {
+    return 0;
+  }
+  return getPlanCatalogEntry(activePlan)?.watchPartyMaxMembers ?? 0;
+}
+
+async function verifyFirebaseAuthHeader(
+  authorizationHeader: string | string[] | undefined
+): Promise<admin.auth.DecodedIdToken | null> {
+  const header = Array.isArray(authorizationHeader) ?
+    authorizationHeader[0] :
+    authorizationHeader;
+  const idToken = getBearerToken(header);
+  if (!idToken) {
+    return null;
+  }
+  try {
+    return await admin.auth().verifyIdToken(idToken);
+  } catch (error) {
+    logger.warn("Invalid Firebase auth token", error);
+    return null;
+  }
+}
+
+function normalizeWatchPartyRoomId(roomId: unknown): string | null {
+  const normalized = valueAsString(roomId).trim().toUpperCase();
+  return /^[A-Z0-9]{6}$/.test(normalized) ? normalized : null;
+}
+
+function generateWatchPartyRoomId(): string {
+  return Array.from({length: 6}, () =>
+    WATCH_PARTY_ROOM_ID_CHARS[
+      Math.floor(Math.random() * WATCH_PARTY_ROOM_ID_CHARS.length)
+    ]
+  ).join("");
+}
+
+async function createUniqueWatchPartyRoomId(): Promise<string> {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const roomId = generateWatchPartyRoomId();
+    const snapshot = await rtdb.ref(`watchParty/${roomId}`).get();
+    if (!snapshot.exists()) {
+      return roomId;
+    }
+  }
+  throw new Error("Unable to generate unique watch party room ID");
+}
+
+function displayNameForMember(
+  decodedToken: admin.auth.DecodedIdToken,
+  profileData: Record<string, unknown>
+): string {
+  return valueAsString(profileData.displayName).trim() ||
+    valueAsString(decodedToken.name).trim() ||
+    "Người dùng";
+}
+
+function photoUrlForMember(
+  decodedToken: admin.auth.DecodedIdToken,
+  profileData: Record<string, unknown>
+): string {
+  return valueAsString(profileData.photoUrl).trim() ||
+    valueAsString(decodedToken.picture).trim();
+}
+
+export const createWatchPartyRoom = onRequest(
+  {cors: true, region: REGION, invoker: "public"},
+  async (req, res) => {
+    try {
+      if (req.method !== "POST") {
+        res.status(405).json({error: "Method Not Allowed"});
+        return;
+      }
+
+      const decodedToken = await verifyFirebaseAuthHeader(
+        req.headers.authorization
+      );
+      if (!decodedToken) {
+        res.status(401).json({error: "Invalid Firebase auth token"});
+        return;
+      }
+
+      const userSnapshot = await db.collection("users")
+        .doc(decodedToken.uid)
+        .get();
+      const profileData =
+        (userSnapshot.data() ?? {}) as Record<string, unknown>;
+      const maxMembers = watchPartyMaxMembersForProfile(profileData);
+      if (maxMembers <= 0) {
+        res.status(403).json({
+          error: "Gói Couple hoặc Premium mới có thể tạo phòng xem chung",
+        });
+        return;
+      }
+
+      const body = req.body as CreateWatchPartyRoomBody;
+      const roomId = await createUniqueWatchPartyRoomId();
+      const now = Date.now();
+      const hostName = displayNameForMember(decodedToken, profileData);
+      const hostPhotoUrl = photoUrlForMember(decodedToken, profileData);
+      const roomRef = rtdb.ref(`watchParty/${roomId}`);
+      await roomRef.set({
+        roomId,
+        hostId: decodedToken.uid,
+        hostName,
+        movieSlug: valueAsString(body.movieSlug).trim(),
+        movieTitle: valueAsString(body.movieTitle).trim(),
+        moviePosterUrl: valueAsString(body.moviePosterUrl).trim(),
+        episodeId: valueAsString(body.episodeId).trim(),
+        episodeName: valueAsString(body.episodeName).trim(),
+        playbackState: "paused",
+        currentTimeSec: 0,
+        playStartedAt: 0,
+        lastUpdated: admin.database.ServerValue.TIMESTAMP,
+        createdAt: now,
+        maxMembers,
+        members: {
+          [decodedToken.uid]: {
+            uid: decodedToken.uid,
+            displayName: hostName,
+            photoUrl: hostPhotoUrl,
+          },
+        },
+      });
+
+      res.status(200).json({
+        roomId,
+        maxMembers,
+        message: "Created",
+      });
+    } catch (error) {
+      logger.error("Error in createWatchPartyRoom", error);
+      res.status(500).json({error: "Internal Server Error"});
+    }
+  }
+);
+
+export const joinWatchPartyRoom = onRequest(
+  {cors: true, region: REGION, invoker: "public"},
+  async (req, res) => {
+    try {
+      if (req.method !== "POST") {
+        res.status(405).json({error: "Method Not Allowed"});
+        return;
+      }
+
+      const decodedToken = await verifyFirebaseAuthHeader(
+        req.headers.authorization
+      );
+      if (!decodedToken) {
+        res.status(401).json({error: "Invalid Firebase auth token"});
+        return;
+      }
+
+      const body = req.body as JoinWatchPartyRoomBody;
+      const roomId = normalizeWatchPartyRoomId(body.roomId);
+      if (!roomId) {
+        res.status(400).json({error: "Invalid room ID"});
+        return;
+      }
+
+      const roomRef = rtdb.ref(`watchParty/${roomId}`);
+      const roomSnapshot = await roomRef.get();
+      if (!roomSnapshot.exists()) {
+        res.status(404).json({error: "Phòng không tồn tại"});
+        return;
+      }
+
+      const maxMembers =
+        Number(roomSnapshot.child("maxMembers").val()) || 2;
+      const userSnapshot = await db.collection("users")
+        .doc(decodedToken.uid)
+        .get();
+      const profileData =
+        (userSnapshot.data() ?? {}) as Record<string, unknown>;
+      const member = {
+        uid: decodedToken.uid,
+        displayName: displayNameForMember(decodedToken, profileData),
+        photoUrl: photoUrlForMember(decodedToken, profileData),
+      };
+
+      let roomFull = false;
+      let roomMissing = false;
+      const transactionResult = await roomRef.transaction(
+        (currentRoom) => {
+          if (!currentRoom || typeof currentRoom !== "object") {
+            roomMissing = true;
+            return;
+          }
+          const room = currentRoom as Record<string, unknown>;
+          const currentMembers = room.members;
+          const members = currentMembers &&
+            typeof currentMembers === "object" ?
+            currentMembers as Record<string, unknown> :
+            {};
+          if (Object.prototype.hasOwnProperty.call(members, decodedToken.uid)) {
+            return room;
+          }
+          if (Object.keys(members).length >= maxMembers) {
+            roomFull = true;
+            return;
+          }
+          return {
+            ...room,
+            members: {
+              ...members,
+              [decodedToken.uid]: member,
+            },
+          };
+        },
+        undefined,
+        false
+      );
+
+      if (!transactionResult.committed && roomMissing) {
+        res.status(404).json({error: "Phòng không tồn tại"});
+        return;
+      }
+      if (!transactionResult.committed && roomFull) {
+        res.status(409).json({
+          error: `Phòng đã đầy (${maxMembers}/${maxMembers} người)`,
+        });
+        return;
+      }
+      if (!transactionResult.committed) {
+        res.status(409).json({error: "Không thể tham gia phòng"});
+        return;
+      }
+
+      res.status(200).json({
+        roomId,
+        maxMembers,
+        message: "Joined",
+      });
+    } catch (error) {
+      logger.error("Error in joinWatchPartyRoom", error);
+      res.status(500).json({error: "Internal Server Error"});
+    }
+  }
+);
+
+export const leaveWatchPartyRoom = onRequest(
+  {cors: true, region: REGION, invoker: "public"},
+  async (req, res) => {
+    try {
+      if (req.method !== "POST") {
+        res.status(405).json({error: "Method Not Allowed"});
+        return;
+      }
+
+      const decodedToken = await verifyFirebaseAuthHeader(
+        req.headers.authorization
+      );
+      if (!decodedToken) {
+        res.status(401).json({error: "Invalid Firebase auth token"});
+        return;
+      }
+
+      const body = req.body as LeaveWatchPartyRoomBody;
+      const roomId = normalizeWatchPartyRoomId(body.roomId);
+      if (!roomId) {
+        res.status(400).json({error: "Invalid room ID"});
+        return;
+      }
+
+      const roomRef = rtdb.ref(`watchParty/${roomId}`);
+      const roomSnapshot = await roomRef.get();
+      if (!roomSnapshot.exists()) {
+        res.status(200).json({roomId, maxMembers: null, message: "Left"});
+        return;
+      }
+
+      const hostId = valueAsString(roomSnapshot.child("hostId").val());
+      if (hostId === decodedToken.uid) {
+        await roomRef.remove();
+      } else {
+        await roomRef.child("members").child(decodedToken.uid).remove();
+      }
+
+      res.status(200).json({roomId, maxMembers: null, message: "Left"});
+    } catch (error) {
+      logger.error("Error in leaveWatchPartyRoom", error);
+      res.status(500).json({error: "Internal Server Error"});
+    }
+  }
+);
+
 export const createMomoPayment = onRequest(
   {cors: true, region: REGION, invoker: "public"},
   async (req, res) => {
@@ -789,12 +1170,19 @@ export const createMomoPayment = onRequest(
       const {amount, orderInfo, plan} = req.body as MomoCreatePaymentBody;
       const numericAmount = Number(amount);
       const normalizedPlan = normalizeMomoPlan(plan);
+      const planEntry = normalizedPlan ?
+        getPlanCatalogEntry(normalizedPlan) :
+        null;
       if (!Number.isFinite(numericAmount) || numericAmount <= 0 || !orderInfo) {
         res.status(400).json({error: "Missing or invalid amount/orderInfo"});
         return;
       }
-      if (!normalizedPlan) {
+      if (!normalizedPlan || !planEntry) {
         res.status(400).json({error: "Invalid subscription plan"});
+        return;
+      }
+      if (numericAmount !== planEntry.amount) {
+        res.status(400).json({error: "Invalid subscription plan amount"});
         return;
       }
 
@@ -811,6 +1199,7 @@ export const createMomoPayment = onRequest(
         uid: decodedToken.uid,
         plan: normalizedPlan,
         amount: numericAmount,
+        durationMonths: planEntry.durationMonths,
         orderInfo,
         status: "pending",
         provider: "momo",
@@ -928,13 +1317,20 @@ export const processMomoAppPayment = onRequest(
       const normalizedOrderId = normalizeMomoAppOrderId(orderId);
       const momoToken = valueAsString(token).trim();
       const customerNumber = valueAsString(phoneNumber).trim();
+      const planEntry = normalizedPlan ?
+        getPlanCatalogEntry(normalizedPlan) :
+        null;
 
       if (!Number.isFinite(numericAmount) || numericAmount <= 0 || !orderInfo) {
         res.status(400).json({error: "Missing or invalid amount/orderInfo"});
         return;
       }
-      if (!normalizedPlan) {
+      if (!normalizedPlan || !planEntry) {
         res.status(400).json({error: "Invalid subscription plan"});
+        return;
+      }
+      if (numericAmount !== planEntry.amount) {
+        res.status(400).json({error: "Invalid subscription plan amount"});
         return;
       }
       if (!normalizedOrderId || !momoToken || !customerNumber) {
@@ -947,6 +1343,7 @@ export const processMomoAppPayment = onRequest(
         uid: decodedToken.uid,
         plan: normalizedPlan,
         amount: numericAmount,
+        durationMonths: planEntry.durationMonths,
         orderInfo,
         status: "processing",
         provider: "momo",
@@ -1166,7 +1563,9 @@ export const processMomoAppPayment = onRequest(
           subscriptionPlan: order.plan,
           subscriptionStatus: "active",
           subscriptionStartedAt,
-          subscriptionExpiresAt: getSubscriptionExpiry(),
+          subscriptionExpiresAt: getSubscriptionExpiry(
+            getOrderDurationMonths(order)
+          ),
           subscriptionPaymentMethod: "MoMo",
           subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1253,7 +1652,9 @@ export const momoIpn = onRequest(
             subscriptionPlan: order.plan,
             subscriptionStatus: "active",
             subscriptionStartedAt,
-            subscriptionExpiresAt: getSubscriptionExpiry(),
+            subscriptionExpiresAt: getSubscriptionExpiry(
+              getOrderDurationMonths(order)
+            ),
             subscriptionPaymentMethod: "MoMo",
             subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
