@@ -42,6 +42,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -347,6 +355,9 @@ fun WatchPartyScreen(
         var showBrightnessIndicator by remember { mutableStateOf(false) }
         var visibleChats by remember { mutableStateOf<List<WatchPartyChatMessage>>(emptyList()) }
         val prevMsgCount = remember { mutableStateOf(chatMessages.size) }
+        var showGuestControls by remember { mutableStateOf(true) }
+        var controlsTrigger by remember { mutableStateOf(0) }
+
         LaunchedEffect(showBrightnessIndicator) {
             if (showBrightnessIndicator) { delay(1500); showBrightnessIndicator = false }
         }
@@ -358,6 +369,12 @@ fun WatchPartyScreen(
                 delay(4000)
                 visibleChats = visibleChats.filterNot { it in newMsgs }
             } else { prevMsgCount.value = chatMessages.size }
+        }
+        LaunchedEffect(controlsTrigger, showGuestControls) {
+            if (showGuestControls) {
+                delay(3500)
+                showGuestControls = false
+            }
         }
         val overlayAlpha = (1f - brightness).coerceIn(0f, 0.85f)
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -398,6 +415,16 @@ fun WatchPartyScreen(
                         if (isHost && episodes.size > 1) {
                             epBtn?.visibility = android.view.View.VISIBLE
                             epBtn?.setOnClickListener { showEpisodeDialog = true }
+                        }
+
+                        if (!isHost) {
+                            isClickable = true
+                            setOnClickListener {
+                                showGuestControls = !showGuestControls
+                                if (showGuestControls) {
+                                    controlsTrigger++
+                                }
+                            }
                         }
                     }
                 },
@@ -469,12 +496,55 @@ fun WatchPartyScreen(
                 }
             }
             // Guest overlays
-            if (!isHost) {
-                val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
-                Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
-                IconButton(onClick = { toggleFullscreen() }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f))) {
-                    Icon(Icons.Rounded.FullscreenExit, "Thu nhỏ", tint = Color.White)
+            AnimatedVisibility(
+                visible = !isHost && showGuestControls,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
+                    Text(
+                        text = "${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 16.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { toggleMicWithPermission() },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isMicMuted) Color.Red.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.4f))
+                        ) {
+                            Icon(
+                                imageVector = if (isMicMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                                contentDescription = "Mic",
+                                tint = if (isMicMuted) Color.White else Color(0xFFF6E29A)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { toggleFullscreen() },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.4f))
+                        ) {
+                            Icon(Icons.Rounded.FullscreenExit, "Thu nhỏ", tint = Color.White)
+                        }
+                    }
                 }
             }
 
@@ -969,14 +1039,7 @@ private fun MembersList(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if (canAdjustVolume) {
-                            Text(
-                                text = "$volume%",
-                                color = Color.White.copy(alpha = 0.38f),
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1
-                            )
-                        }
+
                     }
 
                     if (showVolumePopup && canAdjustVolume) {
@@ -989,6 +1052,93 @@ private fun MembersList(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CustomVolumeSlider(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        val icon = when {
+            value <= 0 -> Icons.Rounded.VolumeOff
+            value < 33 -> Icons.Rounded.VolumeDown
+            else -> Icons.Rounded.VolumeUp
+        }
+
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.size(22.dp)
+        )
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .height(32.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val progress = (offset.x / size.width).coerceIn(0f, 1f)
+                        onValueChange((progress * 100).toInt())
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        val width = size.width.toFloat()
+                        if (width > 0f) {
+                            val newProgress = ((value / 100f) + (dragAmount.x / width)).coerceIn(0f, 1f)
+                            onValueChange((newProgress * 100).toInt())
+                        }
+                    }
+                }
+        ) {
+            val width = maxWidth
+            val progressWidth = width * (value / 100f)
+
+            // Track background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.White.copy(alpha = 0.12f))
+            ) {
+                // Active track
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(progressWidth)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFFF6E29A), Color(0xFFD4A843))
+                            )
+                        )
+                )
+            }
+
+            // Thumb
+            val thumbSize = 14.dp
+            val offset = (progressWidth - (thumbSize / 2)).coerceAtLeast(0.dp).coerceAtMost(width - thumbSize)
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = offset)
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF6E29A))
+                    .border(2.dp, Color(0xFF181818), CircleShape)
+            )
         }
     }
 }
@@ -1010,48 +1160,17 @@ private fun MemberVolumeDialog(
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Âm lượng",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = member.displayName.ifBlank { "Người dùng" },
-                        color = Color.White.copy(alpha = 0.58f),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+            Text(
+                text = "Âm lượng",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
 
-                Text(
-                    text = "$volume%",
-                    color = Color.Black,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color(0xFFF6E29A))
-                        .padding(horizontal = 12.dp, vertical = 7.dp)
-                )
-            }
-
-            Slider(
-                value = volume.toFloat(),
-                onValueChange = { onVolumeChange(it.toInt()) },
-                valueRange = 0f..100f,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color(0xFFF6E29A),
-                    activeTrackColor = Color(0xFFF6E29A),
-                    inactiveTrackColor = Color.White.copy(alpha = 0.14f)
-                )
+            CustomVolumeSlider(
+                value = volume,
+                onValueChange = onVolumeChange,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
