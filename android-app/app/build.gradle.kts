@@ -76,7 +76,9 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui.text)
     implementation("androidx.compose.runtime:runtime")
-    
+    implementation("androidx.compose.material3:material3")
+    implementation("com.google.android.material:material:1.12.0")
+
     // ViewModel & LiveData ktx cho Coroutines
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
