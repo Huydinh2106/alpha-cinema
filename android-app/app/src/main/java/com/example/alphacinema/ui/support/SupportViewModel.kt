@@ -8,6 +8,7 @@ import com.example.alphacinema.data.model.SupportChatMemoryContext
 import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportChatMetadata
 import com.example.alphacinema.data.model.SupportChatReply
+import com.example.alphacinema.data.model.SupportChatSession
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.mergeWith
 import com.example.alphacinema.data.repository.SupportRepository
@@ -30,15 +31,26 @@ class SupportViewModel(
         settingsManager = SettingsManager.getInstance()
     )
 
-    private var currentSessionId = settingsManager.getSupportChatSessionId()
+    private val initialSessionId = settingsManager.getSupportChatSessionId()
         ?: UUID.randomUUID().toString()
+    private val initialMessages = settingsManager.getSupportChatMessages()
+        .filterNot { it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID }
+
+    private val _currentSessionId = MutableStateFlow(initialSessionId)
+    val currentSessionId: StateFlow<String> = _currentSessionId.asStateFlow()
+
     private var memorySnapshot = SupportChatMemoryContext()
 
-    private val _messages = MutableStateFlow(
-        settingsManager.getSupportChatMessages()
-            .filterNot { it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID }
-    )
+    private val _messages = MutableStateFlow(initialMessages)
     val messages: StateFlow<List<SupportChatMessage>> = _messages.asStateFlow()
+
+    private val _chatSessions = MutableStateFlow(
+        loadInitialChatSessions(
+            sessionId = initialSessionId,
+            messages = initialMessages
+        )
+    )
+    val chatSessions: StateFlow<List<SupportChatSession>> = _chatSessions.asStateFlow()
 
     init {
         memorySnapshot = buildMemoryContext(
@@ -50,9 +62,9 @@ class SupportViewModel(
 
     fun sendMessage(userInput: String) {
         val question = userInput.trim()
-        if (question.isBlank()) return
+        if (question.isBlank() || hasPendingResponse()) return
 
-        val previousMessages = _messages.value
+        val previousMessages = _messages.value.filterNot { it.sender == SupportMessageSender.LOADING }
         val userMessage = createMessage(
             text = question,
             sender = SupportMessageSender.USER
@@ -63,9 +75,10 @@ class SupportViewModel(
             text = "\u0110ang tr\u1ea3 l\u1eddi...",
             sender = SupportMessageSender.LOADING
         )
+        val requestSessionId = _currentSessionId.value
 
-        _messages.update { current ->
-            current + userMessage + loadingMessage
+        _messages.update {
+            previousMessages + userMessage + loadingMessage
         }
         persistConversation()
 
@@ -73,7 +86,7 @@ class SupportViewModel(
             val botReply = runCatching {
                 repository.askQuestion(
                     question = question,
-                    sessionId = currentSessionId,
+                    sessionId = requestSessionId,
                     history = conversationHistory,
                     memory = requestMemory,
                     includeChatHistory = conversationHistory.isNotEmpty()
@@ -81,11 +94,15 @@ class SupportViewModel(
             }.getOrElse {
                 SupportChatReply(
                     text = SupportRepository.FALLBACK_REPLY,
-                    sessionId = currentSessionId
+                    sessionId = requestSessionId
                 )
             }
 
-            currentSessionId = botReply.sessionId?.takeIf { it.isNotBlank() } ?: currentSessionId
+            val resolvedSessionId = botReply.sessionId?.takeIf { it.isNotBlank() } ?: requestSessionId
+            if (resolvedSessionId != requestSessionId) {
+                _chatSessions.update { sessions -> sessions.filterNot { it.id == requestSessionId } }
+            }
+            _currentSessionId.value = resolvedSessionId
             memorySnapshot = memorySnapshot.mergeWith(botReply.memory)
 
             val botMessage = loadingMessage.copy(
@@ -96,8 +113,21 @@ class SupportViewModel(
             )
 
             _messages.update { current ->
-                current.map { message ->
-                    if (message.id == loadingMessage.id) botMessage else message
+                var replacedLoadingMessage = false
+                val resolvedMessages = current.mapNotNull { message ->
+                    when {
+                        message.id == loadingMessage.id -> {
+                            replacedLoadingMessage = true
+                            botMessage
+                        }
+                        message.sender == SupportMessageSender.LOADING -> null
+                        else -> message
+                    }
+                }
+                if (replacedLoadingMessage) {
+                    resolvedMessages
+                } else {
+                    resolvedMessages + botMessage
                 }
             }
             persistConversation()
@@ -105,10 +135,25 @@ class SupportViewModel(
     }
 
     fun startNewConversation() {
-        currentSessionId = UUID.randomUUID().toString()
+        _currentSessionId.value = UUID.randomUUID().toString()
         memorySnapshot = SupportChatMemoryContext()
         _messages.value = emptyList()
         persistConversation()
+    }
+
+    fun openConversation(sessionId: String) {
+        val session = _chatSessions.value.firstOrNull { it.id == sessionId } ?: return
+        val restoredMessages = session.messages.filterNot {
+            it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID
+        }
+
+        _currentSessionId.value = session.id
+        _messages.value = restoredMessages
+        memorySnapshot = buildMemoryContext(
+            messages = restoredMessages,
+            baseMemory = SupportChatMemoryContext()
+        )
+        saveActiveConversation(restoredMessages)
     }
 
     private fun createMessage(
@@ -201,13 +246,93 @@ class SupportViewModel(
         }
     }
 
+    private fun hasPendingResponse(): Boolean {
+        return _messages.value.any { it.sender == SupportMessageSender.LOADING }
+    }
+
     private fun persistConversation() {
-        settingsManager.saveSupportChatConversation(
-            sessionId = currentSessionId,
-            messages = _messages.value.filterNot {
-                it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID
+        val messages = _messages.value.filterNot {
+            it.sender == SupportMessageSender.LOADING || it.id == WELCOME_MESSAGE_ID
+        }
+        saveActiveConversation(messages)
+
+        if (messages.isNotEmpty()) {
+            val updatedSession = createSession(
+                sessionId = _currentSessionId.value,
+                messages = messages,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+            _chatSessions.update { sessions ->
+                (listOf(updatedSession) + sessions.filterNot { it.id == updatedSession.id })
+                    .filter { it.messages.isNotEmpty() }
+                    .sortedByDescending { it.updatedAtMillis }
+                    .take(MAX_SAVED_SESSIONS)
             }
+        }
+
+        settingsManager.saveSupportChatSessions(_chatSessions.value)
+    }
+
+    private fun saveActiveConversation(messages: List<SupportChatMessage>) {
+        settingsManager.saveSupportChatConversation(
+            sessionId = _currentSessionId.value,
+            messages = messages
         )
+    }
+
+    private fun loadInitialChatSessions(
+        sessionId: String,
+        messages: List<SupportChatMessage>
+    ): List<SupportChatSession> {
+        val storedSessions = settingsManager.getSupportChatSessions()
+            .filter { it.messages.isNotEmpty() }
+        if (messages.isEmpty()) {
+            return storedSessions
+                .sortedByDescending { it.updatedAtMillis }
+                .take(MAX_SAVED_SESSIONS)
+        }
+
+        val activeSession = createSession(
+            sessionId = sessionId,
+            messages = messages,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+
+        return (listOf(activeSession) + storedSessions.filterNot { it.id == sessionId })
+            .sortedByDescending { it.updatedAtMillis }
+            .take(MAX_SAVED_SESSIONS)
+    }
+
+    private fun createSession(
+        sessionId: String,
+        messages: List<SupportChatMessage>,
+        updatedAtMillis: Long
+    ): SupportChatSession {
+        return SupportChatSession(
+            id = sessionId,
+            title = conversationTitle(messages),
+            updatedAtMillis = updatedAtMillis,
+            messages = messages
+        )
+    }
+
+    private fun conversationTitle(messages: List<SupportChatMessage>): String {
+        return messages
+            .firstOrNull { it.sender == SupportMessageSender.USER }
+            ?.text
+            ?.cleanTitle()
+            ?: messages
+                .firstOrNull { it.sender == SupportMessageSender.BOT }
+                ?.text
+                ?.cleanTitle()
+            ?: "Cuộc trò chuyện mới"
+    }
+
+    private fun String.cleanTitle(): String {
+        return trim()
+            .replace(Regex("\\s+"), " ")
+            .take(MAX_SESSION_TITLE_CHARS)
+            .ifBlank { "Cuộc trò chuyện mới" }
     }
 
     companion object {
@@ -218,6 +343,8 @@ class SupportViewModel(
         private const val MAX_MEMORY_SUMMARY_CHARS = 500
         private const val MAX_MEMORY_MOVIES = 5
         private const val MAX_MOVIE_CONTEXT_ITEMS = 5
+        private const val MAX_SAVED_SESSIONS = 30
+        private const val MAX_SESSION_TITLE_CHARS = 56
         private const val WELCOME_MESSAGE_ID = "welcome"
 
         private fun currentTimeLabel(): String {

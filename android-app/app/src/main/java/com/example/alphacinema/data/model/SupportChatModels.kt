@@ -182,6 +182,13 @@ data class SupportChatMessage(
     val metadata: SupportChatMetadata? = null
 )
 
+data class SupportChatSession(
+    val id: String,
+    val title: String,
+    val updatedAtMillis: Long,
+    val messages: List<SupportChatMessage> = emptyList()
+)
+
 data class SupportChatReply(
     val text: String,
     val metadata: SupportChatMetadata? = null,
