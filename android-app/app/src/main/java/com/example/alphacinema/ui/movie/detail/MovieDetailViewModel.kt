@@ -21,6 +21,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.Normalizer
 import com.example.alphacinema.data.local.SettingsManager
@@ -80,37 +81,49 @@ class MovieDetailViewModel : ViewModel() {
         activeUserId = userId
         
         viewModelScope.launch {
-            firestoreRepository.getMovieStats(slug).collect {
-                _movieStats.value = it
-            }
+            firestoreRepository.getMovieStats(slug)
+                .catch { e -> Log.e(TAG, "Error collecting movie stats", e) }
+                .collect {
+                    _movieStats.value = it
+                }
         }
         viewModelScope.launch {
-            firestoreRepository.getComments(slug).collect {
-                _comments.value = it
-            }
+            firestoreRepository.getComments(slug)
+                .catch { e -> Log.e(TAG, "Error collecting comments", e) }
+                .collect {
+                    _comments.value = it
+                }
         }
         if (userId != null) {
             viewModelScope.launch {
-                firestoreRepository.getFavorites(userId).collect { favorites ->
-                    _isFavorite.value = favorites.any { it.movieId == slug }
-                }
+                firestoreRepository.getFavorites(userId)
+                    .catch { e -> Log.e(TAG, "Error collecting favorites", e) }
+                    .collect { favorites ->
+                        _isFavorite.value = favorites.any { it.movieId == slug }
+                    }
             }
             viewModelScope.launch {
-                firestoreRepository.getUserRating(slug, userId).collect { rating ->
-                    _userRating.value = rating?.score
-                }
+                firestoreRepository.getUserRating(slug, userId)
+                    .catch { e -> Log.e(TAG, "Error collecting user rating", e) }
+                    .collect { rating ->
+                        _userRating.value = rating?.score
+                    }
             }
             playlistsJob?.cancel()
             playlistsJob = viewModelScope.launch {
-                firestoreRepository.getPlaylists(userId, isKidsMode).collect { playlists ->
-                    _playlists.value = playlists
-                }
+                firestoreRepository.getPlaylists(userId, isKidsMode)
+                    .catch { e -> Log.e(TAG, "Error collecting playlists", e) }
+                    .collect { playlists ->
+                        _playlists.value = playlists
+                    }
             }
             moviePlaylistIdsJob?.cancel()
             moviePlaylistIdsJob = viewModelScope.launch {
-                firestoreRepository.getPlaylistIdsForMovie(userId, slug, isKidsMode).collect { playlistIds ->
-                    _playlistIdsForCurrentMovie.value = playlistIds
-                }
+                firestoreRepository.getPlaylistIdsForMovie(userId, slug, isKidsMode)
+                    .catch { e -> Log.e(TAG, "Error collecting playlist IDs", e) }
+                    .collect { playlistIds ->
+                        _playlistIdsForCurrentMovie.value = playlistIds
+                    }
             }
         } else {
             _userRating.value = null

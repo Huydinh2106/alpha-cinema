@@ -116,6 +116,7 @@ import com.google.firebase.auth.UserProfileChangeRequest
 import com.example.alphacinema.util.formatFirestoreDate
 import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import com.example.alphacinema.data.api.EmailVerificationHelper
 import com.example.alphacinema.data.api.OtpVerifyResult
@@ -349,11 +350,21 @@ fun AccountScreen(
     val settingsManager = remember { SettingsManager.getInstance() }
     val isKidsModeEnabled by settingsManager.isKidsModeEnabled.collectAsState()
     val favoritesFlow = remember(currentUser?.uid) {
-        currentUser?.uid?.let(firestoreRepository::getFavorites) ?: flowOf(emptyList())
+        currentUser?.uid?.let { uid ->
+            firestoreRepository.getFavorites(uid).catch { e ->
+                android.util.Log.e("AccountScreen", "Error collecting favorites", e)
+                emit(emptyList())
+            }
+        } ?: flowOf(emptyList())
     }
     val favorites by favoritesFlow.collectAsState(initial = emptyList())
     val playlistsFlow = remember(currentUser?.uid, isKidsModeEnabled) {
-        currentUser?.uid?.let { uid -> firestoreRepository.getPlaylists(uid, isKidsModeEnabled) } ?: flowOf(emptyList())
+        currentUser?.uid?.let { uid ->
+            firestoreRepository.getPlaylists(uid, isKidsModeEnabled).catch { e ->
+                android.util.Log.e("AccountScreen", "Error collecting playlists", e)
+                emit(emptyList())
+            }
+        } ?: flowOf(emptyList())
     }
     val playlists by playlistsFlow.collectAsState(initial = emptyList())
 
@@ -2166,7 +2177,12 @@ fun AccountPlaylistsScreen(
     val canUsePlaylist = userProfile.activeEntitlements().playlist
 
     val playlistsFlow = remember(currentUser?.uid, isKidsModeEnabled) {
-        currentUser?.uid?.let { uid -> firestoreRepository.getPlaylists(uid, isKidsModeEnabled) } ?: flowOf(emptyList())
+        currentUser?.uid?.let { uid ->
+            firestoreRepository.getPlaylists(uid, isKidsModeEnabled).catch { e ->
+                android.util.Log.e("AccountPlaylistsScreen", "Error collecting playlists", e)
+                emit(emptyList())
+            }
+        } ?: flowOf(emptyList())
     }
     val playlists by playlistsFlow.collectAsState(initial = emptyList())
     val selectedPlaylistId = selectedPlaylist?.id
@@ -2174,7 +2190,10 @@ fun AccountPlaylistsScreen(
         val uid = currentUser?.uid
         val playlistId = selectedPlaylistId
         if (uid != null && !playlistId.isNullOrBlank()) {
-            firestoreRepository.getPlaylistItems(uid, playlistId, isKidsModeEnabled)
+            firestoreRepository.getPlaylistItems(uid, playlistId, isKidsModeEnabled).catch { e ->
+                android.util.Log.e("AccountPlaylistsScreen", "Error collecting playlist items", e)
+                emit(emptyList())
+            }
         } else {
             flowOf(emptyList())
         }
