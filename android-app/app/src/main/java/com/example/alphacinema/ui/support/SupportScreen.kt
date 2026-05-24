@@ -1081,14 +1081,20 @@ private fun ChatInputBar(
         }
 
         Surface(
-            color = Color(0xF0141E32),
+            color = Color.Transparent,
             shadowElevation = 12.dp,
             shape = RoundedCornerShape(28.dp),
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF1F1F1F), Color(0xFF242424))
+                    )
+                )
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.09f),
+                    color = Color.White.copy(alpha = 0.15f),
                     shape = RoundedCornerShape(28.dp)
                 )
         ) {

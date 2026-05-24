@@ -15,31 +15,32 @@
 
         <ImageButton
             android:id="@+id/exo_rew"
-            android:layout_width="54dp"
-            android:layout_height="54dp"
-            android:layout_marginEnd="32dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="40dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:scaleType="fitCenter"
-            android:padding="6dp"
+            android:padding="8dp"
             android:src="@drawable/ic_replay_10" />
 
         <ImageButton
             android:id="@+id/exo_play_pause"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:scaleType="fitCenter"
-            android:src="@drawable/exo_ic_play_circle_filled"
+            android:padding="8dp"
+            android:src="@drawable/exo_styled_controls_play"
             android:tint="@android:color/white" />
 
         <ImageButton
             android:id="@+id/exo_ffwd"
-            android:layout_width="54dp"
-            android:layout_height="54dp"
-            android:layout_marginStart="32dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginStart="40dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:scaleType="fitCenter"
-            android:padding="6dp"
+            android:padding="8dp"
             android:src="@drawable/ic_forward_10" />
     </LinearLayout>
 

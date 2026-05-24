@@ -1,6 +1,7 @@
 package com.example.alphacinema.ui.app
 
 import com.example.alphacinema.data.model.SubscriptionPlan
+import com.example.alphacinema.data.model.availableUpgradePlans
 import com.example.alphacinema.data.model.resolvePlanEntitlements
 import com.google.firebase.Timestamp
 import org.junit.Assert.assertFalse
@@ -71,5 +72,22 @@ class AdFreePlanTest {
         assertFalse(expired.adFree)
         assertFalse(inactive.playlist)
         assertFalse(missingExpiry.canCreateWatchParty)
+    }
+
+    @Test
+    fun availableUpgradePlansOnlyIncludeHigherPlans() {
+        assertEquals(
+            listOf(SubscriptionPlan.BASIC, SubscriptionPlan.COUPLE, SubscriptionPlan.PREMIUM),
+            availableUpgradePlans(null)
+        )
+        assertEquals(
+            listOf(SubscriptionPlan.COUPLE, SubscriptionPlan.PREMIUM),
+            availableUpgradePlans("basic")
+        )
+        assertEquals(
+            listOf(SubscriptionPlan.PREMIUM),
+            availableUpgradePlans(" couple ")
+        )
+        assertEquals(emptyList<SubscriptionPlan>(), availableUpgradePlans("premium"))
     }
 }

@@ -25,7 +25,7 @@ data class MovieTypeNavRoute(val type: String, val title: String) // type = "phi
 data object AdminNavRoute
 
 @Serializable
-data object PaymentNavRoute
+data class PaymentNavRoute(val currentPlan: String? = null)
 
 @Serializable
 data class WatchPartyNavRoute(val roomId: String)

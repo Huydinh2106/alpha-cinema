@@ -67,6 +67,22 @@ fun SubscriptionPlan.entitlements(): PlanEntitlements {
     }
 }
 
+fun availableUpgradePlans(currentPlan: String?): List<SubscriptionPlan> {
+    return when (SubscriptionPlan.from(currentPlan)) {
+        SubscriptionPlan.FREE -> listOf(
+            SubscriptionPlan.BASIC,
+            SubscriptionPlan.COUPLE,
+            SubscriptionPlan.PREMIUM
+        )
+        SubscriptionPlan.BASIC -> listOf(
+            SubscriptionPlan.COUPLE,
+            SubscriptionPlan.PREMIUM
+        )
+        SubscriptionPlan.COUPLE -> listOf(SubscriptionPlan.PREMIUM)
+        SubscriptionPlan.PREMIUM -> emptyList()
+    }
+}
+
 fun resolvePlanEntitlements(
     plan: String?,
     status: String?,

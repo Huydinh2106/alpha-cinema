@@ -32,6 +32,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,13 +64,16 @@ fun WatchPartyLobbySheet(
     isJoining: Boolean,
     error: String?,
     joinOnly: Boolean = false,
+    canCreateRoom: Boolean = true,
     maxMembers: Int = 2,
     onDismiss: () -> Unit,
     onCreateRoom: () -> Unit,
     onJoinRoom: (String) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var activeTab by remember { mutableStateOf(if (joinOnly) LobbyTab.JOIN else LobbyTab.CREATE) }
+    var activeTab by remember(joinOnly, canCreateRoom) {
+        mutableStateOf(if (joinOnly || !canCreateRoom) LobbyTab.JOIN else LobbyTab.CREATE)
+    }
     var roomIdInput by remember { mutableStateOf("") }
 
     ModalBottomSheet(
@@ -237,7 +245,7 @@ fun WatchPartyLobbySheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp),
-                        enabled = !isCreating,
+                        enabled = canCreateRoom && !isCreating,
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFF6E29A),
@@ -247,6 +255,8 @@ fun WatchPartyLobbySheet(
                     ) {
                         if (isCreating) {
                             LottieLoadingIndicator(size = 32.dp)
+                        } else if (!canCreateRoom) {
+                            Text("Tạo phòng cần gói Couple hoặc Premium", fontWeight = FontWeight.Bold)
                         } else {
                             Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -256,30 +266,68 @@ fun WatchPartyLobbySheet(
                 }
 
                 LobbyTab.JOIN -> {
-                    OutlinedTextField(
+                    val maxChar = 6
+                    BasicTextField(
                         value = roomIdInput,
-                        onValueChange = { roomIdInput = it.uppercase().take(6) },
+                        onValueChange = {
+                            val filtered = it
+                                .filter { char -> char.isLetterOrDigit() }
+                                .uppercase()
+                            if (filtered.length <= maxChar) {
+                                roomIdInput = filtered
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = ImeAction.Done
+                        ),
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("Mã phòng (6 ký tự)") },
-                        placeholder = { Text("VD: ABC123", color = Color.White.copy(alpha = 0.3f)) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedContainerColor = Color(0xFF1F1F1F),
-                            unfocusedContainerColor = Color(0xFF141414),
-                            focusedBorderColor = Color(0xFFF6E29A),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.12f),
-                            cursorColor = Color(0xFFF6E29A),
-                            focusedLabelColor = Color(0xFFF6E29A),
-                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f)
-                        ),
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(
-                            letterSpacing = 6.sp,
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        shape = RoundedCornerShape(14.dp)
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    repeat(maxChar) { index ->
+                                        val char = roomIdInput.getOrNull(index)?.toString() ?: ""
+                                        val isFocused = roomIdInput.length == index || (index == maxChar - 1 && roomIdInput.length == maxChar)
+                                        
+                                        Box(
+                                            modifier = Modifier
+                                                .size(46.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(Color(0xFF1F1F1F))
+                                                .border(
+                                                    width = 1.5.dp,
+                                                    color = if (isFocused) Color(0xFFF6E29A) 
+                                                            else Color.White.copy(alpha = 0.12f),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = char,
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(1.dp)
+                                        .graphicsLayer { alpha = 0f }
+                                ) {
+                                    innerTextField()
+                                }
+                            }
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))

@@ -3,7 +3,12 @@ import { onRequest } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 
-admin.initializeApp();
+const REALTIME_DATABASE_URL =
+  "https://alpha-cinema-39dfb-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+admin.initializeApp({
+  databaseURL: REALTIME_DATABASE_URL,
+});
 const db = admin.firestore();
 const rtdb = admin.database();
 

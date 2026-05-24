@@ -70,7 +70,7 @@ class WatchPartyRepository {
         photoUrl: String
     ): Result<WatchPartyRoom> {
         return try {
-            val normalizedRoomId = roomId.uppercase().trim()
+            val normalizedRoomId = normalizeRoomId(roomId)
             val idToken = requireIdToken()
             val response = api.joinRoom(
                 authorization = "Bearer $idToken",
@@ -78,18 +78,58 @@ class WatchPartyRepository {
             )
 
             if (!response.isSuccessful) {
+                if (response.code() == 404) {
+                    return joinRoomDirect(
+                        roomId = normalizedRoomId,
+                        uid = uid,
+                        displayName = displayName,
+                        photoUrl = photoUrl
+                    )
+                }
                 return Result.failure(Exception(response.functionErrorMessage("Không thể tham gia phòng")))
             }
 
-            val snapshot = rootRef.child(normalizedRoomId).get().await()
-            if (!snapshot.exists()) {
-                Result.failure(Exception("Phòng không tồn tại"))
-            } else {
-                Result.success(snapshotToRoom(snapshot))
-            }
+            val responseBody = response.body()
+            val joinedRoomId = responseBody?.roomId?.takeIf { it.isNotBlank() }
+                ?.let(::normalizeRoomId)
+                ?: normalizedRoomId
+            Result.success(
+                WatchPartyRoom(
+                    roomId = joinedRoomId,
+                    maxMembers = responseBody?.maxMembers ?: MAX_MEMBERS
+                )
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun joinRoomDirect(
+        roomId: String,
+        uid: String,
+        displayName: String,
+        photoUrl: String
+    ): Result<WatchPartyRoom> {
+        val roomRef = rootRef.child(roomId)
+        val snapshot = roomRef.get().await()
+        if (!snapshot.exists()) {
+            return Result.failure(Exception("Phòng không tồn tại"))
+        }
+
+        val membersSnapshot = snapshot.child("members")
+        val maxMembers = snapshot.child("maxMembers").getValue(Int::class.java) ?: MAX_MEMBERS
+        if (membersSnapshot.childrenCount >= maxMembers && !membersSnapshot.hasChild(uid)) {
+            return Result.failure(Exception("Phòng đã đầy ($maxMembers/$maxMembers người)"))
+        }
+
+        val member = mapOf(
+            "uid" to uid,
+            "displayName" to displayName,
+            "photoUrl" to photoUrl
+        )
+        roomRef.child("members").child(uid).setValue(member).await()
+
+        return Result.success(snapshotToRoom(snapshot))
     }
 
     // ── Leave Room ──────────────────────────────────────────────────
@@ -265,6 +305,13 @@ class WatchPartyRepository {
     }
 
     // ── Helper ──────────────────────────────────────────────────────
+
+    private fun normalizeRoomId(roomId: String): String {
+        return roomId
+            .filter { it.isLetterOrDigit() }
+            .uppercase()
+            .take(6)
+    }
 
     private fun snapshotToRoom(snapshot: DataSnapshot): WatchPartyRoom {
         return WatchPartyRoom(
