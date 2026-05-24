@@ -45,6 +45,7 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.storage.FirebaseStorage
+import com.example.alphacinema.data.model.activeEntitlements
 import com.example.alphacinema.util.formatFirestoreDate
 import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import kotlinx.coroutines.launch
@@ -109,7 +110,7 @@ fun ProfileSettingsScreen(
     } else {
         currentUser?.photoUrl?.toString() ?: userProfile?.photoUrl ?: cachedAvatar
     }
-    val plan = userProfile?.subscriptionPlan ?: "free"
+    val plan = userProfile.activeEntitlements().plan.id
     val subscriptionStartedDate = formatFirestoreDate(userProfile?.subscriptionStartedAt)
     val subscriptionExpiredDate = formatFirestoreDate(userProfile?.subscriptionExpiresAt)
 

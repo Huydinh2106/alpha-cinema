@@ -106,6 +106,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import com.example.alphacinema.data.model.PlaylistMovieItem
 import com.example.alphacinema.data.model.UserPlaylist
+import com.example.alphacinema.data.model.activeEntitlements
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -345,8 +346,8 @@ fun AccountScreen(
         currentUser?.uid?.let(firestoreRepository::getFavorites) ?: flowOf(emptyList())
     }
     val favorites by favoritesFlow.collectAsState(initial = emptyList())
-    val playlistsFlow = remember(currentUser?.uid) {
-        currentUser?.uid?.let(firestoreRepository::getPlaylists) ?: flowOf(emptyList())
+    val playlistsFlow = remember(currentUser?.uid, isKidsModeEnabled) {
+        currentUser?.uid?.let { uid -> firestoreRepository.getPlaylists(uid, isKidsModeEnabled) } ?: flowOf(emptyList())
     }
     val playlists by playlistsFlow.collectAsState(initial = emptyList())
 
@@ -362,11 +363,11 @@ fun AccountScreen(
     var activePanel by remember { mutableStateOf<AccountPanelType?>(null) }
     var selectedPlaylist by remember { mutableStateOf<UserPlaylist?>(null) }
     val selectedPlaylistId = selectedPlaylist?.id
-    val playlistItemsFlow = remember(currentUser?.uid, selectedPlaylistId) {
+    val playlistItemsFlow = remember(currentUser?.uid, selectedPlaylistId, isKidsModeEnabled) {
         val uid = currentUser?.uid
         val playlistId = selectedPlaylistId
         if (uid != null && !playlistId.isNullOrBlank()) {
-            firestoreRepository.getPlaylistItems(uid, playlistId)
+            firestoreRepository.getPlaylistItems(uid, playlistId, isKidsModeEnabled)
         } else {
             flowOf(emptyList())
         }
@@ -377,8 +378,16 @@ fun AccountScreen(
     var showCancelRenewDialog by remember { mutableStateOf(false) }
     var showLoginRequiredDialog by remember { mutableStateOf(false) }
     val isLoggedIn = currentUser != null
+    val planAccessReady = !isLoggedIn || loadedProfileUid == currentUser?.uid
+    val planEntitlements = userProfile.activeEntitlements()
     val profileStartedDate = formatFirestoreDate(userProfile?.subscriptionStartedAt)
     val profileExpiredDate = formatFirestoreDate(userProfile?.subscriptionExpiresAt)
+
+    LaunchedEffect(isKidsModeEnabled, planEntitlements.kidsMode, planAccessReady) {
+        if (planAccessReady && isKidsModeEnabled && !planEntitlements.kidsMode) {
+            settingsManager.setKidsMode(false)
+        }
+    }
 
     LaunchedEffect(activePanel, playlists, selectedPlaylistId) {
         if (activePanel != AccountPanelType.PLAYLISTS) {
@@ -395,11 +404,16 @@ fun AccountScreen(
         profileStartedDate,
         profileExpiredDate,
         membershipStartedDate,
-        membershipExpiredDate
+        membershipExpiredDate,
+        planEntitlements.plan
     ) {
         if (isLoggedIn) {
             buildDemoMembershipPlan(
-                currentPlan = userProfile?.subscriptionPlan ?: currentPlan,
+                currentPlan = if (loadedProfileUid == currentUser?.uid) {
+                    planEntitlements.plan.id
+                } else {
+                    currentPlan
+                },
                 expiredDate = profileExpiredDate ?: membershipExpiredDate,
                 startedDate = profileStartedDate ?: membershipStartedDate
             )
@@ -466,17 +480,39 @@ fun AccountScreen(
                 if (isLoggedIn) openPanel(AccountPanelType.MOVIE_LIBRARY) else showLoginRequiredDialog = true
             }
             AccountMenuAction.PLAYLISTS -> {
-                if (isLoggedIn) onOpenPlaylistsPage() else showLoginRequiredDialog = true
+                when {
+                    !isLoggedIn -> showLoginRequiredDialog = true
+                    !planAccessReady -> android.widget.Toast.makeText(
+                        context,
+                        "Đang tải thông tin gói",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    !planEntitlements.playlist -> android.widget.Toast.makeText(
+                        context,
+                        "Playlist cần gói Basic trở lên",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    else -> onOpenPlaylistsPage()
+                }
             }
             AccountMenuAction.FAVORITES -> openPanel(AccountPanelType.FAVORITES, requiresLogin = true)
             AccountMenuAction.POLICY -> openPanel(AccountPanelType.POLICY)
             AccountMenuAction.FEEDBACK -> openPanel(AccountPanelType.FEEDBACK)
             AccountMenuAction.ADMIN -> onOpenAdminPanel()
             AccountMenuAction.WATCH_TOGETHER -> {
-                if (isLoggedIn) {
-                    onWatchTogether()
-                } else {
-                    authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+                when {
+                    !isLoggedIn -> authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
+                    !planAccessReady -> android.widget.Toast.makeText(
+                        context,
+                        "Đang tải thông tin gói",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    !planEntitlements.canCreateWatchParty -> android.widget.Toast.makeText(
+                        context,
+                        "Tạo phòng xem chung cần gói Couple hoặc Premium",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    else -> onWatchTogether()
                 }
             }
         }
@@ -623,8 +659,17 @@ fun AccountScreen(
 
             KidsModeCard(
                 isKidsModeEnabled = isKidsModeEnabled,
+                isAvailableForPlan = !planAccessReady || planEntitlements.kidsMode,
                 currentUser = currentUser,
                 onRequireLogin = { authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN)) },
+                onRequireUpgrade = {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Chế độ trẻ em cần gói Basic trở lên",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    onOpenPayment()
+                },
                 onToggleMode = { checked ->
                     if (checked) {
                         if (settingsManager.getKidsModePin() == null) {
@@ -872,7 +917,7 @@ fun AccountScreen(
                     } else {
                         scope.launch {
                             try {
-                                firestoreRepository.renamePlaylist(uid, playlistId, playlistName)
+                                firestoreRepository.renamePlaylist(uid, playlistId, playlistName, isKidsModeEnabled)
                                 android.widget.Toast.makeText(context, "Đã đổi tên danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
                             } catch (e: Exception) {
                                 android.widget.Toast.makeText(context, "Không thể đổi tên danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
@@ -887,7 +932,7 @@ fun AccountScreen(
                     } else {
                         scope.launch {
                             try {
-                                firestoreRepository.deletePlaylist(uid, playlist.id)
+                                firestoreRepository.deletePlaylist(uid, playlist.id, isKidsModeEnabled)
                                 if (selectedPlaylist?.id == playlist.id) {
                                     selectedPlaylist = null
                                 }
@@ -905,7 +950,7 @@ fun AccountScreen(
                     } else {
                         scope.launch {
                             try {
-                                firestoreRepository.removeMovieFromPlaylist(uid, playlist.id, movieId)
+                                firestoreRepository.removeMovieFromPlaylist(uid, playlist.id, movieId, isKidsModeEnabled)
                                 android.widget.Toast.makeText(context, "Đã xóa khỏi danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
                             } catch (e: Exception) {
                                 android.widget.Toast.makeText(context, "Không thể xóa phim khỏi danh sách phát", android.widget.Toast.LENGTH_SHORT).show()
@@ -1095,8 +1140,10 @@ fun AccountScreen(
 @Composable
 private fun KidsModeCard(
     isKidsModeEnabled: Boolean,
+    isAvailableForPlan: Boolean,
     currentUser: FirebaseUser?,
     onRequireLogin: () -> Unit,
+    onRequireUpgrade: () -> Unit,
     onToggleMode: (Boolean) -> Unit
 ) {
     val titleColor = if (isKidsModeEnabled) AccountAccentGold else Color.White
@@ -1124,6 +1171,8 @@ private fun KidsModeCard(
             Text(
                 text = if (currentUser == null) {
                     "Đăng nhập để lưu cài đặt an toàn"
+                } else if (!isAvailableForPlan) {
+                    "Cần gói Basic trở lên"
                 } else {
                     "Lọc nội dung an toàn cho trẻ"
                 },
@@ -1138,6 +1187,8 @@ private fun KidsModeCard(
             onCheckedChange = { checked ->
                 if (currentUser == null) {
                     onRequireLogin()
+                } else if (checked && !isAvailableForPlan) {
+                    onRequireUpgrade()
                 } else {
                     onToggleMode(checked)
                 }
@@ -1159,15 +1210,15 @@ private fun WatchTogetherHighlightCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
             .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp),
+                .size(34.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1189,7 +1240,7 @@ private fun WatchTogetherHighlightCard(
                 Text(
                     text = "Xem chung",
                     color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold
                 )
                 AccountFeatureBadge(text = "PRO")
@@ -1199,7 +1250,7 @@ private fun WatchTogetherHighlightCard(
         Icon(
             imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.62f),
+            tint = Color.White.copy(alpha = 0.55f),
             modifier = Modifier.size(14.dp)
         )
     }
@@ -1254,9 +1305,9 @@ internal fun buildDemoMembershipPlan(
             price = "29.000đ / tháng",
             description = "Bạn đang sử dụng gói Basic.",
             benefits = listOf(
-                "Xem phim không giới hạn",
-                "Lưu danh sách yêu thích",
-                "Chất lượng HD"
+                "Không quảng cáo",
+                "Chế độ trẻ em",
+                "Lưu video vào playlist"
             ),
             startedDate = paidStartedDate,
             expiredDate = paidExpiredDate
@@ -1268,9 +1319,10 @@ internal fun buildDemoMembershipPlan(
             price = "59.000đ / tháng",
             description = "Bạn đang sử dụng gói Couple.",
             benefits = listOf(
-                "Tạo phòng xem chung",
-                "Đồng bộ thời gian xem phim",
-                "Chat trong phòng xem"
+                "Không quảng cáo",
+                "Chế độ trẻ em",
+                "Lưu video vào playlist",
+                "Xem chung tối đa 2 người"
             ),
             startedDate = paidStartedDate,
             expiredDate = paidExpiredDate
@@ -1283,10 +1335,10 @@ internal fun buildDemoMembershipPlan(
             description = "Bạn đang tận hưởng đầy đủ tính năng cao cấp.",
             benefits = listOf(
                 "Không quảng cáo",
-                "Chất lượng Full HD / 4K",
-                "Tạo nhiều phòng xem chung",
-                "Mời bạn bè bằng link",
-                "Ưu tiên trải nghiệm xem phim"
+                "Chế độ trẻ em",
+                "Lưu video vào playlist",
+                "Xem chung tối đa 10 người",
+                "Mời bạn bè bằng link"
             ),
             startedDate = paidStartedDate,
             expiredDate = paidExpiredDate
@@ -2078,7 +2130,8 @@ internal fun PlanInfoRow(
 @Composable
 fun AccountPlaylistsScreen(
     onBack: () -> Unit,
-    onOpenMovieDetail: (String) -> Unit
+    onOpenMovieDetail: (String) -> Unit,
+    onOpenPayment: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2089,6 +2142,8 @@ fun AccountPlaylistsScreen(
     var playlistToRename by remember { mutableStateOf<UserPlaylist?>(null) }
     var renamePlaylistName by remember { mutableStateOf("") }
     var playlistToDelete by remember { mutableStateOf<UserPlaylist?>(null) }
+    var userProfile by remember { mutableStateOf<com.example.alphacinema.data.model.UserProfile?>(null) }
+    var profileLoaded by remember { mutableStateOf(false) }
 
     DisposableEffect(auth) {
         val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
@@ -2098,16 +2153,32 @@ fun AccountPlaylistsScreen(
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
-    val playlistsFlow = remember(currentUser?.uid) {
-        currentUser?.uid?.let(firestoreRepository::getPlaylists) ?: flowOf(emptyList())
+    LaunchedEffect(currentUser?.uid) {
+        val user = currentUser
+        profileLoaded = false
+        userProfile = if (user == null) {
+            null
+        } else {
+            firestoreRepository.saveUser(user)
+            firestoreRepository.getUserProfile(user.uid)
+        }
+        profileLoaded = true
+    }
+
+    val settingsManager = remember { SettingsManager.getInstance() }
+    val isKidsModeEnabled by settingsManager.isKidsModeEnabled.collectAsState()
+    val canUsePlaylist = userProfile.activeEntitlements().playlist
+
+    val playlistsFlow = remember(currentUser?.uid, isKidsModeEnabled) {
+        currentUser?.uid?.let { uid -> firestoreRepository.getPlaylists(uid, isKidsModeEnabled) } ?: flowOf(emptyList())
     }
     val playlists by playlistsFlow.collectAsState(initial = emptyList())
     val selectedPlaylistId = selectedPlaylist?.id
-    val playlistItemsFlow = remember(currentUser?.uid, selectedPlaylistId) {
+    val playlistItemsFlow = remember(currentUser?.uid, selectedPlaylistId, isKidsModeEnabled) {
         val uid = currentUser?.uid
         val playlistId = selectedPlaylistId
         if (uid != null && !playlistId.isNullOrBlank()) {
-            firestoreRepository.getPlaylistItems(uid, playlistId)
+            firestoreRepository.getPlaylistItems(uid, playlistId, isKidsModeEnabled)
         } else {
             flowOf(emptyList())
         }
@@ -2128,12 +2199,13 @@ fun AccountPlaylistsScreen(
         val normalizedName = name.trim()
         when {
             uid == null -> showToast("Vui lòng đăng nhập để sửa danh sách phát")
+            !canUsePlaylist -> showToast("Playlist cần gói Basic trở lên")
             normalizedName.isBlank() -> showToast("Vui lòng nhập tên danh sách phát")
             normalizedName.length > 60 -> showToast("Tên danh sách phát tối đa 60 ký tự")
             else -> {
                 scope.launch {
                     try {
-                        firestoreRepository.renamePlaylist(uid, playlistId, normalizedName)
+                        firestoreRepository.renamePlaylist(uid, playlistId, normalizedName, isKidsModeEnabled)
                         showToast("Đã đổi tên danh sách phát")
                     } catch (e: Exception) {
                         android.util.Log.e("AccountPlaylistsScreen", "renamePlaylist failed", e)
@@ -2150,9 +2222,13 @@ fun AccountPlaylistsScreen(
             showToast("Vui lòng đăng nhập để xóa danh sách phát")
             return
         }
+        if (!canUsePlaylist) {
+            showToast("Playlist cần gói Basic trở lên")
+            return
+        }
         scope.launch {
             try {
-                firestoreRepository.deletePlaylist(uid, playlist.id)
+                firestoreRepository.deletePlaylist(uid, playlist.id, isKidsModeEnabled)
                 if (selectedPlaylist?.id == playlist.id) {
                     selectedPlaylist = null
                 }
@@ -2170,9 +2246,13 @@ fun AccountPlaylistsScreen(
             showToast("Vui lòng đăng nhập để sửa danh sách phát")
             return
         }
+        if (!canUsePlaylist) {
+            showToast("Playlist cần gói Basic trở lên")
+            return
+        }
         scope.launch {
             try {
-                firestoreRepository.removeMovieFromPlaylist(uid, playlist.id, movieId)
+                firestoreRepository.removeMovieFromPlaylist(uid, playlist.id, movieId, isKidsModeEnabled)
                 showToast("Đã xóa khỏi danh sách phát")
             } catch (e: Exception) {
                 android.util.Log.e("AccountPlaylistsScreen", "removeFromPlaylist failed", e)
@@ -2245,6 +2325,22 @@ fun AccountPlaylistsScreen(
 
             if (currentUser == null) {
                 AccountEmptyState("Vui lòng đăng nhập để xem danh sách phát.")
+            } else if (!profileLoaded) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    LottieLoadingIndicator(size = 80.dp)
+                }
+            } else if (!canUsePlaylist) {
+                AccountEmptyState("Playlist cần gói Basic trở lên.")
+                Button(
+                    onClick = onOpenPayment,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccountAccentGold,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Nâng cấp gói", fontWeight = FontWeight.ExtraBold)
+                }
             } else if (selectedPlaylist == null) {
                 if (playlists.isEmpty()) {
                     AccountEmptyState("Bạn chưa có danh sách phát nào. Hãy bấm “Thêm vào” ở màn chi tiết phim để tạo danh sách mới.")
@@ -2928,9 +3024,6 @@ private fun AccountEmptyState(message: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
             .padding(18.dp),
         contentAlignment = Alignment.Center
     ) {

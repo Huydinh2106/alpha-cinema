@@ -112,6 +112,7 @@ fun MovieDetailScreen(
     playlists: List<UserPlaylist> = emptyList(),
     playlistIdsForMovie: Set<String> = emptySet(),
     playlistActionInProgress: Boolean = false,
+    canUsePlaylist: Boolean = true,
     currentUserId: String? = null,
     currentUserAvatarUrl: String = "",
     onToggleFavorite: (MovieDetailUi) -> Unit,
@@ -120,6 +121,7 @@ fun MovieDetailScreen(
     onRenamePlaylist: (String, String) -> Unit = { _, _ -> },
     onDeletePlaylist: (String) -> Unit = {},
     onAddToListLoginRequired: () -> Unit = {},
+    onPlaylistUpgradeRequired: () -> Unit = {},
     onPostComment: (String) -> Unit,
     onReplyComment: (Comment, String) -> Unit = { _, _ -> },
     onToggleCommentLike: (Comment) -> Unit = {},
@@ -240,6 +242,8 @@ fun MovieDetailScreen(
                                 MovieDetailAction.ADD_TO_LIST -> {
                                     if (currentUserId == null) {
                                         onAddToListLoginRequired()
+                                    } else if (!canUsePlaylist) {
+                                        onPlaylistUpgradeRequired()
                                     } else {
                                         showSaveToPlaylistSheet = true
                                     }
