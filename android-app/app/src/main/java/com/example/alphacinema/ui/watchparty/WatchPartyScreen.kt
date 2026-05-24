@@ -42,6 +42,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -76,6 +79,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -84,9 +88,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -144,6 +150,7 @@ fun WatchPartyScreen(
     
     val isMicMuted by viewModel.isMicMuted.collectAsState()
     val speakingUsers by viewModel.speakingUsers.collectAsState()
+    val memberVolumes by viewModel.memberVolumes.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) {
@@ -749,7 +756,9 @@ fun WatchPartyScreen(
                     MembersList(
                         members = members,
                         hostId = room?.hostId ?: "",
+                        currentUid = currentUid,
                         speakingUsers = speakingUsers,
+                        memberVolumes = memberVolumes,
                         onAdjustVolume = { uid, vol -> viewModel.adjustUserVolume(uid, vol) }
                     )
                 }
@@ -883,7 +892,9 @@ private fun WatchPartyActionButton(
 private fun MembersList(
     members: List<WatchPartyMember>, 
     hostId: String,
+    currentUid: String?,
     speakingUsers: Map<Int, Int>,
+    memberVolumes: Map<String, Int>,
     onAdjustVolume: (String, Int) -> Unit
 ) {
     Column(
@@ -907,8 +918,9 @@ private fun MembersList(
                     val memberIsHost = member.uid == hostId
                     val agoraUid = member.uid.hashCode() and 0x7FFFFFFF
                     val isSpeaking = speakingUsers.containsKey(agoraUid)
+                    val canAdjustVolume = member.uid != currentUid
                     var showVolumePopup by remember { mutableStateOf(false) }
-                    var volume by remember { mutableStateOf(100f) }
+                    val volume = memberVolumes[member.uid] ?: 100
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -930,7 +942,7 @@ private fun MembersList(
                                     else if (memberIsHost) Modifier.border(2.dp, Color(0xFFF6E29A), CircleShape)
                                     else Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
                                 )
-                                .clickable { showVolumePopup = true },
+                                .clickable(enabled = canAdjustVolume) { showVolumePopup = true },
                             contentAlignment = Alignment.Center
                         ) {
                             if (member.photoUrl.isNotBlank()) {
@@ -957,37 +969,90 @@ private fun MembersList(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        if (canAdjustVolume) {
+                            Text(
+                                text = "$volume%",
+                                color = Color.White.copy(alpha = 0.38f),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1
+                            )
+                        }
                     }
 
-                    if (showVolumePopup) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = { showVolumePopup = false },
-                            containerColor = Color(0xFF1F1F1F),
-                            title = {
-                                Text("Âm lượng: ${member.displayName}", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                            },
-                            text = {
-                                androidx.compose.material3.Slider(
-                                    value = volume,
-                                    onValueChange = { 
-                                        volume = it 
-                                        onAdjustVolume(member.uid, it.toInt())
-                                    },
-                                    valueRange = 0f..100f
-                                )
-                            },
-                            confirmButton = {
-                                Button(
-                                    onClick = { showVolumePopup = false },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A))
-                                ) {
-                                    Text("Đóng", color = Color.Black)
-                                }
-                            }
+                    if (showVolumePopup && canAdjustVolume) {
+                        MemberVolumeDialog(
+                            member = member,
+                            volume = volume,
+                            onVolumeChange = { onAdjustVolume(member.uid, it) },
+                            onDismiss = { showVolumePopup = false }
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MemberVolumeDialog(
+    member: WatchPartyMember,
+    volume: Int,
+    onVolumeChange: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFF181818))
+                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(24.dp))
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Âm lượng",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = member.displayName.ifBlank { "Người dùng" },
+                        color = Color.White.copy(alpha = 0.58f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Text(
+                    text = "$volume%",
+                    color = Color.Black,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color(0xFFF6E29A))
+                        .padding(horizontal = 12.dp, vertical = 7.dp)
+                )
+            }
+
+            Slider(
+                value = volume.toFloat(),
+                onValueChange = { onVolumeChange(it.toInt()) },
+                valueRange = 0f..100f,
+                colors = SliderDefaults.colors(
+                    thumbColor = Color(0xFFF6E29A),
+                    activeTrackColor = Color(0xFFF6E29A),
+                    inactiveTrackColor = Color.White.copy(alpha = 0.14f)
+                )
+            )
         }
     }
 }
@@ -1152,6 +1217,7 @@ private fun ChatSection(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Input bar
+        val hasText = input.isNotBlank()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1159,32 +1225,61 @@ private fun ChatSection(
                 .navigationBarsPadding()
                 .imePadding()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF1F1F1F))
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF1F1F1F), Color(0xFF242424))
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            androidx.compose.material3.TextField(
+            BasicTextField(
                 value = input,
                 onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text("Nhắn gì đi...", color = Color.White.copy(alpha = 0.3f), style = MaterialTheme.typography.bodyMedium)
-                },
-                singleLine = true,
-                colors = androidx.compose.material3.TextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = Color(0xFFF6E29A)
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 42.dp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = Color.White,
+                    lineHeight = 20.sp
                 ),
-                textStyle = MaterialTheme.typography.bodyMedium
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (hasText) {
+                            onSend(input)
+                            input = ""
+                        }
+                    }
+                ),
+                cursorBrush = SolidColor(Color(0xFFF6E29A)),
+                singleLine = true,
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (input.isBlank()) {
+                            Text(
+                                "Nhắn gì đi...",
+                                color = Color.White.copy(alpha = 0.42f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
             )
 
             // Send button
-            val hasText = input.isNotBlank()
             Box(
                 modifier = Modifier
                     .size(40.dp)

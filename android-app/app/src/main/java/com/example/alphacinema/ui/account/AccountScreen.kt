@@ -213,10 +213,16 @@ fun AccountScreen(
     LaunchedEffect(currentUser?.uid) {
         val user = currentUser
         if (user != null) {
-            loadedProfileUid = null
-            firestoreRepository.saveUser(user)
-            userProfile = firestoreRepository.getUserProfile(user.uid)
-            loadedProfileUid = user.uid
+            try {
+                loadedProfileUid = null
+                firestoreRepository.saveUser(user)
+                userProfile = firestoreRepository.getUserProfile(user.uid)
+                loadedProfileUid = user.uid
+            } catch (e: Exception) {
+                android.util.Log.e("AccountScreen", "Failed to load user profile", e)
+                userProfile = null
+                loadedProfileUid = null
+            }
         } else {
             userProfile = null
             loadedProfileUid = null
@@ -502,16 +508,6 @@ fun AccountScreen(
             AccountMenuAction.WATCH_TOGETHER -> {
                 when {
                     !isLoggedIn -> authStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
-                    !planAccessReady -> android.widget.Toast.makeText(
-                        context,
-                        "Đang tải thông tin gói",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                    !planEntitlements.canCreateWatchParty -> android.widget.Toast.makeText(
-                        context,
-                        "Tạo phòng xem chung cần gói Couple hoặc Premium",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
                     else -> onWatchTogether()
                 }
             }

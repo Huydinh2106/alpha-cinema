@@ -57,9 +57,13 @@ class WatchPartyViewModel : ViewModel() {
     private val _isMicMuted = MutableStateFlow(false)
     val isMicMuted: StateFlow<Boolean> = _isMicMuted.asStateFlow()
 
-    // Map of integer UID (Firebase UID hashCode) to volume level (0-255)
+    // Map of integer UID (Firebase UID hashCode) to current speaking level reported by Agora.
     private val _speakingUsers = MutableStateFlow<Map<Int, Int>>(emptyMap())
     val speakingUsers: StateFlow<Map<Int, Int>> = _speakingUsers.asStateFlow()
+
+    private val _memberVolumes = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val memberVolumes: StateFlow<Map<String, Int>> = _memberVolumes.asStateFlow()
+    private val remotePlaybackVolumesByAgoraUid = mutableMapOf<Int, Int>()
 
     // TODO: BẠN CẦN THAY THẾ APP ID CỦA BẠN TẠI ĐÂY
     private val AGORA_APP_ID = "8d5392fa3903473d9ce043ec36666424" 
@@ -75,6 +79,12 @@ class WatchPartyViewModel : ViewModel() {
                     }
                 }
                 _speakingUsers.value = newMap
+            }
+        }
+
+        override fun onUserJoined(uid: Int, elapsed: Int) {
+            remotePlaybackVolumesByAgoraUid[uid]?.let { volume ->
+                rtcEngine?.adjustUserPlaybackSignalVolume(uid, volume)
             }
         }
     }
@@ -139,8 +149,8 @@ class WatchPartyViewModel : ViewModel() {
                     photoUrl = getAvatarUrl(context, user)
                 )
                 result.fold(
-                    onSuccess = {
-                        startObserving(roomId.uppercase().trim())
+                    onSuccess = { joinedRoom ->
+                        startObserving(joinedRoom.roomId)
                         onSuccess()
                     },
                     onFailure = { e ->
@@ -200,6 +210,9 @@ class WatchPartyViewModel : ViewModel() {
             // Bật mic mặc định
             _isMicMuted.value = false
             rtcEngine?.muteLocalAudioStream(false)
+            remotePlaybackVolumesByAgoraUid.forEach { (agoraUid, volume) ->
+                rtcEngine?.adjustUserPlaybackSignalVolume(agoraUid, volume)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -212,8 +225,14 @@ class WatchPartyViewModel : ViewModel() {
     }
 
     fun adjustUserVolume(firebaseUid: String, volume: Int) {
-        // volume range: 0 - 100
-        rtcEngine?.adjustUserPlaybackSignalVolume(firebaseUid.hashCode() and 0x7FFFFFFF, volume)
+        if (firebaseUid == auth.currentUser?.uid) return
+
+        val normalizedVolume = volume.coerceIn(0, 100)
+        _memberVolumes.value = _memberVolumes.value + (firebaseUid to normalizedVolume)
+
+        val agoraUid = firebaseUid.hashCode() and 0x7FFFFFFF
+        remotePlaybackVolumesByAgoraUid[agoraUid] = normalizedVolume
+        rtcEngine?.adjustUserPlaybackSignalVolume(agoraUid, normalizedVolume)
     }
 
     // ── Playback Control (Host only) ────────────────────────────────
@@ -331,6 +350,8 @@ class WatchPartyViewModel : ViewModel() {
         _room.value = null
         _members.value = emptyList()
         _chatMessages.value = emptyList()
+        _memberVolumes.value = emptyMap()
+        remotePlaybackVolumesByAgoraUid.clear()
     }
 
     private fun leaveVoiceChannel() {

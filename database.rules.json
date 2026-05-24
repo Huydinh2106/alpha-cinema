@@ -2,7 +2,7 @@
   "rules": {
     "watchParty": {
       "$roomId": {
-        ".read": "auth != null && data.child('members').child(auth.uid).exists()",
+        ".read": "auth != null",
         ".write": false,
         "playbackState": {
           ".write": "auth != null && root.child('watchParty').child($roomId).child('hostId').val() == auth.uid",
@@ -42,7 +42,8 @@
         },
         "members": {
           "$uid": {
-            ".write": false
+            ".write": "auth != null && auth.uid == $uid && root.child('watchParty').child($roomId).exists()",
+            ".validate": "newData.hasChildren(['uid', 'displayName', 'photoUrl']) && newData.child('uid').val() == auth.uid && newData.child('displayName').isString() && newData.child('photoUrl').isString()"
           }
         },
         "chat": {

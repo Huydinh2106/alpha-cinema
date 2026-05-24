@@ -59,13 +59,16 @@ fun WatchPartyLobbySheet(
     isJoining: Boolean,
     error: String?,
     joinOnly: Boolean = false,
+    canCreateRoom: Boolean = true,
     maxMembers: Int = 2,
     onDismiss: () -> Unit,
     onCreateRoom: () -> Unit,
     onJoinRoom: (String) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var activeTab by remember { mutableStateOf(if (joinOnly) LobbyTab.JOIN else LobbyTab.CREATE) }
+    var activeTab by remember(joinOnly, canCreateRoom) {
+        mutableStateOf(if (joinOnly || !canCreateRoom) LobbyTab.JOIN else LobbyTab.CREATE)
+    }
     var roomIdInput by remember { mutableStateOf("") }
 
     ModalBottomSheet(
@@ -237,7 +240,7 @@ fun WatchPartyLobbySheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp),
-                        enabled = !isCreating,
+                        enabled = canCreateRoom && !isCreating,
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFF6E29A),
@@ -247,6 +250,8 @@ fun WatchPartyLobbySheet(
                     ) {
                         if (isCreating) {
                             LottieLoadingIndicator(size = 32.dp)
+                        } else if (!canCreateRoom) {
+                            Text("Tạo phòng cần gói Couple hoặc Premium", fontWeight = FontWeight.Bold)
                         } else {
                             Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -258,7 +263,12 @@ fun WatchPartyLobbySheet(
                 LobbyTab.JOIN -> {
                     OutlinedTextField(
                         value = roomIdInput,
-                        onValueChange = { roomIdInput = it.uppercase().take(6) },
+                        onValueChange = {
+                            roomIdInput = it
+                                .filter { char -> char.isLetterOrDigit() }
+                                .uppercase()
+                                .take(6)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         label = { Text("Mã phòng (6 ký tự)") },
