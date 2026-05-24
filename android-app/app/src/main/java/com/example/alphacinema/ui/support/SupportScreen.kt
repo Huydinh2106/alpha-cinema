@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HeadsetMic
 import androidx.compose.material.icons.rounded.Menu
@@ -79,6 +81,7 @@ import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatLinkItem
 import com.example.alphacinema.data.model.SupportChatMessage
 import com.example.alphacinema.data.model.SupportChatMovieItem
+import com.example.alphacinema.data.model.SupportChatSession
 import com.example.alphacinema.data.model.SupportMessageSender
 import com.example.alphacinema.data.model.primaryAction
 import com.example.alphacinema.data.model.resolveRoute
@@ -142,7 +145,10 @@ fun SupportScreen(
 ) {
     var inputText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var isHistoryOpen by remember { mutableStateOf(false) }
     val messages by supportViewModel.messages.collectAsState()
+    val chatSessions by supportViewModel.chatSessions.collectAsState()
+    val currentSessionId by supportViewModel.currentSessionId.collectAsState()
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -185,7 +191,9 @@ fun SupportScreen(
         ) {
             ChatHeader(
                 hasStartedChat = hasStartedChat,
+                isLoading = isLoading,
                 userDisplayName = userDisplayName,
+                onOpenHistory = { isHistoryOpen = true },
                 onNewConversation = {
                     inputText = ""
                     error = null
@@ -245,13 +253,36 @@ fun SupportScreen(
                 }
             )
         }
+
+        if (isHistoryOpen) {
+            ChatHistoryPanel(
+                sessions = chatSessions,
+                currentSessionId = currentSessionId,
+                isLoading = isLoading,
+                onDismiss = { isHistoryOpen = false },
+                onNewConversation = {
+                    inputText = ""
+                    error = null
+                    supportViewModel.startNewConversation()
+                    isHistoryOpen = false
+                },
+                onSessionClick = { sessionId ->
+                    inputText = ""
+                    error = null
+                    supportViewModel.openConversation(sessionId)
+                    isHistoryOpen = false
+                }
+            )
+        }
     }
 }
 
 @Composable
 private fun ChatHeader(
     hasStartedChat: Boolean,
+    isLoading: Boolean,
     userDisplayName: String,
+    onOpenHistory: () -> Unit,
     onNewConversation: () -> Unit
 ) {
     Row(
@@ -263,8 +294,8 @@ private fun ChatHeader(
     ) {
         HeaderIconButton(
             icon = Icons.Rounded.Menu,
-            contentDescription = "Mở menu",
-            onClick = {}
+            contentDescription = "Mở lịch sử chat",
+            onClick = onOpenHistory
         )
 
         Column(
@@ -293,6 +324,7 @@ private fun ChatHeader(
             if (hasStartedChat) {
                 TextButton(
                     onClick = onNewConversation,
+                    enabled = !isLoading,
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     modifier = Modifier.height(26.dp)
                 ) {
@@ -303,12 +335,12 @@ private fun ChatHeader(
                         Icon(
                             imageVector = Icons.Rounded.Add,
                             contentDescription = null,
-                            tint = Color(0xFFF6E29A),
+                            tint = Color(0xFFF6E29A).copy(alpha = if (isLoading) 0.38f else 1f),
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = "Cuộc trò chuyện mới",
-                            color = Color(0xFFF6E29A),
+                            color = Color(0xFFF6E29A).copy(alpha = if (isLoading) 0.38f else 1f),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -333,6 +365,155 @@ private fun ChatHeader(
         UserAvatar(
             displayName = userDisplayName,
             modifier = Modifier.size(38.dp)
+        )
+    }
+}
+
+@Composable
+private fun ChatHistoryPanel(
+    sessions: List<SupportChatSession>,
+    currentSessionId: String,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onNewConversation: () -> Unit,
+    onSessionClick: (String) -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.58f))
+                .clickable(onClick = onDismiss)
+        )
+
+        Surface(
+            color = Color(0xFF0F0F0F),
+            shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
+            shadowElevation = 14.dp,
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.84f)
+                .widthIn(max = 330.dp)
+                .clickable(onClick = {})
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Alpha AI",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            text = "Lịch sử chat",
+                            color = Color.White.copy(alpha = 0.56f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    HeaderIconButton(
+                        icon = Icons.Rounded.Close,
+                        contentDescription = "Đóng lịch sử chat",
+                        onClick = onDismiss
+                    )
+                }
+
+                TextButton(
+                    onClick = onNewConversation,
+                    enabled = !isLoading,
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = Color(0xFFF6E29A).copy(alpha = if (isLoading) 0.38f else 1f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Cuộc trò chuyện mới",
+                            color = Color(0xFFF6E29A).copy(alpha = if (isLoading) 0.38f else 1f),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Gần đây",
+                    color = Color.White.copy(alpha = 0.62f),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                if (sessions.isEmpty()) {
+                    Text(
+                        text = "Chưa có lịch sử chat",
+                        color = Color.White.copy(alpha = 0.46f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(sessions, key = { it.id }) { session ->
+                            ChatHistoryRow(
+                                session = session,
+                                selected = session.id == currentSessionId,
+                                enabled = !isLoading,
+                                onClick = { onSessionClick(session.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatHistoryRow(
+    session: SupportChatSession,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (selected) Color(0x18F6E29A) else Color.Transparent,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+    ) {
+        Text(
+            text = session.title,
+            color = Color.White.copy(
+                alpha = when {
+                    !enabled -> 0.36f
+                    selected -> 0.96f
+                    else -> 0.82f
+                }
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
         )
     }
 }
@@ -367,12 +548,9 @@ private fun ChatWelcome(
 ) {
     val suggestions = listOf(
         ChatSuggestionUi("Gợi ý phim cho tôi", Icons.Rounded.Movie),
-        ChatSuggestionUi("Tìm phim theo tâm trạng", Icons.Rounded.AutoAwesome),
         ChatSuggestionUi("Gói Premium có gì?", Icons.Rounded.WorkspacePremium),
         ChatSuggestionUi("Cách tạo phòng xem chung?", Icons.Rounded.Groups),
-        ChatSuggestionUi("Tôi cần hỗ trợ tài khoản", Icons.Rounded.PersonOutline),
-        ChatSuggestionUi("Nhạc phim Interstellar", Icons.Rounded.HeadsetMic),
-        ChatSuggestionUi("Phim đang hot hôm nay", Icons.Rounded.Movie)
+        ChatSuggestionUi("Tôi cần hỗ trợ tài khoản", Icons.Rounded.PersonOutline)
     )
 
     Column(
