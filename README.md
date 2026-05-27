@@ -5,12 +5,6 @@
 
 Video demo: https://youtu.be/IRt1zVyo6Kk
 
-## Demo
-
-[![Alpha Cinema Demo](https://img.youtube.com/vi/IRt1zVyo6Kk/0.jpg)](https://youtu.be/IRt1zVyo6Kk)
-
-Video demo: [https://youtu.be/IRt1zVyo6Kk](https://youtu.be/IRt1zVyo6Kk)
-
 ## Screenshots
 
 | Home | Movie Detail | Player |
