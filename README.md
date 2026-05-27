@@ -1,6 +1,9 @@
 # Alpha Cinema
 
 **Languages:** English | [Tiếng Việt](#tieng-viet)
+## Demo
+
+Video demo: https://youtu.be/IRt1zVyo6Kk
 
 Alpha Cinema is a modern Android movie streaming application built with Kotlin and Jetpack Compose. The app combines movie discovery, high-quality playback, AI-assisted recommendations, real-time watch parties, subscription payments, and Firebase-backed user features.
 
