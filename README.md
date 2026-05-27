@@ -2,6 +2,22 @@
 
 **Languages:** English | [Tiếng Việt](#tieng-viet)
 
+## Demo
+
+[![Alpha Cinema Demo](https://img.youtube.com/vi/IRt1zVyo6Kk/0.jpg)](https://youtu.be/IRt1zVyo6Kk)
+
+Video demo: [https://youtu.be/IRt1zVyo6Kk](https://youtu.be/IRt1zVyo6Kk)
+
+## Screenshots
+
+| Home | Movie Detail | Player |
+|---|---|---|
+| <img src="docs/screenshots/home.png" alt="Home screen" width="260"> | <img src="docs/screenshots/movie-detail.png" alt="Movie detail screen" width="260"> | <img src="docs/screenshots/player.png" alt="Player screen" width="260"> |
+
+| AI Assistant | Watch Party | Payment |
+|---|---|---|
+| <img src="docs/screenshots/ai-assistant.png" alt="AI assistant screen" width="260"> | <img src="docs/screenshots/watch-party.png" alt="Watch Party screen" width="260"> | <img src="docs/screenshots/payment.png" alt="Payment screen" width="260"> |
+
 Alpha Cinema is a modern Android movie streaming application built with Kotlin and Jetpack Compose. The app combines movie discovery, high-quality playback, AI-assisted recommendations, real-time watch parties, subscription payments, and Firebase-backed user features.
 
 ## Highlights
