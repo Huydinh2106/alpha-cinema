@@ -21,13 +21,19 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.Normalizer
+import com.example.alphacinema.data.local.SettingsManager
 
 class MovieDetailViewModel : ViewModel() {
     private val api = RetrofitClient.instance
     private val tmdbApi = RetrofitClient.tmdbApi
     private val firestoreRepository = FirestoreRepository()
+    private val settingsManager = SettingsManager.getInstance()
+
+    private val isKidsMode: Boolean
+        get() = settingsManager.isKidsModeEnabled.value
 
     private val _movieDetail = MutableStateFlow<MovieDetailUi?>(null)
     val movieDetail: StateFlow<MovieDetailUi?> = _movieDetail.asStateFlow()
@@ -75,37 +81,49 @@ class MovieDetailViewModel : ViewModel() {
         activeUserId = userId
         
         viewModelScope.launch {
-            firestoreRepository.getMovieStats(slug).collect {
-                _movieStats.value = it
-            }
+            firestoreRepository.getMovieStats(slug)
+                .catch { e -> Log.e(TAG, "Error collecting movie stats", e) }
+                .collect {
+                    _movieStats.value = it
+                }
         }
         viewModelScope.launch {
-            firestoreRepository.getComments(slug).collect {
-                _comments.value = it
-            }
+            firestoreRepository.getComments(slug)
+                .catch { e -> Log.e(TAG, "Error collecting comments", e) }
+                .collect {
+                    _comments.value = it
+                }
         }
         if (userId != null) {
             viewModelScope.launch {
-                firestoreRepository.getFavorites(userId).collect { favorites ->
-                    _isFavorite.value = favorites.any { it.movieId == slug }
-                }
+                firestoreRepository.getFavorites(userId)
+                    .catch { e -> Log.e(TAG, "Error collecting favorites", e) }
+                    .collect { favorites ->
+                        _isFavorite.value = favorites.any { it.movieId == slug }
+                    }
             }
             viewModelScope.launch {
-                firestoreRepository.getUserRating(slug, userId).collect { rating ->
-                    _userRating.value = rating?.score
-                }
+                firestoreRepository.getUserRating(slug, userId)
+                    .catch { e -> Log.e(TAG, "Error collecting user rating", e) }
+                    .collect { rating ->
+                        _userRating.value = rating?.score
+                    }
             }
             playlistsJob?.cancel()
             playlistsJob = viewModelScope.launch {
-                firestoreRepository.getPlaylists(userId).collect { playlists ->
-                    _playlists.value = playlists
-                }
+                firestoreRepository.getPlaylists(userId, isKidsMode)
+                    .catch { e -> Log.e(TAG, "Error collecting playlists", e) }
+                    .collect { playlists ->
+                        _playlists.value = playlists
+                    }
             }
             moviePlaylistIdsJob?.cancel()
             moviePlaylistIdsJob = viewModelScope.launch {
-                firestoreRepository.getPlaylistIdsForMovie(userId, slug).collect { playlistIds ->
-                    _playlistIdsForCurrentMovie.value = playlistIds
-                }
+                firestoreRepository.getPlaylistIdsForMovie(userId, slug, isKidsMode)
+                    .catch { e -> Log.e(TAG, "Error collecting playlist IDs", e) }
+                    .collect { playlistIds ->
+                        _playlistIdsForCurrentMovie.value = playlistIds
+                    }
             }
         } else {
             _userRating.value = null
@@ -154,7 +172,8 @@ class MovieDetailViewModel : ViewModel() {
                 firestoreRepository.createPlaylist(
                     userId = uid,
                     name = normalizedName,
-                    firstMovie = movie.toPlaylistMovieItem()
+                    firstMovie = movie.toPlaylistMovieItem(),
+                    isKidsMode = isKidsMode
                 )
                 onResult(true, "Đã lưu vào $normalizedName")
             } catch (e: Exception) {
@@ -197,13 +216,14 @@ class MovieDetailViewModel : ViewModel() {
             }
             try {
                 if (isInPlaylist) {
-                    firestoreRepository.removeMovieFromPlaylist(uid, playlistId, movie.id)
+                    firestoreRepository.removeMovieFromPlaylist(uid, playlistId, movie.id, isKidsMode)
                     onResult(true, "Đã bỏ khỏi $playlistName")
                 } else {
                     firestoreRepository.addMovieToPlaylist(
                         userId = uid,
                         playlistId = playlistId,
-                        movie = movie.toPlaylistMovieItem()
+                        movie = movie.toPlaylistMovieItem(),
+                        isKidsMode = isKidsMode
                     )
                     onResult(true, "Đã lưu vào $playlistName")
                 }
@@ -239,7 +259,7 @@ class MovieDetailViewModel : ViewModel() {
         viewModelScope.launch {
             _playlistActionInProgress.value = true
             try {
-                firestoreRepository.renamePlaylist(uid, playlistId, normalizedName)
+                firestoreRepository.renamePlaylist(uid, playlistId, normalizedName, isKidsMode)
                 onResult(true, "Đã đổi tên danh sách phát")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -272,7 +292,7 @@ class MovieDetailViewModel : ViewModel() {
             val previousIds = _playlistIdsForCurrentMovie.value
             _playlistIdsForCurrentMovie.value = previousIds - playlistId
             try {
-                firestoreRepository.deletePlaylist(uid, playlistId)
+                firestoreRepository.deletePlaylist(uid, playlistId, isKidsMode)
                 onResult(true, "Đã xóa danh sách phát")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e

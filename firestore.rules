@@ -4,7 +4,31 @@ service cloud.firestore {
     // Chỉ người dùng Authentication mới được đọc/ghi
     function isAuthenticated() { return request.auth != null; }
     // Người dùng chỉ có quyền trên dữ liệu của chính mình
-    function isOwner(uid) { return request.auth.uid == uid; }
+    function isOwner(uid) { return isAuthenticated() && request.auth.uid == uid; }
+    function subscriptionManagedKeys() {
+      return [
+        'subscriptionPlan',
+        'subscriptionStatus',
+        'subscriptionStartedAt',
+        'subscriptionExpiresAt',
+        'subscriptionUpdatedAt',
+        'subscriptionPaymentMethod',
+        'isAdmin'
+      ];
+    }
+    function isClientSafeUserCreate() {
+      return !request.resource.data.keys().hasAny(subscriptionManagedKeys());
+    }
+    function isClientSafeUserUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(subscriptionManagedKeys());
+    }
+    function hasActivePaidPlan(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) &&
+        get(/databases/$(database)/documents/users/$(uid)).data.subscriptionStatus == 'active' &&
+        get(/databases/$(database)/documents/users/$(uid)).data.subscriptionPlan in ['basic', 'couple', 'premium'] &&
+        get(/databases/$(database)/documents/users/$(uid)).data.subscriptionExpiresAt is timestamp &&
+        get(/databases/$(database)/documents/users/$(uid)).data.subscriptionExpiresAt > request.time;
+    }
     function likedByBefore() {
       return resource.data.likedBy is list ? resource.data.likedBy : [];
     }
@@ -25,7 +49,9 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow create: if isOwner(userId) && isClientSafeUserCreate();
+      allow update: if isOwner(userId) && isClientSafeUserUpdate();
+      allow delete: if false;
       
       match /watch_history/{movieId} {
         allow read, write: if isOwner(userId);
@@ -36,10 +62,22 @@ service cloud.firestore {
       }
 
       match /playlists/{playlistId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId) && hasActivePaidPlan(userId);
 
         match /items/{movieId} {
-          allow read, write: if isOwner(userId);
+          allow read: if isOwner(userId);
+          allow create, update, delete: if isOwner(userId) && hasActivePaidPlan(userId);
+        }
+      }
+
+      match /playlists_kids/{playlistId} {
+        allow read: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId) && hasActivePaidPlan(userId);
+
+        match /items/{movieId} {
+          allow read: if isOwner(userId);
+          allow create, update, delete: if isOwner(userId) && hasActivePaidPlan(userId);
         }
       }
       

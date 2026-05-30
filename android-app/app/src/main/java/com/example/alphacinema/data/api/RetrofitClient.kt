@@ -70,6 +70,10 @@ object RetrofitClient {
         createRetrofit(FUNCTIONS_BASE_URL).create(MomoApiService::class.java)
     }
 
+    val watchPartyApi: WatchPartyApiService by lazy {
+        createRetrofit(FUNCTIONS_BASE_URL).create(WatchPartyApiService::class.java)
+    }
+
     val spotifyApi: SpotifyApiService by lazy {
         createRetrofit(SPOTIFY_API_BASE_URL, quietOkHttpClient).create(SpotifyApiService::class.java)
     }

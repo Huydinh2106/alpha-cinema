@@ -45,6 +45,7 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.storage.FirebaseStorage
+import com.example.alphacinema.data.model.activeEntitlements
 import com.example.alphacinema.util.formatFirestoreDate
 import com.example.alphacinema.ui.components.clearFocusOnTapOutside
 import kotlinx.coroutines.launch
@@ -85,18 +86,24 @@ fun ProfileSettingsScreen(
     }
 
     LaunchedEffect(currentUser?.uid) {
-        currentUser?.let {
-            firestoreRepo.saveUser(it)
-            val profile = firestoreRepo.getUserProfile(it.uid)
+        val user = currentUser
+        if (user == null) {
+            userProfile = null
+            return@LaunchedEffect
+        }
+
+        try {
+            firestoreRepo.saveUser(user)
+            val profile = firestoreRepo.getUserProfile(user.uid)
             userProfile = profile
             // Update cache with fresh data
-            val freshName = it.displayName ?: profile?.displayName ?: ""
-            val freshAvatar = it.photoUrl?.toString() ?: profile?.photoUrl ?: ""
-            profileCache.save(it.uid, freshName, freshAvatar)
+            val freshName = user.displayName ?: profile?.displayName ?: ""
+            val freshAvatar = user.photoUrl?.toString() ?: profile?.photoUrl ?: ""
+            profileCache.save(user.uid, freshName, freshAvatar)
             cachedName = freshName
             cachedAvatar = freshAvatar
-        } ?: run {
-            userProfile = null
+        } catch (e: Exception) {
+            android.util.Log.e("ProfileSettingsScreen", "Failed to load profile", e)
         }
     }
 
@@ -109,7 +116,7 @@ fun ProfileSettingsScreen(
     } else {
         currentUser?.photoUrl?.toString() ?: userProfile?.photoUrl ?: cachedAvatar
     }
-    val plan = userProfile?.subscriptionPlan ?: "free"
+    val plan = userProfile.activeEntitlements().plan.id
     val subscriptionStartedDate = formatFirestoreDate(userProfile?.subscriptionStartedAt)
     val subscriptionExpiredDate = formatFirestoreDate(userProfile?.subscriptionExpiresAt)
 
@@ -138,6 +145,7 @@ fun ProfileSettingsScreen(
                     avatarUrl = avatarUrl,
                     plan = plan,
                     isGoogleUser = isGoogleUser,
+                    isLoggingOut = isLoggingOut,
                     onBack = onBack,
                     onEditProfile = { currentPage = ProfilePage.EDIT_PROFILE },
                     onChangePassword = { currentPage = ProfilePage.CHANGE_PASSWORD },
@@ -151,13 +159,11 @@ fun ProfileSettingsScreen(
                     onLogout = {
                         if (!isLoggingOut) {
                             isLoggingOut = true
-                            profileCache.clear()
-                            currentUser = null
-                            userProfile = null
-                            isLoading = false
-                            currentPage = ProfilePage.MAIN
-                            onLogout()
-                            auth.signOut()
+                            try {
+                                onLogout()
+                            } finally {
+                                isLoggingOut = false
+                            }
                         }
                     }
                 )
@@ -280,6 +286,7 @@ private fun ProfileMainPage(
     avatarUrl: String,
     plan: String,
     isGoogleUser: Boolean,
+    isLoggingOut: Boolean,
     onBack: () -> Unit,
     onEditProfile: () -> Unit,
     onChangePassword: () -> Unit,
@@ -384,6 +391,7 @@ private fun ProfileMainPage(
         // Logout
         Button(
             onClick = onLogout,
+            enabled = !isLoggingOut,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
@@ -393,7 +401,11 @@ private fun ProfileMainPage(
         ) {
             Icon(Icons.AutoMirrored.Rounded.ExitToApp, null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.size(8.dp))
-            Text("Đăng xuất", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+            Text(
+                if (isLoggingOut) "Đang đăng xuất..." else "Đăng xuất",
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 16.sp
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))

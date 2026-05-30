@@ -42,6 +42,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material.icons.rounded.VolumeOff
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -76,6 +87,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -84,9 +96,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -144,6 +158,7 @@ fun WatchPartyScreen(
     
     val isMicMuted by viewModel.isMicMuted.collectAsState()
     val speakingUsers by viewModel.speakingUsers.collectAsState()
+    val memberVolumes by viewModel.memberVolumes.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) {
@@ -340,6 +355,9 @@ fun WatchPartyScreen(
         var showBrightnessIndicator by remember { mutableStateOf(false) }
         var visibleChats by remember { mutableStateOf<List<WatchPartyChatMessage>>(emptyList()) }
         val prevMsgCount = remember { mutableStateOf(chatMessages.size) }
+        var showGuestControls by remember { mutableStateOf(true) }
+        var controlsTrigger by remember { mutableStateOf(0) }
+
         LaunchedEffect(showBrightnessIndicator) {
             if (showBrightnessIndicator) { delay(1500); showBrightnessIndicator = false }
         }
@@ -351,6 +369,12 @@ fun WatchPartyScreen(
                 delay(4000)
                 visibleChats = visibleChats.filterNot { it in newMsgs }
             } else { prevMsgCount.value = chatMessages.size }
+        }
+        LaunchedEffect(controlsTrigger, showGuestControls) {
+            if (showGuestControls) {
+                delay(3500)
+                showGuestControls = false
+            }
         }
         val overlayAlpha = (1f - brightness).coerceIn(0f, 0.85f)
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -391,6 +415,16 @@ fun WatchPartyScreen(
                         if (isHost && episodes.size > 1) {
                             epBtn?.visibility = android.view.View.VISIBLE
                             epBtn?.setOnClickListener { showEpisodeDialog = true }
+                        }
+
+                        if (!isHost) {
+                            isClickable = true
+                            setOnClickListener {
+                                showGuestControls = !showGuestControls
+                                if (showGuestControls) {
+                                    controlsTrigger++
+                                }
+                            }
                         }
                     }
                 },
@@ -462,12 +496,55 @@ fun WatchPartyScreen(
                 }
             }
             // Guest overlays
-            if (!isHost) {
-                val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
-                Text("${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 14.dp, vertical = 4.dp))
-                IconButton(onClick = { toggleFullscreen() }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f))) {
-                    Icon(Icons.Rounded.FullscreenExit, "Thu nhỏ", tint = Color.White)
+            AnimatedVisibility(
+                visible = !isHost && showGuestControls,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val fmt = { ms: Long -> val ts = ms / 1000; val h = ts / 3600; val m = (ts % 3600) / 60; val s = ts % 60; if (h > 0) "$h:${"%02d".format(m)}:${"%02d".format(s)}" else "$m:${"%02d".format(s)}" }
+                    Text(
+                        text = "${fmt(guestCurrentTimeMs)} / ${fmt(guestDurationMs)}",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 16.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { toggleMicWithPermission() },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isMicMuted) Color.Red.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.4f))
+                        ) {
+                            Icon(
+                                imageVector = if (isMicMuted) Icons.Rounded.MicOff else Icons.Rounded.Mic,
+                                contentDescription = "Mic",
+                                tint = if (isMicMuted) Color.White else Color(0xFFF6E29A)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { toggleFullscreen() },
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.4f))
+                        ) {
+                            Icon(Icons.Rounded.FullscreenExit, "Thu nhỏ", tint = Color.White)
+                        }
+                    }
                 }
             }
 
@@ -749,7 +826,9 @@ fun WatchPartyScreen(
                     MembersList(
                         members = members,
                         hostId = room?.hostId ?: "",
+                        currentUid = currentUid,
                         speakingUsers = speakingUsers,
+                        memberVolumes = memberVolumes,
                         onAdjustVolume = { uid, vol -> viewModel.adjustUserVolume(uid, vol) }
                     )
                 }
@@ -883,7 +962,9 @@ private fun WatchPartyActionButton(
 private fun MembersList(
     members: List<WatchPartyMember>, 
     hostId: String,
+    currentUid: String?,
     speakingUsers: Map<Int, Int>,
+    memberVolumes: Map<String, Int>,
     onAdjustVolume: (String, Int) -> Unit
 ) {
     Column(
@@ -907,8 +988,9 @@ private fun MembersList(
                     val memberIsHost = member.uid == hostId
                     val agoraUid = member.uid.hashCode() and 0x7FFFFFFF
                     val isSpeaking = speakingUsers.containsKey(agoraUid)
+                    val canAdjustVolume = member.uid != currentUid
                     var showVolumePopup by remember { mutableStateOf(false) }
-                    var volume by remember { mutableStateOf(100f) }
+                    val volume = memberVolumes[member.uid] ?: 100
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -930,7 +1012,7 @@ private fun MembersList(
                                     else if (memberIsHost) Modifier.border(2.dp, Color(0xFFF6E29A), CircleShape)
                                     else Modifier.border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
                                 )
-                                .clickable { showVolumePopup = true },
+                                .clickable(enabled = canAdjustVolume) { showVolumePopup = true },
                             contentAlignment = Alignment.Center
                         ) {
                             if (member.photoUrl.isNotBlank()) {
@@ -957,37 +1039,139 @@ private fun MembersList(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+
                     }
 
-                    if (showVolumePopup) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = { showVolumePopup = false },
-                            containerColor = Color(0xFF1F1F1F),
-                            title = {
-                                Text("Âm lượng: ${member.displayName}", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                            },
-                            text = {
-                                androidx.compose.material3.Slider(
-                                    value = volume,
-                                    onValueChange = { 
-                                        volume = it 
-                                        onAdjustVolume(member.uid, it.toInt())
-                                    },
-                                    valueRange = 0f..100f
-                                )
-                            },
-                            confirmButton = {
-                                Button(
-                                    onClick = { showVolumePopup = false },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A))
-                                ) {
-                                    Text("Đóng", color = Color.Black)
-                                }
-                            }
+                    if (showVolumePopup && canAdjustVolume) {
+                        MemberVolumeDialog(
+                            member = member,
+                            volume = volume,
+                            onVolumeChange = { onAdjustVolume(member.uid, it) },
+                            onDismiss = { showVolumePopup = false }
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CustomVolumeSlider(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        val icon = when {
+            value <= 0 -> Icons.Rounded.VolumeOff
+            value < 33 -> Icons.Rounded.VolumeDown
+            else -> Icons.Rounded.VolumeUp
+        }
+
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.size(22.dp)
+        )
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .height(32.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val progress = (offset.x / size.width).coerceIn(0f, 1f)
+                        onValueChange((progress * 100).toInt())
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        val width = size.width.toFloat()
+                        if (width > 0f) {
+                            val newProgress = ((value / 100f) + (dragAmount.x / width)).coerceIn(0f, 1f)
+                            onValueChange((newProgress * 100).toInt())
+                        }
+                    }
+                }
+        ) {
+            val width = maxWidth
+            val progressWidth = width * (value / 100f)
+
+            // Track background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.White.copy(alpha = 0.12f))
+            ) {
+                // Active track
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(progressWidth)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFFF6E29A), Color(0xFFD4A843))
+                            )
+                        )
+                )
+            }
+
+            // Thumb
+            val thumbSize = 14.dp
+            val offset = (progressWidth - (thumbSize / 2)).coerceAtLeast(0.dp).coerceAtMost(width - thumbSize)
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = offset)
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF6E29A))
+                    .border(2.dp, Color(0xFF181818), CircleShape)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MemberVolumeDialog(
+    member: WatchPartyMember,
+    volume: Int,
+    onVolumeChange: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFF181818))
+                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(24.dp))
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Âm lượng",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            CustomVolumeSlider(
+                value = volume,
+                onValueChange = onVolumeChange,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -1152,6 +1336,7 @@ private fun ChatSection(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Input bar
+        val hasText = input.isNotBlank()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1159,32 +1344,61 @@ private fun ChatSection(
                 .navigationBarsPadding()
                 .imePadding()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF1F1F1F))
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF1F1F1F), Color(0xFF242424))
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            androidx.compose.material3.TextField(
+            BasicTextField(
                 value = input,
                 onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text("Nhắn gì đi...", color = Color.White.copy(alpha = 0.3f), style = MaterialTheme.typography.bodyMedium)
-                },
-                singleLine = true,
-                colors = androidx.compose.material3.TextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = Color(0xFFF6E29A)
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 42.dp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = Color.White,
+                    lineHeight = 20.sp
                 ),
-                textStyle = MaterialTheme.typography.bodyMedium
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (hasText) {
+                            onSend(input)
+                            input = ""
+                        }
+                    }
+                ),
+                cursorBrush = SolidColor(Color(0xFFF6E29A)),
+                singleLine = true,
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (input.isBlank()) {
+                            Text(
+                                "Nhắn gì đi...",
+                                color = Color.White.copy(alpha = 0.42f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
             )
 
             // Send button
-            val hasText = input.isNotBlank()
             Box(
                 modifier = Modifier
                     .size(40.dp)

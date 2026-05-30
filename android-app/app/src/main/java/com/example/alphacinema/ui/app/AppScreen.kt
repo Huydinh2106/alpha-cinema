@@ -32,6 +32,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,6 +55,9 @@ import androidx.navigation.toRoute
 import com.example.alphacinema.BuildConfig
 import com.example.alphacinema.data.model.SupportChatAction
 import com.example.alphacinema.data.model.SupportChatRouteDestination
+import com.example.alphacinema.data.model.SubscriptionPlan
+import com.example.alphacinema.data.model.activeEntitlements
+import com.example.alphacinema.data.model.entitlements
 import com.example.alphacinema.data.model.resolveRoute
 import com.example.alphacinema.ui.account.AccountPlaylistsScreen
 import com.example.alphacinema.ui.account.AccountScreen
@@ -100,11 +104,6 @@ private const val TAB_SWITCH_ANIM_DURATION = 90
 private const val ALPHA_CINEMA_WEB_LINK_HOST = "alpha-cinema-39dfb.web.app"
 private const val MOVIE_LINK_SEGMENT = "movie"
 private const val WATCH_PARTY_LINK_SEGMENT = "watchparty"
-private val AD_FREE_PLANS = setOf("basic", "couple", "premium")
-
-internal fun isAdFreePlan(plan: String?): Boolean {
-    return plan?.trim()?.lowercase() in AD_FREE_PLANS
-}
 
 private fun movieShareLink(slug: String): String {
     return Uri.Builder()
@@ -265,10 +264,13 @@ fun MainContent(
     val wpIsCreating by watchPartyViewModel.isCreating.collectAsState()
     val wpIsJoining by watchPartyViewModel.isJoining.collectAsState()
     var watchPartyLobbyMovie by remember { mutableStateOf<com.example.alphacinema.ui.movie.detail.MovieDetailUi?>(null) }
+    var pendingWatchPartyMovie by remember { mutableStateOf<com.example.alphacinema.ui.movie.detail.MovieDetailUi?>(null) }
     var showWatchPartyLobby by remember { mutableStateOf(false) }
     val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
+    var appCurrentUser by remember { mutableStateOf(auth.currentUser) }
     var appAuthLoading by remember { mutableStateOf(false) }
     var appAuthError by remember { mutableStateOf<String?>(null) }
+    var appLogoutInProgress by remember { mutableStateOf(false) }
 
     fun showToast(message: String) {
         android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
@@ -305,6 +307,34 @@ fun MainContent(
         return cachedAvatar ?: user.photoUrl?.toString().orEmpty()
     }
 
+    var demoCurrentPlan by rememberSaveable { mutableStateOf<String?>(null) }
+    var demoMembershipStartedDate by rememberSaveable { mutableStateOf<String?>(null) }
+    var demoMembershipExpiredDate by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentPlanEntitlements by remember { mutableStateOf(SubscriptionPlan.FREE.entitlements()) }
+
+    fun applySubscriptionProfile(profile: com.example.alphacinema.data.model.UserProfile?) {
+        val entitlements = profile.activeEntitlements()
+        currentPlanEntitlements = entitlements
+        if (entitlements.plan == SubscriptionPlan.FREE) {
+            demoCurrentPlan = null
+            demoMembershipStartedDate = null
+            demoMembershipExpiredDate = null
+        } else {
+            demoCurrentPlan = entitlements.plan.id
+            demoMembershipStartedDate = formatFirestoreDate(profile?.subscriptionStartedAt)
+            demoMembershipExpiredDate = formatFirestoreDate(profile?.subscriptionExpiresAt)
+        }
+    }
+
+    fun continueWatchPartyAfterAuth(canCreateWatchParty: Boolean) {
+        watchPartyLobbyMovie = pendingWatchPartyMovie
+        pendingWatchPartyMovie = null
+        showWatchPartyLobby = true
+        if (!canCreateWatchParty) {
+            showToast("Bạn có thể tham gia bằng mã phòng. Tạo phòng cần gói Couple hoặc Premium")
+        }
+    }
+
     val appAuthStateHolder = rememberAccountAuthStateHolder(
         onLogin = { email, password, onSuccess ->
             scope.launch {
@@ -312,9 +342,13 @@ fun MainContent(
                 appAuthError = null
                 try {
                     val result = auth.signInWithEmailAndPassword(email, password).await()
-                    result.user?.let { firestoreRepo.saveUser(it) }
-                    // Sau khi đăng nhập xong, mở lại Watch Party lobby
-                    showWatchPartyLobby = true
+                    val entitlements = result.user?.let {
+                        firestoreRepo.saveUser(it)
+                        val profile = firestoreRepo.getUserProfile(it.uid)
+                        applySubscriptionProfile(profile)
+                        profile.activeEntitlements()
+                    } ?: SubscriptionPlan.FREE.entitlements()
+                    continueWatchPartyAfterAuth(entitlements.canCreateWatchParty)
                     onSuccess()
                 } catch (e: Exception) {
                     appAuthError = e.localizedMessage ?: "Lỗi đăng nhập"
@@ -349,8 +383,13 @@ fun MainContent(
                             .setDisplayName(name)
                             .build()
                     )?.await()
-                    (auth.currentUser ?: result.user)?.let { firestoreRepo.saveUser(it) }
-                    showWatchPartyLobby = true
+                    val entitlements = (auth.currentUser ?: result.user)?.let {
+                        firestoreRepo.saveUser(it)
+                        val profile = firestoreRepo.getUserProfile(it.uid)
+                        applySubscriptionProfile(profile)
+                        profile.activeEntitlements()
+                    } ?: SubscriptionPlan.FREE.entitlements()
+                    continueWatchPartyAfterAuth(entitlements.canCreateWatchParty)
                     onSuccess()
                 } catch (e: Exception) {
                     appAuthError = "Đăng ký thất bại: ${e.localizedMessage}"
@@ -381,8 +420,13 @@ fun MainContent(
                     val googleIdTokenCredential = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(credentialResponse.credential.data)
                     val firebaseCredential = com.google.firebase.auth.GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
                     val result = auth.signInWithCredential(firebaseCredential).await()
-                    result.user?.let { firestoreRepo.saveUser(it) }
-                    showWatchPartyLobby = true
+                    val entitlements = result.user?.let {
+                        firestoreRepo.saveUser(it)
+                        val profile = firestoreRepo.getUserProfile(it.uid)
+                        applySubscriptionProfile(profile)
+                        profile.activeEntitlements()
+                    } ?: SubscriptionPlan.FREE.entitlements()
+                    continueWatchPartyAfterAuth(entitlements.canCreateWatchParty)
                     onSuccess()
                 } catch (e: Exception) {
                     appAuthError = "Đăng nhập Google thất bại"
@@ -392,22 +436,28 @@ fun MainContent(
             }
         }
     )
-    var demoCurrentPlan by rememberSaveable { mutableStateOf<String?>(null) }
-    var demoMembershipStartedDate by rememberSaveable { mutableStateOf<String?>(null) }
-    var demoMembershipExpiredDate by rememberSaveable { mutableStateOf<String?>(null) }
+    DisposableEffect(auth) {
+        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
+            appCurrentUser = firebaseAuth.currentUser
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
 
-    // Load subscription plan from Firestore on app start
-    LaunchedEffect(Unit) {
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null && demoCurrentPlan == null) {
-            firestoreRepo.saveUser(user)
-            val profile = firestoreRepo.getUserProfile(user.uid)
-            val plan = profile?.subscriptionPlan
-            if (!plan.isNullOrBlank() && plan != "free") {
-                demoCurrentPlan = plan
-                demoMembershipStartedDate = formatFirestoreDate(profile?.subscriptionStartedAt)
-                demoMembershipExpiredDate = formatFirestoreDate(profile?.subscriptionExpiresAt)
+    // Keep feature entitlements in sync with login/logout changes from any screen.
+    LaunchedEffect(appCurrentUser?.uid) {
+        val user = appCurrentUser
+        if (user != null) {
+            try {
+                firestoreRepo.saveUser(user)
+                val profile = firestoreRepo.getUserProfile(user.uid)
+                applySubscriptionProfile(profile)
+            } catch (e: Exception) {
+                android.util.Log.e("AppScreen", "Failed to sync subscription profile", e)
+                applySubscriptionProfile(null)
             }
+        } else {
+            applySubscriptionProfile(null)
         }
     }
 
@@ -499,6 +549,26 @@ fun MainContent(
             navController.navigate(MainRoute) {
                 launchSingleTop = true
             }
+        }
+    }
+
+    fun performLogout() {
+        if (appLogoutInProgress) return
+        appLogoutInProgress = true
+
+        try {
+            watchPartyViewModel.leaveRoom()
+            auth.signOut()
+            appCurrentUser = null
+            profileCache.clear()
+            applySubscriptionProfile(null)
+            returnToAccountScreen()
+            showToast("Đã đăng xuất")
+        } catch (e: Exception) {
+            android.util.Log.e("AppScreen", "Logout failed", e)
+            showToast("Không thể đăng xuất. Vui lòng thử lại")
+        } finally {
+            appLogoutInProgress = false
         }
     }
 
@@ -634,7 +704,7 @@ fun MainContent(
                             onPlayMovie = ::openPlayerFromHome,
                             onOpenMovieDetail = ::openMovieDetail,
                             onNavigateToPlan = {
-                                navController.navigate(PaymentNavRoute)
+                                navController.navigate(PaymentNavRoute())
                             },
                             onSeeMore = { kind, slug, title ->
                                 navController.navigate(
@@ -681,15 +751,15 @@ fun MainContent(
                                 showWatchPartyLobby = true
                             },
                             onOpenPayment = {
-                                navController.navigate(PaymentNavRoute)
+                                navController.navigate(
+                                    PaymentNavRoute(currentPlan = currentPlanEntitlements.plan.id)
+                                )
                             },
                             onOpenProfileSettings = {
                                 navController.navigate(ProfileSettingsNavRoute)
                             },
                             onLogout = {
-                                demoCurrentPlan = null
-                                demoMembershipStartedDate = null
-                                demoMembershipExpiredDate = null
+                                applySubscriptionProfile(null)
                             },
                             currentPlan = demoCurrentPlan,
                             membershipStartedDate = demoMembershipStartedDate,
@@ -745,6 +815,7 @@ fun MainContent(
                         playlists = playlists,
                         playlistIdsForMovie = playlistIdsForCurrentMovie,
                         playlistActionInProgress = playlistActionInProgress,
+                        canUsePlaylist = currentPlanEntitlements.playlist,
                         currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
                         currentUserAvatarUrl = currentCommentAvatarUrl(
                             com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -778,6 +849,9 @@ fun MainContent(
                         },
                         onAddToListLoginRequired = {
                             showToast("Vui lòng đăng nhập để lưu vào danh sách phát")
+                        },
+                        onPlaylistUpgradeRequired = {
+                            showToast("Playlist cần gói Basic trở lên")
                         },
                         onPostComment = { content ->
                             val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -818,6 +892,7 @@ fun MainContent(
                             val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                             if (currentUser == null) {
                                 // Chưa đăng nhập -> hiện popup đăng nhập ngay
+                                pendingWatchPartyMovie = detailMovie
                                 appAuthStateHolder.onEvent(AccountAuthEvent.OpenDialog(AuthMode.LOGIN))
                             } else if (wpRoom != null && watchPartyViewModel.isHost) {
                                 // Đang là chủ phòng -> đổi phim cho phòng hiện tại
@@ -898,7 +973,7 @@ fun MainContent(
                             episodeVideoUrls = episodeVideoUrls,
                             startPositionMs = route.startPositionMs,
                             adTagUrl = BuildConfig.IMA_AD_TAG_URL,
-                            adsEnabled = !isAdFreePlan(demoCurrentPlan),
+                            adsEnabled = !currentPlanEntitlements.adFree,
                             onSelectEpisode = { ep ->
                                 // Thay thế route hiện tại bằng episode mới (không thêm vào back stack)
                                 navController.navigate(
@@ -955,17 +1030,17 @@ fun MainContent(
                 )
             }
 
-            composable<PaymentNavRoute> {
+            composable<PaymentNavRoute> { backStackEntry ->
+                val route = backStackEntry.toRoute<PaymentNavRoute>()
                 PaymentScreen(
                     onBack = { popBackStackSafely() },
+                    currentPlan = route.currentPlan,
                     onPaymentConfirmed = {
                         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                         if (user != null) {
                             scope.launch {
                                 val profile = firestoreRepo.getUserProfile(user.uid)
-                                demoCurrentPlan = profile?.subscriptionPlan
-                                demoMembershipStartedDate = formatFirestoreDate(profile?.subscriptionStartedAt)
-                                demoMembershipExpiredDate = formatFirestoreDate(profile?.subscriptionExpiresAt)
+                                applySubscriptionProfile(profile)
                             }
                         }
                         showToast("MoMo đã xác nhận thanh toán")
@@ -977,13 +1052,12 @@ fun MainContent(
             composable<ProfileSettingsNavRoute> {
                 ProfileSettingsScreen(
                     onBack = { popBackStackSafely() },
-                    onOpenPayment = { navController.navigate(PaymentNavRoute) },
-                    onLogout = {
-                        demoCurrentPlan = null
-                        demoMembershipStartedDate = null
-                        demoMembershipExpiredDate = null
-                        returnToAccountScreen()
-                    }
+                    onOpenPayment = {
+                        navController.navigate(
+                            PaymentNavRoute(currentPlan = currentPlanEntitlements.plan.id)
+                        )
+                    },
+                    onLogout = ::performLogout
                 )
             }
 
@@ -1003,7 +1077,12 @@ fun MainContent(
             composable<PlaylistsNavRoute> {
                 AccountPlaylistsScreen(
                     onBack = { popBackStackSafely() },
-                    onOpenMovieDetail = ::openMovieDetail
+                    onOpenMovieDetail = ::openMovieDetail,
+                    onOpenPayment = {
+                        navController.navigate(
+                            PaymentNavRoute(currentPlan = currentPlanEntitlements.plan.id)
+                        )
+                    }
                 )
             }
 
@@ -1150,11 +1229,17 @@ fun MainContent(
                 isJoining = wpIsJoining,
                 error = wpError,
                 joinOnly = false,
+                canCreateRoom = currentPlanEntitlements.canCreateWatchParty,
+                maxMembers = currentPlanEntitlements.maxWatchPartyMembers.coerceAtLeast(2),
                 onDismiss = {
                     showWatchPartyLobby = false
                     watchPartyViewModel.clearError()
                 },
                 onCreateRoom = {
+                    if (!currentPlanEntitlements.canCreateWatchParty) {
+                        showToast("Tạo phòng xem chung cần gói Couple hoặc Premium")
+                        return@WatchPartyLobbySheet
+                    }
                     watchPartyViewModel.createRoom(
                         context = context,
                         movieSlug = movie?.id ?: "",
@@ -1184,9 +1269,15 @@ fun MainContent(
                 errorMessage = appAuthError,
                 onEvent = { event -> 
                     appAuthError = null
+                    if (event == AccountAuthEvent.CloseDialog) {
+                        pendingWatchPartyMovie = null
+                    }
                     appAuthStateHolder.onEvent(event)
                 },
-                onForgotPassword = { appAuthStateHolder.onEvent(AccountAuthEvent.CloseDialog) }
+                onForgotPassword = {
+                    pendingWatchPartyMovie = null
+                    appAuthStateHolder.onEvent(AccountAuthEvent.CloseDialog)
+                }
             )
         }
 
@@ -1195,7 +1286,7 @@ fun MainContent(
             if (initialNotificationType == "new_movie" && initialMovieId != null) {
                 navController.navigate(MovieDetailNavRoute(slug = initialMovieId))
             } else if (initialNotificationType == "billing") {
-                navController.navigate(PaymentNavRoute)
+                navController.navigate(PaymentNavRoute())
             }
         }
 

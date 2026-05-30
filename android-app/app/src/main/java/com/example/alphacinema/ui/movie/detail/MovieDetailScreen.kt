@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -31,6 +32,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Reply
@@ -92,6 +96,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -112,6 +117,7 @@ fun MovieDetailScreen(
     playlists: List<UserPlaylist> = emptyList(),
     playlistIdsForMovie: Set<String> = emptySet(),
     playlistActionInProgress: Boolean = false,
+    canUsePlaylist: Boolean = true,
     currentUserId: String? = null,
     currentUserAvatarUrl: String = "",
     onToggleFavorite: (MovieDetailUi) -> Unit,
@@ -120,6 +126,7 @@ fun MovieDetailScreen(
     onRenamePlaylist: (String, String) -> Unit = { _, _ -> },
     onDeletePlaylist: (String) -> Unit = {},
     onAddToListLoginRequired: () -> Unit = {},
+    onPlaylistUpgradeRequired: () -> Unit = {},
     onPostComment: (String) -> Unit,
     onReplyComment: (Comment, String) -> Unit = { _, _ -> },
     onToggleCommentLike: (Comment) -> Unit = {},
@@ -240,6 +247,8 @@ fun MovieDetailScreen(
                                 MovieDetailAction.ADD_TO_LIST -> {
                                     if (currentUserId == null) {
                                         onAddToListLoginRequired()
+                                    } else if (!canUsePlaylist) {
+                                        onPlaylistUpgradeRequired()
                                     } else {
                                         showSaveToPlaylistSheet = true
                                     }
@@ -1488,6 +1497,8 @@ private fun CommentInputBar(
     onSend: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hasText = text.isNotBlank()
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1536,45 +1547,78 @@ private fun CommentInputBar(
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(Color(0xFF1F1F1F), Color(0xFF242424))
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            OutlinedTextField(
+            BasicTextField(
                 value = text,
                 onValueChange = onTextChange,
-                modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text(
-                        if (replyTarget == null) "Viết bình luận..." else "Viết câu trả lời...",
-                        color = Color.White.copy(alpha = 0.5f)
-                    )
-                },
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                    unfocusedContainerColor = Color.White.copy(alpha = 0.08f),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                    focusedBorderColor = Color(0xFFF6E29A)
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 42.dp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                    color = Color.White,
+                    lineHeight = 20.sp
                 ),
-                shape = RoundedCornerShape(28.dp),
-                maxLines = 3
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (hasText) {
+                            onSend()
+                        }
+                    }
+                ),
+                cursorBrush = SolidColor(Color(0xFFF6E29A)),
+                maxLines = 3,
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (text.isBlank()) {
+                            Text(
+                                if (replyTarget == null) "Viết bình luận..." else "Viết câu trả lời...",
+                                color = Color.White.copy(alpha = 0.42f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
             )
-            Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = onSend,
-                modifier = Modifier.size(56.dp),
+                enabled = hasText,
+                modifier = Modifier.size(40.dp),
                 shape = CircleShape,
                 contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFFF6E29A),
-                    contentColor = Color.Black
+                    contentColor = Color.Black,
+                    disabledContainerColor = Color.White.copy(alpha = 0.10f),
+                    disabledContentColor = Color.White.copy(alpha = 0.30f)
                 )
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.Send,
                     contentDescription = "Gửi bình luận",
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

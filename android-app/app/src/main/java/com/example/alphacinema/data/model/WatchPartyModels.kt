@@ -14,7 +14,7 @@ data class WatchPartyRoom(
     val playStartedAt: Long = 0,          // server timestamp when play started
     val lastUpdated: Long = 0,
     val createdAt: Long = 0,
-    val maxMembers: Int = 5
+    val maxMembers: Int = 10
 )
 
 data class WatchPartyMember(

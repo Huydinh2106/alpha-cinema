@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.alphacinema.data.model.MomoPaymentResponse
+import com.example.alphacinema.data.model.availableUpgradePlans
 import com.example.alphacinema.payment.MomoSdkCoordinator
 import com.example.alphacinema.payment.MomoSdkPaymentRequest
 import com.google.zxing.BarcodeFormat
@@ -115,6 +116,8 @@ private fun PaymentPackageId.selectionColor(): Color {
         PaymentPackageId.PREMIUM -> Color(0xFFF6E29A)
     }
 }
+
+private fun PaymentPackageId.planId(): String = name.lowercase(Locale.ROOT)
 
 private data class PaymentPackageUi(
     val id: PaymentPackageId,
@@ -154,10 +157,17 @@ private enum class PaymentStatus {
 fun PaymentScreen(
     onBack: () -> Unit = {},
     onPaymentConfirmed: () -> Unit = {},
+    currentPlan: String? = null,
     viewModel: PaymentViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val packages = rememberPaymentPackages()
+    val allPackages = rememberPaymentPackages()
+    val upgradePlanIds = remember(currentPlan) {
+        availableUpgradePlans(currentPlan).map { it.id }.toSet()
+    }
+    val packages = remember(allPackages, upgradePlanIds) {
+        allPackages.filter { it.id.planId() in upgradePlanIds }
+    }
     val paymentMethods = rememberPaymentMethods()
     var selectedPackage by remember { mutableStateOf<PaymentPackageUi?>(null) }
     var selectedPaymentMethod by remember { mutableStateOf<PaymentMethodUi?>(null) }
@@ -174,6 +184,12 @@ fun PaymentScreen(
     LaunchedEffect(momoResponse) {
         if (momoResponse != null) {
             paymentStatus = PaymentStatus.QR_DISPLAYED
+        }
+    }
+
+    LaunchedEffect(packages) {
+        if (selectedPackage != null && packages.none { it.id == selectedPackage?.id }) {
+            selectedPackage = null
         }
     }
 
@@ -238,49 +254,53 @@ fun PaymentScreen(
                 PaymentStatus.FAILED -> {
                     PaymentHero()
 
-                    PricingSection(
-                        packages = packages,
-                        selectedPackageId = selectedPackage?.id,
-                        onSelectPackage = {
-                            selectedPackage = it
-                            if (paymentStatus != PaymentStatus.IDLE) {
-                                paymentStatus = PaymentStatus.IDLE
+                    if (packages.isEmpty()) {
+                        NoUpgradePlansNotice()
+                    } else {
+                        PricingSection(
+                            packages = packages,
+                            selectedPackageId = selectedPackage?.id,
+                            onSelectPackage = {
+                                selectedPackage = it
+                                if (paymentStatus != PaymentStatus.IDLE) {
+                                    paymentStatus = PaymentStatus.IDLE
+                                }
                             }
-                        }
-                    )
+                        )
 
-                    PaymentMethodSection(
-                        methods = paymentMethods,
-                        selectedMethodId = selectedPaymentMethod?.id,
-                        onSelectMethod = {
-                            selectedPaymentMethod = it
-                            if (paymentStatus != PaymentStatus.IDLE) {
-                                paymentStatus = PaymentStatus.IDLE
+                        PaymentMethodSection(
+                            methods = paymentMethods,
+                            selectedMethodId = selectedPaymentMethod?.id,
+                            onSelectMethod = {
+                                selectedPaymentMethod = it
+                                if (paymentStatus != PaymentStatus.IDLE) {
+                                    paymentStatus = PaymentStatus.IDLE
+                                }
                             }
+                        )
+
+                        PaymentPolicyNotice()
+
+                        Button(
+                            onClick = { paymentStatus = PaymentStatus.CONFIRMING },
+                            enabled = isSelectionComplete,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentGold,
+                                contentColor = Color(0xFF060914),
+                                disabledContainerColor = Color.White.copy(alpha = 0.12f),
+                                disabledContentColor = Color.White.copy(alpha = 0.38f)
+                            )
+                        ) {
+                            Text(
+                                text = "Tiếp tục thanh toán",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
-                    )
-
-                    PaymentPolicyNotice()
-
-                    Button(
-                        onClick = { paymentStatus = PaymentStatus.CONFIRMING },
-                        enabled = isSelectionComplete,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentGold,
-                            contentColor = Color(0xFF060914),
-                            disabledContainerColor = Color.White.copy(alpha = 0.12f),
-                            disabledContentColor = Color.White.copy(alpha = 0.38f)
-                        )
-                    ) {
-                        Text(
-                            text = "Tiếp tục thanh toán",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold
-                        )
                     }
                 }
 
@@ -769,6 +789,38 @@ private suspend fun saveImageToGallery(context: Context, bitmap: Bitmap) {
 }
 
 @Composable
+private fun NoUpgradePlansNotice() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White.copy(alpha = 0.055f))
+            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(24.dp))
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.WorkspacePremium,
+            contentDescription = null,
+            tint = AccentGold,
+            modifier = Modifier.size(28.dp)
+        )
+        Text(
+            text = "Bạn đang dùng gói cao nhất",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Text(
+            text = "Gói Premium đã bao gồm toàn bộ quyền lợi hiện có.",
+            color = Color.White.copy(alpha = 0.68f),
+            style = MaterialTheme.typography.bodyMedium,
+            lineHeight = 20.sp
+        )
+    }
+}
+
+@Composable
 private fun rememberPaymentPackages(): List<PaymentPackageUi> {
     return remember {
         listOf(
@@ -780,10 +832,9 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 duration = "1 tháng",
                 description = "Dành cho người dùng cá nhân",
                 features = listOf(
-                    "Xem phim không giới hạn",
-                    "Lưu danh sách phim yêu thích",
-                    "Chất lượng HD",
-                    "Không quảng cáo"
+                    "Không quảng cáo",
+                    "Chế độ trẻ em",
+                    "Lưu video vào playlist"
                 ),
                 buttonText = "Chọn gói Basic"
             ),
@@ -795,11 +846,10 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 duration = "1 tháng",
                 description = "Dành cho 2 người xem chung",
                 features = listOf(
-                    "Tất cả tính năng của Basic",
-                    "Tạo phòng xem chung",
-                    "Đồng bộ thời gian xem phim",
-                    "Chat trong phòng xem",
-                    "Không quảng cáo"
+                    "Không quảng cáo",
+                    "Chế độ trẻ em",
+                    "Lưu video vào playlist",
+                    "Tạo phòng xem chung tối đa 2 người"
                 ),
                 buttonText = "Chọn gói Couple"
             ),
@@ -811,11 +861,11 @@ private fun rememberPaymentPackages(): List<PaymentPackageUi> {
                 duration = "1 tháng",
                 description = "Dành cho nhóm bạn / gia đình",
                 features = listOf(
-                    "Tất cả tính năng của Couple",
-                    "Tạo nhiều phòng xem chung",
-                    "Mời bạn bè tham gia bằng link",
-                    "Ưu tiên chất lượng Full HD / 4K",
-                    "Không quảng cáo"
+                    "Không quảng cáo",
+                    "Chế độ trẻ em",
+                    "Lưu video vào playlist",
+                    "Tạo phòng xem chung tối đa 10 người",
+                    "Mời bạn bè tham gia bằng link"
                 ),
                 buttonText = "Chọn gói Premium",
                 badge = "Phổ biến nhất"
@@ -1264,15 +1314,11 @@ private fun SummaryRow(
 
 @Composable
 private fun ProcessingPaymentState() {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
-            .padding(horizontal = 20.dp, vertical = 34.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(vertical = 34.dp),
+        contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator(
             color = AccentGold,
