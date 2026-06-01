@@ -4,8 +4,15 @@
     <style name="Theme.AlphaCinema" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/splash_bg</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:windowTranslucentNavigation">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
     </style>
 
     <!-- System Splash Screen của Android 12+ được "vô hiệu hoá" bằng cách:
@@ -19,6 +26,10 @@
         <item name="windowSplashScreenIconBackgroundColor">@color/splash_bg</item>
         <!-- Thời gian hiển thị tối thiểu = 0 → tắt ngay -->
         <item name="windowSplashScreenAnimationDuration">0</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
         <item name="postSplashScreenTheme">@style/Theme.AlphaCinema</item>
     </style>
 </resources>

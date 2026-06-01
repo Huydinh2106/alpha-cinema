@@ -1451,6 +1451,7 @@ private fun CommentsTab(
             .groupBy { it.parentCommentId }
             .mapValues { (_, replies) -> replies.sortedBy { it.createdAtMillis() } }
     }
+    var expandedCommentIds by remember(comments) { mutableStateOf(setOf<String>()) }
     
     Column(
         modifier = Modifier
@@ -1463,25 +1464,80 @@ private fun CommentsTab(
             Text("Chưa có bình luận nào.", color = Color.White.copy(alpha = 0.5f))
         } else {
             topLevelComments.forEach { comment ->
-                CommentRow(
-                    comment = comment,
-                    currentUserId = currentUserId,
-                    currentUserAvatarUrl = currentUserAvatarUrl,
-                    showReplyAction = true,
-                    onReply = { onSelectReplyTarget(comment) },
-                    onToggleLike = { onToggleCommentLike(comment) }
-                )
-
-                repliesByParent[comment.id].orEmpty().forEach { reply ->
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     CommentRow(
-                        comment = reply,
+                        comment = comment,
                         currentUserId = currentUserId,
                         currentUserAvatarUrl = currentUserAvatarUrl,
-                        showReplyAction = false,
-                        modifier = Modifier.padding(start = 48.dp),
-                        onReply = {},
-                        onToggleLike = { onToggleCommentLike(reply) }
+                        showReplyAction = true,
+                        onReply = { onSelectReplyTarget(comment) },
+                        onToggleLike = { onToggleCommentLike(comment) }
                     )
+
+                    val replies = repliesByParent[comment.id].orEmpty()
+                    if (replies.isNotEmpty()) {
+                        val isExpanded = expandedCommentIds.contains(comment.id)
+                        if (isExpanded) {
+                            replies.forEach { reply ->
+                                CommentRow(
+                                    comment = reply,
+                                    currentUserId = currentUserId,
+                                    currentUserAvatarUrl = currentUserAvatarUrl,
+                                    showReplyAction = true,
+                                    modifier = Modifier.padding(start = 48.dp),
+                                    onReply = { onSelectReplyTarget(reply) },
+                                    onToggleLike = { onToggleCommentLike(reply) }
+                                )
+                            }
+                            
+                            // "Ẩn bớt câu trả lời" button
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .padding(start = 48.dp, top = 4.dp)
+                                    .clickable { expandedCommentIds = expandedCommentIds - comment.id }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(24.dp)
+                                        .height(1.dp)
+                                        .background(Color.White.copy(alpha = 0.3f))
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Ẩn bớt câu trả lời",
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            // "Xem X câu trả lời khác" button
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .padding(start = 48.dp, top = 4.dp)
+                                    .clickable { expandedCommentIds = expandedCommentIds + comment.id }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(24.dp)
+                                        .height(1.dp)
+                                        .background(Color.White.copy(alpha = 0.3f))
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Xem ${replies.size} câu trả lời khác",
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1625,6 +1681,21 @@ private fun CommentInputBar(
     }
 }
 
+private fun formatTimeAgo(timestamp: com.google.firebase.Timestamp?): String {
+    if (timestamp == null) return "Vừa xong"
+    val diff = System.currentTimeMillis() - timestamp.toDate().time
+    return when {
+        diff < 60000 -> "Vừa xong"
+        diff < 3600000 -> "${diff / 60000} phút"
+        diff < 86400000 -> "${diff / 3600000} giờ"
+        diff < 2592000000L -> "${diff / 86400000L} ngày"
+        else -> {
+            val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+            sdf.format(timestamp.toDate())
+        }
+    }
+}
+
 @Composable
 private fun CommentRow(
     comment: Comment,
@@ -1642,7 +1713,7 @@ private fun CommentRow(
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(36.dp)
                 .clip(CircleShape)
                 .background(Color(0xFF262626)),
             contentAlignment = Alignment.Center
@@ -1658,84 +1729,74 @@ private fun CommentRow(
                 Text(
                     text = comment.userName.firstOrNull()?.uppercase() ?: "?",
                     color = Color(0xFFF6E29A),
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
         }
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .padding(12.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = comment.userName.ifBlank { "Người dùng" },
                     color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodyMedium
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = comment.replyContentLabel(),
-                    color = Color.White.copy(alpha = 0.8f),
-                    style = MaterialTheme.typography.bodyMedium
+                    text = formatTimeAgo(comment.createdAt),
+                    color = Color.White.copy(alpha = 0.45f),
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = comment.replyContentLabel(),
+                color = Color.White.copy(alpha = 0.9f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 4.dp)
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onToggleLike,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = if (comment.isLikedBy(currentUserId)) {
-                            Icons.Rounded.Favorite
-                        } else {
-                            Icons.Rounded.FavoriteBorder
-                        },
-                        contentDescription = "Thả tim",
-                        tint = if (comment.isLikedBy(currentUserId)) {
-                            Color(0xFFFF5C7A)
-                        } else {
-                            Color.White.copy(alpha = 0.58f)
-                        },
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                val likeCount = comment.visibleLikeCount()
-                if (likeCount > 0L) {
-                    Text(
-                        text = likeCount.toString(),
-                        color = Color.White.copy(alpha = 0.62f),
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                }
                 if (showReplyAction) {
-                    TextButton(
-                        onClick = onReply,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.Reply,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.62f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Trả lời",
-                            color = Color.White.copy(alpha = 0.62f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Text(
+                        text = "Trả lời",
+                        color = Color.White.copy(alpha = 0.45f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onReply() }
+                    )
                 }
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            val isLiked = comment.isLikedBy(currentUserId)
+            IconButton(
+                onClick = onToggleLike,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    contentDescription = "Thả tim",
+                    tint = if (isLiked) Color(0xFFFF2D55) else Color.White.copy(alpha = 0.45f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            val likeCount = comment.visibleLikeCount()
+            if (likeCount > 0L) {
+                Text(
+                    text = likeCount.toString(),
+                    color = Color.White.copy(alpha = 0.45f),
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }

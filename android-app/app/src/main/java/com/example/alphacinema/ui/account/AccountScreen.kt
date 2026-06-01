@@ -1250,7 +1250,16 @@ private fun WatchTogetherHighlightCard(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold
                 )
-                AccountFeatureBadge(text = "PRO")
+                AccountFeatureBadge(
+                    text = "COUPLE",
+                    borderColor = Color(0xFFFF6FA8).copy(alpha = 0.72f),
+                    textColor = Color(0xFFFF6FA8)
+                )
+                AccountFeatureBadge(
+                    text = "PREMIUM",
+                    borderColor = AccountAccentGold.copy(alpha = 0.72f),
+                    textColor = AccountAccentGold
+                )
             }
         }
 
@@ -1264,16 +1273,20 @@ private fun WatchTogetherHighlightCard(
 }
 
 @Composable
-private fun AccountFeatureBadge(text: String) {
+private fun AccountFeatureBadge(
+    text: String,
+    borderColor: Color = AccountAccentGold.copy(alpha = 0.72f),
+    textColor: Color = AccountAccentGold
+) {
     Box(
         modifier = Modifier
-            .border(1.dp, AccountAccentGold.copy(alpha = 0.72f), RoundedCornerShape(5.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(5.dp))
             .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = AccountAccentGold,
+            color = textColor,
             fontSize = 10.sp,
             lineHeight = 12.sp,
             fontWeight = FontWeight.ExtraBold,

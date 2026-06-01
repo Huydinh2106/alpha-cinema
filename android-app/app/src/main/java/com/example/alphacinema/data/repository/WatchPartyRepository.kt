@@ -331,7 +331,6 @@ class WatchPartyRepository {
             maxMembers = snapshot.child("maxMembers").getValue(Int::class.java) ?: MAX_MEMBERS
         )
     }
-
     // ── Server Time Offset ──────────────────────────────────────────
 
     fun getServerTimeOffset(): Flow<Long> = callbackFlow {
@@ -345,6 +344,16 @@ class WatchPartyRepository {
         val ref = db.getReference(".info/serverTimeOffset")
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
+    }
+
+    fun registerOnDisconnect(roomId: String, uid: String) {
+        if (roomId.isBlank() || uid.isBlank()) return
+        rootRef.child(roomId).child("members").child(uid).onDisconnect().removeValue()
+    }
+
+    fun cancelOnDisconnect(roomId: String, uid: String) {
+        if (roomId.isBlank() || uid.isBlank()) return
+        rootRef.child(roomId).child("members").child(uid).onDisconnect().cancel()
     }
 
     private suspend fun requireIdToken(): String {

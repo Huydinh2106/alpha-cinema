@@ -863,11 +863,16 @@ fun MainContent(
                         },
                         onReplyComment = { parentComment, content ->
                             val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                            val resolvedParentId = if (parentComment.parentCommentId.isNotBlank()) {
+                                parentComment.parentCommentId
+                            } else {
+                                parentComment.id
+                            }
                             movieDetailViewModel.postComment(
                                 user?.displayName ?: "Ẩn danh",
                                 currentCommentAvatarUrl(user),
                                 content,
-                                parentCommentId = parentComment.id,
+                                parentCommentId = resolvedParentId,
                                 replyToUserName = parentComment.userName.ifBlank { "Người dùng" }
                             ) { _, msg -> showToast(msg) }
                         },

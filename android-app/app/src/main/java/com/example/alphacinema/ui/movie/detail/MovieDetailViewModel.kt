@@ -413,7 +413,8 @@ class MovieDetailViewModel : ViewModel() {
             try {
                 firestoreRepository.toggleCommentLike(slug, commentId, uid)
             } catch (e: Exception) {
-                onResult(false, "Không thể cập nhật thả tim")
+                Log.e(TAG, "Error toggling comment like for comment $commentId", e)
+                onResult(false, "Không thể cập nhật thả tim: ${e.localizedMessage ?: e.message}")
             }
         }
     }

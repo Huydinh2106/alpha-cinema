@@ -308,6 +308,11 @@ class WatchPartyViewModel : ViewModel() {
         stopObserving()
         activeRoomId = roomId
         _roomDismissed.value = false
+
+        currentUid?.let { uid ->
+            repository.registerOnDisconnect(roomId, uid)
+        }
+
         observeJob = viewModelScope.launch {
             launch {
                 repository.observeRoom(roomId).collect { room ->
@@ -344,6 +349,12 @@ class WatchPartyViewModel : ViewModel() {
     }
 
     private fun clearLocalRoomSession() {
+        val roomId = _room.value?.roomId ?: activeRoomId
+        val uid = currentUid
+        if (!roomId.isNullOrBlank() && !uid.isNullOrBlank()) {
+            repository.cancelOnDisconnect(roomId, uid)
+        }
+
         stopObserving()
         activeRoomId = null
         leaveVoiceChannel()
