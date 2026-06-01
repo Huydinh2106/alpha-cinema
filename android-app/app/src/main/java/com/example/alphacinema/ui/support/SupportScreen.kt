@@ -1101,17 +1101,10 @@ private fun ChatInputBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                InputActionButton(
-                    icon = Icons.Rounded.Add,
-                    contentDescription = "Thêm lựa chọn",
-                    enabled = !isLoading,
-                    onClick = {}
-                )
-
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
@@ -1151,13 +1144,6 @@ private fun ChatInputBar(
                     }
                 )
 
-                InputActionButton(
-                    icon = Icons.Rounded.HeadsetMic,
-                    contentDescription = "Nhập bằng giọng nói",
-                    enabled = !isLoading,
-                    onClick = {}
-                )
-
                 Button(
                     onClick = onSend,
                     enabled = value.isNotBlank() && !isLoading,
@@ -1179,29 +1165,5 @@ private fun ChatInputBar(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun InputActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = if (enabled) 0.07f else 0.035f))
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = Color.White.copy(alpha = if (enabled) 0.72f else 0.28f),
-            modifier = Modifier.size(19.dp)
-        )
     }
 }

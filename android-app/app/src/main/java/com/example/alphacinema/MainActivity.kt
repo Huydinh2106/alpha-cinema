@@ -39,10 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         com.example.alphacinema.data.local.SettingsManager.init(this)
         val splashScreen = installSplashScreen()
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
-        )
+        applyEdgeToEdge()
 
         super.onCreate(savedInstanceState)
 
@@ -92,6 +89,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        applyEdgeToEdge()
         
         handleFCMIntent(intent)
         
@@ -118,6 +116,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        applyEdgeToEdge()
+    }
+
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (MomoSdkCoordinator.handleActivityResult(requestCode, resultCode, data)) {
@@ -138,6 +141,13 @@ class MainActivity : ComponentActivity() {
 
             intent.putExtra("open_notifications", true)
         }
+    }
+
+    private fun applyEdgeToEdge() {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
+        )
     }
 
     private fun requestNotificationPermission() {

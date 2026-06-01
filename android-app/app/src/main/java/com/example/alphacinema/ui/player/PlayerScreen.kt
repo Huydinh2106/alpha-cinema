@@ -665,7 +665,7 @@ private fun hideSystemBars(activity: Activity?) {
 private fun showSystemBars(activity: Activity?) {
     val window = activity?.window ?: return
 
-    WindowCompat.setDecorFitsSystemWindows(window, true)
+    WindowCompat.setDecorFitsSystemWindows(window, false)
 
     WindowInsetsControllerCompat(window, window.decorView)
         .show(WindowInsetsCompat.Type.systemBars())

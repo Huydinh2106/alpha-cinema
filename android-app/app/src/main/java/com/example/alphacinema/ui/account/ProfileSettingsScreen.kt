@@ -706,10 +706,10 @@ private fun ChangePasswordPage(
         // Lock icon
         Box(
             modifier = Modifier.align(Alignment.CenterHorizontally).size(72.dp).clip(CircleShape)
-                .background(Color(0xFFE8A0FF).copy(alpha = 0.10f)),
+                .background(Color(0xFFF6E29A).copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Rounded.Lock, null, tint = Color(0xFFE8A0FF), modifier = Modifier.size(34.dp))
+            Icon(Icons.Rounded.Lock, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(34.dp))
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -761,7 +761,7 @@ private fun ChangePasswordPage(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp),
             enabled = !isLoading,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE8A0FF), contentColor = Color.Black)
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF6E29A), contentColor = Color.Black)
         ) {
             Text("Xác nhận đổi mật khẩu", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, lineHeight = 20.sp)
         }

@@ -379,7 +379,10 @@ fun PaymentScreen(
         if (paymentStatus == PaymentStatus.SUCCESS && currentPackage != null) {
             PaymentSuccessModal(
                 packageName = currentPackage?.name.orEmpty(),
-                onDismiss = { paymentStatus = PaymentStatus.IDLE }
+                onDismiss = {
+                    paymentStatus = PaymentStatus.IDLE
+                    onBack()
+                }
             )
         }
 
@@ -1084,7 +1087,7 @@ private fun PricingCard(
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             packageUi.features.forEach { feature ->
-                FeatureRow(text = feature, highlighted = selected || isPremium)
+                FeatureRow(text = feature, highlighted = selected)
             }
         }
 
