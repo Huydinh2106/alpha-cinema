@@ -250,7 +250,8 @@ fun WatchPartyLobbySheet(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFF6E29A),
                             contentColor = Color.Black,
-                            disabledContainerColor = Color(0xFFF6E29A).copy(alpha = 0.5f)
+                            disabledContainerColor = Color(0xFFF6E29A).copy(alpha = 0.5f),
+                            disabledContentColor = Color.Black.copy(alpha = 0.5f)
                         )
                     ) {
                         if (isCreating) {
@@ -342,7 +343,8 @@ fun WatchPartyLobbySheet(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFF6E29A),
                             contentColor = Color.Black,
-                            disabledContainerColor = Color(0xFFF6E29A).copy(alpha = 0.3f)
+                            disabledContainerColor = Color(0xFFF6E29A).copy(alpha = 0.3f),
+                            disabledContentColor = Color.White.copy(alpha = 0.3f)
                         )
                     ) {
                         if (isJoining) {

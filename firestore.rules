@@ -30,7 +30,7 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(uid)).data.subscriptionExpiresAt > request.time;
     }
     function likedByBefore() {
-      return resource.data.likedBy is list ? resource.data.likedBy : [];
+      return resource.data.get('likedBy', []) is list ? resource.data.get('likedBy', []) : [];
     }
     function isCommentLikeToggle() {
       return isAuthenticated() &&

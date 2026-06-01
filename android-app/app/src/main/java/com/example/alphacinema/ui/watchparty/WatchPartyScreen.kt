@@ -306,6 +306,7 @@ fun WatchPartyScreen(
             exoPlayer.release()
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             val window = activity?.window ?: return@onDispose
+            WindowCompat.setDecorFitsSystemWindows(window, false)
             WindowInsetsControllerCompat(window, window.decorView)
                 .show(WindowInsetsCompat.Type.systemBars())
         }
@@ -317,6 +318,7 @@ fun WatchPartyScreen(
         if (isFullscreen) {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             val window = activity?.window ?: return
+            WindowCompat.setDecorFitsSystemWindows(window, false)
             WindowInsetsControllerCompat(window, window.decorView).apply {
                 hide(WindowInsetsCompat.Type.systemBars())
                 systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -324,6 +326,7 @@ fun WatchPartyScreen(
         } else {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             val window = activity?.window ?: return
+            WindowCompat.setDecorFitsSystemWindows(window, false)
             WindowInsetsControllerCompat(window, window.decorView)
                 .show(WindowInsetsCompat.Type.systemBars())
         }
@@ -492,7 +495,7 @@ fun WatchPartyScreen(
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(Icons.Rounded.Groups, null, tint = Color(0xFFF6E29A), modifier = Modifier.size(16.dp))
-                    Text("${members.size}/5", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("${members.size}/${room?.maxMembers ?: 5}", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
             // Guest overlays
@@ -1062,6 +1065,8 @@ private fun CustomVolumeSlider(
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val currentVolumeState = androidx.compose.runtime.rememberUpdatedState(value)
+
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -1095,7 +1100,7 @@ private fun CustomVolumeSlider(
                         change.consume()
                         val width = size.width.toFloat()
                         if (width > 0f) {
-                            val newProgress = ((value / 100f) + (dragAmount.x / width)).coerceIn(0f, 1f)
+                            val newProgress = ((currentVolumeState.value / 100f) + (dragAmount.x / width)).coerceIn(0f, 1f)
                             onValueChange((newProgress * 100).toInt())
                         }
                     }
