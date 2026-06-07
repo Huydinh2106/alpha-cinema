@@ -171,6 +171,7 @@ package com.example.alphacinema.ui.home
         val auth = remember { com.google.firebase.auth.FirebaseAuth.getInstance() }
         var currentUid by remember { mutableStateOf(auth.currentUser?.uid) }
         var unreadCount by remember { mutableStateOf(0) }
+        val isKidsMode by viewModel.isKidsMode.collectAsState()
 
         DisposableEffect(Unit) {
             val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
@@ -182,9 +183,9 @@ package com.example.alphacinema.ui.home
             }
         }
 
-        DisposableEffect(currentUid) {
+        DisposableEffect(currentUid, isKidsMode) {
             val uid = currentUid
-            if (uid == null) {
+            if (uid == null || isKidsMode) {
                 unreadCount = 0
                 return@DisposableEffect onDispose {}
             }
@@ -225,7 +226,6 @@ package com.example.alphacinema.ui.home
         val heroDescriptions by viewModel.heroDescriptions.collectAsState()
         val previewTrailerKeys by viewModel.previewTrailerKeys.collectAsState()
         val previewTrailerLoading by viewModel.previewTrailerLoading.collectAsState()
-        val isKidsMode by viewModel.isKidsMode.collectAsState()
         val continueWatchingItems by viewModel.continueWatching.collectAsState()
 
         val kidsHoatHinh by viewModel.kidsHoatHinh.collectAsState()
@@ -353,8 +353,11 @@ package com.example.alphacinema.ui.home
             allGroups
         }
 
-        val top10InsertIndex = remember(recommendationGroups) {
-            if (recommendationGroups.isEmpty()) {
+        val shouldShowTop10 = !isKidsMode
+        val top10InsertIndex = remember(recommendationGroups, shouldShowTop10) {
+            if (!shouldShowTop10) {
+                recommendationGroups.size
+            } else if (recommendationGroups.isEmpty()) {
                 0
             } else {
                 (recommendationGroups.size / 2).coerceAtLeast(1)
@@ -555,17 +558,19 @@ package com.example.alphacinema.ui.home
                     },
                     onSeeMore = onSeeMore
                 )
-                if (recommendationGroupsBeforeTop10.isNotEmpty()) {
+                if (shouldShowTop10 && recommendationGroupsBeforeTop10.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(22.dp))
                 }
 
-                Top10Section(
-                    movies = top10Movies,
-                    onMovieClick = { recommendMovie ->
-                        onOpenMovieDetail(recommendMovie.slug)
-                    }
-                )
-                Spacer(modifier = Modifier.height(22.dp))
+                if (shouldShowTop10) {
+                    Top10Section(
+                        movies = top10Movies,
+                        onMovieClick = { recommendMovie ->
+                            onOpenMovieDetail(recommendMovie.slug)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(22.dp))
+                }
 
                 RecommendationGroupsSection(
                     groups = recommendationGroupsAfterTop10,
@@ -623,6 +628,7 @@ package com.example.alphacinema.ui.home
             if (showNotificationScreen) {
                 NotificationScreen(
                     modifier = Modifier.zIndex(100f),
+                    isKidsMode = isKidsMode,
                     onClose = { showNotificationScreen = false },
                     onNavigateToMovie = { slug -> 
                         showNotificationScreen = false

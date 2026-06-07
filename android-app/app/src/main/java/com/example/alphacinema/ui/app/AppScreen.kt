@@ -232,6 +232,7 @@ fun MainContent(
     val firestoreRepo = remember { com.example.alphacinema.data.repository.FirestoreRepository() }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val isKidsMode by homeViewModel.isKidsMode.collectAsState()
     val profileCache = remember { com.example.alphacinema.data.local.UserProfileCache(context) }
     val movieDetailViewModel: MovieDetailViewModel = viewModel()
     val movieDetail by movieDetailViewModel.movieDetail.collectAsState()
@@ -1287,7 +1288,10 @@ fun MainContent(
         }
 
         // Xử lý Deep Link khi khởi chạy App từ Thông báo (Status bar)
-        LaunchedEffect(initialNotificationType, initialMovieId) {
+        LaunchedEffect(initialNotificationType, initialMovieId, isKidsMode) {
+            if (isKidsMode) {
+                return@LaunchedEffect
+            }
             if (initialNotificationType == "new_movie" && initialMovieId != null) {
                 navController.navigate(MovieDetailNavRoute(slug = initialMovieId))
             } else if (initialNotificationType == "billing") {

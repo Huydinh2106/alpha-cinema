@@ -970,6 +970,15 @@ private fun MembersList(
     memberVolumes: Map<String, Int>,
     onAdjustVolume: (String, Int) -> Unit
 ) {
+    val orderedMembers = remember(members, hostId) {
+        if (hostId.isBlank()) {
+            members
+        } else {
+            val (hosts, guests) = members.partition { it.uid == hostId }
+            hosts + guests
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -986,7 +995,7 @@ private fun MembersList(
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            members.forEach { member ->
+            orderedMembers.forEach { member ->
                 androidx.compose.runtime.key(member.uid) {
                     val memberIsHost = member.uid == hostId
                     val agoraUid = member.uid.hashCode() and 0x7FFFFFFF
