@@ -47,6 +47,11 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         Log.d(TAG, "Notification title: $title, body: $body, type: $type")
 
+        if (isKidsModeEnabled()) {
+            Log.d(TAG, "Kids mode enabled; suppressing push notification.")
+            return
+        }
+
         // QUAN TRỌNG: KHÔNG lưu thông báo vào Firestore ở đây.
         // Cloud Functions (onNewMovieAdded, checkExpiringSubscriptions, ...) đã lưu document
         // vào users/{uid}/notifications với đầy đủ trường (bao gồm imageUrl/poster).
@@ -151,6 +156,13 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             null
         }
 
+    }
+
+    private fun isKidsModeEnabled(): Boolean {
+        return runCatching {
+            com.example.alphacinema.data.local.SettingsManager.init(applicationContext)
+            com.example.alphacinema.data.local.SettingsManager.getInstance().isKidsModeEnabled.value
+        }.getOrDefault(false)
     }
 
     private fun sendTokenToServer(token: String) {

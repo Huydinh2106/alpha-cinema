@@ -140,6 +140,7 @@ data class NotificationItem(
 @Composable
 fun NotificationScreen(
     modifier: Modifier = Modifier,
+    isKidsMode: Boolean = false,
     onClose: () -> Unit,
     onNavigateToMovie: (String) -> Unit = {},
     onNavigateToPlan: () -> Unit = {}
@@ -160,9 +161,9 @@ fun NotificationScreen(
         }
     }
 
-    androidx.compose.runtime.DisposableEffect(currentUid) {
+    androidx.compose.runtime.DisposableEffect(currentUid, isKidsMode) {
         val uid = currentUid
-        if (uid == null) {
+        if (uid == null || isKidsMode) {
             notifications.clear()
             return@DisposableEffect onDispose {}
         }
