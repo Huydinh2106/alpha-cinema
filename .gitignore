@@ -25,6 +25,7 @@ service-account*.json
 # Logs
 # =========================
 *.log
+logcat*.txt
 logs/
 npm-debug.log*
 yarn-debug.log*
