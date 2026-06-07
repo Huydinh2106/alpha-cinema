@@ -557,19 +557,47 @@ fun MainContent(
         if (appLogoutInProgress) return
         appLogoutInProgress = true
 
-        try {
-            watchPartyViewModel.leaveRoom()
-            auth.signOut()
-            appCurrentUser = null
-            profileCache.clear()
-            applySubscriptionProfile(null)
-            returnToAccountScreen()
-            showToast("Đã đăng xuất")
-        } catch (e: Exception) {
-            android.util.Log.e("AppScreen", "Logout failed", e)
-            showToast("Không thể đăng xuất. Vui lòng thử lại")
-        } finally {
-            appLogoutInProgress = false
+        scope.launch {
+            try {
+                watchPartyViewModel.leaveRoom()
+
+                // Remove FCM token from Firestore
+                val currentUser = auth.currentUser
+                if (currentUser != null) {
+                    try {
+                        val token = com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+                        if (!token.isNullOrBlank()) {
+                            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            db.collection("users").document(currentUser.uid)
+                                .update("fcmTokens", com.google.firebase.firestore.FieldValue.arrayRemove(token))
+                                .await()
+                            android.util.Log.d("AppScreen", "FCM token removed from Firestore")
+                        }
+                    } catch (fcmEx: Exception) {
+                        android.util.Log.e("AppScreen", "Failed to clear FCM token from Firestore", fcmEx)
+                    }
+                }
+
+                // Delete local FCM token
+                try {
+                    com.google.firebase.messaging.FirebaseMessaging.getInstance().deleteToken().await()
+                    android.util.Log.d("AppScreen", "Local FCM token deleted")
+                } catch (fcmEx: Exception) {
+                    android.util.Log.e("AppScreen", "Failed to delete local FCM token", fcmEx)
+                }
+
+                auth.signOut()
+                appCurrentUser = null
+                profileCache.clear()
+                applySubscriptionProfile(null)
+                returnToAccountScreen()
+                showToast("Đã đăng xuất")
+            } catch (e: Exception) {
+                android.util.Log.e("AppScreen", "Logout failed", e)
+                showToast("Không thể đăng xuất. Vui lòng thử lại")
+            } finally {
+                appLogoutInProgress = false
+            }
         }
     }
 
