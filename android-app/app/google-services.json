@@ -1,7 +1,6 @@
 {
   "project_info": {
     "project_number": "1013232588133",
-    "firebase_url": "https://alpha-cinema-39dfb-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "alpha-cinema-39dfb",
     "storage_bucket": "alpha-cinema-39dfb.firebasestorage.app"
   },
@@ -15,43 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "1013232588133-6egvlrpi3ubq36v6afn2m3hudha9dh72.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.alphacinema",
-            "certificate_hash": "e42ba63762cd08af50cee7be41f31c1198f9a05d"
-          }
-        },
-        {
-          "client_id": "1013232588133-e3og9f2sktojqfbhoc7lkondlkdkqgrn.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.alphacinema",
-            "certificate_hash": "e1687494548cc968ace132f8618c0a9fa2345401"
-          }
-        },
-        {
-          "client_id": "1013232588133-jlr5b4drc84ucg44iiabrgi58q10afdd.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.alphacinema",
-            "certificate_hash": "785a8ab31965039c88b15ec075e33d31804a697f"
-          }
-        },
-        {
           "client_id": "1013232588133-k66p2j3n4qg5lndnfn6m6fkvs0k2f0vc.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.alphacinema",
             "certificate_hash": "24a55344389cf51a1d505edff8915a5fe69c5714"
-          }
-        },
-        {
-          "client_id": "1013232588133-vk46oevjces6ucb5bc01u75brklssu6k.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.alphacinema",
-            "certificate_hash": "4729cb3801b8c0787c990d12b2bd8dede5b70489"
           }
         },
         {
